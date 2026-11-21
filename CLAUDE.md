@@ -10,9 +10,27 @@ derived metrics). [docs/requirements.md](docs/requirements.md) is the source of
 truth for scope. Cite requirement IDs (`FR-n`, `NFR-n`) in commits, PRs and
 design notes when a change implements or affects one.
 
-**Status:** no code yet. Build, test and run commands are still to be decided.
-When they are, add them to this file. Do not invent commands that don't exist in
-the repo.
+**Status:** database schema and tests exist ([db/](db/README.md)); no backend
+or frontend yet. Add build, test and run commands here as they appear. Do not
+invent commands that don't exist in the repo.
+
+## Commands
+
+```bash
+db/test.sh                        # pgTAP tests in a throwaway PostgreSQL 18 container (needs Docker)
+db/test.sh /db/tests/04_runs.sql  # selected test files (container paths)
+```
+
+## Database
+
+- Schema changes are new numbered files in `db/migrations/`; never edit a
+  migration that has been merged. Conventions are in
+  [ADR 0004](docs/adr/0004-database-schema.md).
+- Every schema change comes with pgTAP tests in `db/tests/`.
+- Results are protected by triggers (`TR001`/`TR002`); never work around them.
+  Hard delete only through `delete_run()`.
+- Create definitions and dimensions through the `ensure_*` functions, not raw
+  inserts.
 
 ## Tech stack
 
