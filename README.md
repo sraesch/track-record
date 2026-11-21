@@ -90,3 +90,7 @@ stored as compressed blocks, never as one row per point.
 | Trend query over 1 year (one case/metric/device) | < 3 s |
 | Full run-vs-run comparison | < 30 s, with progress |
 | Ingest one case execution with all samples/series | < 10 s |
+
+## License
+
+[MIT](LICENSE)
