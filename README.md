@@ -4,8 +4,10 @@ A store for benchmark results. It keeps every result of a solution under test
 over its whole lifecycle and helps the team analyze them: run comparisons,
 trends over time and versions, series overlays and derived metrics.
 
-> **Status:** early stage. The requirements are fixed; the design and
-> implementation are not started yet. See [docs/requirements.md](docs/requirements.md).
+> **Status:** early stage. The requirements are fixed
+> ([docs/requirements.md](docs/requirements.md)). The database schema
+> ([db/](db/README.md)) and the backend's ingestion and retrieval API
+> ([backend/](backend/README.md)) exist; analysis, MCP and the web UI follow.
 
 ## What it does
 

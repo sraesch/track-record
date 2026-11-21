@@ -1,0 +1,48 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/server"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+track-record-core = { path = "crates/core" }
+anyhow = "1"
+axum = { version = "0.8", features = ["macros"] }
+axum-extra = { version = "0.12", features = ["query"] }
+base64 = "0.22"
+bytes = "1"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+futures = "0.3"
+getrandom = "0.3"
+hex = "0.4"
+humantime = "2"
+percent-encoding = "2"
+proptest = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "uuid", "chrono", "json", "derive", "tls-rustls-ring-webpki"] }
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-axum = "0.2"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+# Row tuples of sqlx queries are clearer inline than as type aliases.
+type_complexity = "allow"

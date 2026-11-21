@@ -1,0 +1,43 @@
+[package]
+name = "track-record-server"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "track-record backend: REST API, MCP server and jobs"
+
+[dependencies]
+track-record-core.workspace = true
+anyhow.workspace = true
+axum.workspace = true
+axum-extra.workspace = true
+base64.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+futures.workspace = true
+getrandom.workspace = true
+hex.workspace = true
+humantime.workspace = true
+percent-encoding.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+utoipa.workspace = true
+utoipa-axum.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+reqwest.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
