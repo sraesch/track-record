@@ -8,7 +8,8 @@ trends over time and versions, series overlays and derived metrics.
 > ([docs/requirements.md](docs/requirements.md)). The database schema
 > ([db/](db/README.md)) and the backend ([backend/](backend/README.md)) with
 > the REST API for ingestion, retrieval, derived metrics and analysis and the
-> MCP server exist; the web UI follows.
+> MCP server exist. The web UI ([frontend/](frontend/README.md)) is scaffolded;
+> its views follow.
 
 ## What it does
 

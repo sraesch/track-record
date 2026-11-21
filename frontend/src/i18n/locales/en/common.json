@@ -1,0 +1,9 @@
+{
+  "app": {
+    "name": "Track Record",
+    "tagline": "Benchmark results, kept forever."
+  },
+  "home": {
+    "placeholder": "Runs, comparisons and trends will appear here."
+  }
+}
