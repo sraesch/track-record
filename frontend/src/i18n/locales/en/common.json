@@ -77,5 +77,71 @@
   },
   "placeholder": {
     "notBuilt": "This view is not built yet."
+  },
+  "common": {
+    "retry": "Retry",
+    "loading": "Loading…",
+    "none": "—"
+  },
+  "duration": {
+    "hours": "{{h}} h {{m}} min",
+    "minutes": "{{m}} min {{s}} s",
+    "seconds": "{{s}} s"
+  },
+  "runs": {
+    "columns": {
+      "status": "Status",
+      "started": "Started",
+      "duration": "Duration",
+      "suite": "Suite",
+      "sutVersion": "SUT version",
+      "trigger": "Trigger",
+      "tags": "Tags"
+    },
+    "status": {
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "aborted": "Aborted"
+    },
+    "trigger": {
+      "nightly": "Nightly",
+      "manual": "Manual",
+      "ci": "CI"
+    },
+    "validity": {
+      "valid": "Valid",
+      "invalid": "Invalid",
+      "all": "All"
+    },
+    "invalid": "Invalid",
+    "invalidReason": "Invalid: {{reason}}",
+    "suiteVersion": "{{name}} v{{version}}",
+    "stillRunning": "Running",
+    "open": "Open run of {{started}}",
+    "filterByTag": "Filter by tag {{tag}}",
+    "filters": {
+      "label": "Filters",
+      "suite": "Suite",
+      "status": "Status",
+      "trigger": "Trigger",
+      "branch": "Branch",
+      "device": "Client device",
+      "tags": "Tags",
+      "tagsHint": "Type a tag and press Enter",
+      "validity": "Validity",
+      "from": "Started from",
+      "to": "Started until",
+      "any": "Any",
+      "clear": "Clear filters"
+    },
+    "shown_one": "{{count}} run shown",
+    "shown_other": "{{count}} runs shown",
+    "allShown_one": "{{count}} run",
+    "allShown_other": "All {{count}} runs",
+    "loadMore": "Load more",
+    "empty": "No runs yet. Runs appear here once the benchmark harness uploads them.",
+    "noMatch": "No runs match these filters.",
+    "error": "The runs could not be loaded: {{message}}"
   }
 }

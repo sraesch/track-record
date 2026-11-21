@@ -1,17 +1,9 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { createMemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
-import App from './App'
 import { navItems } from './navigation'
-import { routes } from './routes'
+import { renderApp as renderAt } from './test/render'
 import { setViewportWidth } from './test/viewport'
-
-function renderAt(path: string) {
-  const router = createMemoryRouter(routes, { initialEntries: [path] })
-  render(<App router={router} />)
-  return router
-}
 
 const sideMenu = () =>
   screen.getByRole('navigation', { name: 'Main navigation' })

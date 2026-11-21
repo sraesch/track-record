@@ -13,6 +13,7 @@ if [[ "${1:-}" == "--" ]]; then
 fi
 
 npm ci --no-audit --no-fund
+tools/openapi/generate.sh --check
 npm run lint
 npm run typecheck
 npm test -- "$@"

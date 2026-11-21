@@ -25,10 +25,16 @@ frontend/
   src/theme.ts          MUI theme: light and dark color schemes
   src/layout/           App bar, side menu, color mode menu
   src/pages/            Pages and the page header
+  src/api/              API client; schema.d.ts is generated (do not edit)
+  src/runs/             Run list: filters in the URL, table, queries
+  src/format.ts         Dates, durations and commits for display
   src/i18n/             i18next setup, typed keys, locale files
     locales/en/         English translations (JSON, one file per namespace)
   src/test/setup.ts     Vitest setup: jest-dom matchers, i18n, cleanup
   src/test/viewport.ts  setViewportWidth(): screen width for useMediaQuery
+  src/test/api.ts       mockApi(): fake UI API for tests (stubs fetch)
+  src/test/render.tsx   renderApp(path): the whole app on a memory router
+  tools/openapi/        Generator for src/api/schema.d.ts (own package, TypeScript 5)
   vite.config.ts        Vite and Vitest config, dev proxy to the backend
   test.sh               lint, type check, tests and build (what CI runs)
   scripts/seed.ts       Test data for UI development (npm run seed)
@@ -48,6 +54,7 @@ npm run test:watch    # Vitest in watch mode
 npm run lint          # oxlint
 npm run typecheck     # tsc
 npm run build         # type check and production build into dist/
+npm run generate:api  # regenerate src/api/schema.d.ts from backend/openapi/ui.json
 ```
 
 Or everything CI checks, from the repository root:

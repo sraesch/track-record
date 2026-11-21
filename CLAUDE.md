@@ -16,7 +16,8 @@ ingestion, retrieval, tags/annotations, aliases, tokens, the UI-only
 operations, the derived metric DSL and analysis (aggregates, trends,
 comparisons, series views, export) and the MCP server. The frontend
 ([frontend/](frontend/README.md)) has the shell (app bar, side menu, routes
-for every view, color modes); the views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
+for every view, color modes) and the run list; the other views are
+placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 
@@ -40,6 +41,7 @@ deploy/local/up.sh                # whole stack on Docker Desktop Kubernetes (bu
 deploy/local/forward.sh           # UI on localhost:8088, machine API on localhost:8089
 deploy/local/down.sh              # remove the local stack and its data
 npm run seed                      # test data for UI development (in frontend/; needs an empty database, forward.sh)
+npm run generate:api              # regenerate src/api/schema.d.ts from backend/openapi/ui.json (in frontend/)
 ```
 
 ## Backend
@@ -53,7 +55,8 @@ npm run seed                      # test data for UI development (in frontend/; 
 - Results are written with `PUT` on client UUIDs: 201 on create, 200 for an
   identical retry, 409 for different content. One transaction per request.
 - After changing an endpoint, regenerate `backend/openapi/*.json`; a test
-  checks them.
+  checks them. For `ui.json`, also regenerate the frontend types
+  (`npm run generate:api` in `frontend/`).
 - MCP (`/mcp`, rmcp, stateless) shows tools by token scope: read tools for
   every scope, tag/annotation tools only for `annotate`. Tool parameters are
   the REST request types (`schemars::JsonSchema` next to `ToSchema`); service
@@ -80,6 +83,13 @@ npm run seed                      # test data for UI development (in frontend/; 
   Views are listed once in `src/navigation.ts` (side menu and routes);
   pages start with `<PageHeader>`. Import icons per file
   (`@mui/icons-material/ShowChart`). View state lives in the URL (FR-21).
+- API access ([ADR 0012](docs/adr/0012-frontend-data-access.md)): types
+  generated from `backend/openapi/ui.json` into `src/api/schema.d.ts`
+  (`npm run generate:api`; `test.sh` fails when stale), `openapi-fetch`
+  client in `src/api/client.ts`, TanStack Query for fetching. Tests fake
+  the API with `mockApi()` (`src/test/api.ts`) and render with `renderApp()`.
+- After changing a UI endpoint: regenerate the backend OpenAPI documents,
+  then `npm run generate:api` in `frontend/`.
 - The image (`frontend/Dockerfile`) is nginx serving the build and proxying
   `/ui/api` to `TR_UI_API_UPSTREAM`. `deploy/local/` runs the whole stack on
   Docker Desktop Kubernetes for trying the UI; it is not the Helm chart.
@@ -135,10 +145,9 @@ utoipa (OpenAPI from code), rmcp for MCP; workspace in `backend/`.
 
 Frontend tooling is decided in ADR 0010: npm, oxlint, Vitest with jsdom and
 Testing Library. Component library (MUI) and routing (React Router) in
-ADR 0011.
+ADR 0011; API types, client and TanStack Query in ADR 0012.
 
-Still open: cache strategy, charting library, frontend data fetching,
-API client generation, Helm chart, release notes, publishing the server image.
+Still open: cache strategy, charting library, Helm chart, release notes, publishing the server image.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
 only in code.
 

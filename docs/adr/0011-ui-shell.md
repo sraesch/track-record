@@ -51,5 +51,6 @@ included (FR-21). The UI is data-heavy: tables, filters, dialogs, forms.
 ## Left for later ADRs
 
 API client generated from `backend/openapi/ui.json` · data fetching and
-caching · charting library (MUI X charts is a candidate) · URL schema for
+caching (both decided in [ADR 0012](0012-frontend-data-access.md)) ·
+charting library (MUI X charts is a candidate) · URL schema for
 view state.
