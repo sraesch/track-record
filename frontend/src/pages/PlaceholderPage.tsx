@@ -1,8 +1,7 @@
 import ConstructionIcon from '@mui/icons-material/Construction'
-import Paper from '@mui/material/Paper'
-import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
 import type { NavItemId } from '../navigation'
+import { EmptyState } from './EmptyState'
 import { PageHeader } from './PageHeader'
 
 /** Stand-in for a top-level view that is not built yet. */
@@ -22,20 +21,8 @@ export function PlaceholderPage({ id }: { id: NavItemId }) {
 export function NotBuilt() {
   const { t } = useTranslation()
   return (
-    <Paper
-      variant="outlined"
-      sx={{
-        p: 4,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 1,
-        color: 'text.secondary',
-        borderStyle: 'dashed',
-      }}
-    >
-      <ConstructionIcon />
-      <Typography>{t('placeholder.notBuilt')}</Typography>
-    </Paper>
+    <EmptyState icon={<ConstructionIcon />} dashed>
+      {t('placeholder.notBuilt')}
+    </EmptyState>
   )
 }

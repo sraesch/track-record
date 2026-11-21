@@ -12,8 +12,14 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RunStatus, RunTrigger, Validity } from '../api/client'
-import { useBranches, useClientDeviceNames, useSuites } from './queries'
 import {
+  useBranches,
+  useClientDeviceNames,
+  useSuiteNames,
+} from '../api/lookups'
+import {
+  cleanTags,
+  defaultRunFilters,
   hasActiveFilters,
   isDay,
   type RunFilters,
@@ -32,7 +38,7 @@ const fieldSx = { minWidth: 160, flex: '1 1 160px', maxWidth: 260 }
 /** Filters of the run list (FR-11); every change goes to the URL. */
 export function RunFilterBar({ filters, onChange }: Props) {
   const { t } = useTranslation()
-  const suites = useSuites()
+  const suites = useSuiteNames()
   const devices = useClientDeviceNames()
   const branches = useBranches()
   const set = (patch: Partial<RunFilters>) => onChange({ ...filters, ...patch })
@@ -43,16 +49,11 @@ export function RunFilterBar({ filters, onChange }: Props) {
       aria-label={t('runs.filters.label')}
       sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 2 }}
     >
-      <Autocomplete
-        size="small"
-        sx={fieldSx}
-        options={withValue(suites.data, filters.suite)}
-        loading={suites.isPending}
-        value={filters.suite ?? null}
-        onChange={(_, value) => set({ suite: value ?? undefined })}
-        renderInput={(params) => (
-          <TextField {...params} label={t('runs.filters.suite')} />
-        )}
+      <OptionFilter
+        label={t('runs.filters.suite')}
+        options={suites}
+        value={filters.suite}
+        onChange={(suite) => set({ suite })}
       />
 
       <TextField
@@ -110,28 +111,18 @@ export function RunFilterBar({ filters, onChange }: Props) {
         ))}
       </TextField>
 
-      <Autocomplete
-        size="small"
-        sx={fieldSx}
-        options={withValue(branches.data, filters.branch)}
-        loading={branches.isPending}
-        value={filters.branch ?? null}
-        onChange={(_, value) => set({ branch: value ?? undefined })}
-        renderInput={(params) => (
-          <TextField {...params} label={t('runs.filters.branch')} />
-        )}
+      <OptionFilter
+        label={t('runs.filters.branch')}
+        options={branches}
+        value={filters.branch}
+        onChange={(branch) => set({ branch })}
       />
 
-      <Autocomplete
-        size="small"
-        sx={fieldSx}
-        options={withValue(devices.data, filters.device)}
-        loading={devices.isPending}
-        value={filters.device ?? null}
-        onChange={(_, value) => set({ device: value ?? undefined })}
-        renderInput={(params) => (
-          <TextField {...params} label={t('runs.filters.device')} />
-        )}
+      <OptionFilter
+        label={t('runs.filters.device')}
+        options={devices}
+        value={filters.device}
+        onChange={(device) => set({ device })}
       />
 
       <Autocomplete
@@ -143,7 +134,7 @@ export function RunFilterBar({ filters, onChange }: Props) {
         value={filters.tags}
         onChange={(_, value) =>
           set({
-            tags: [...new Set(value.map((v) => v.trim()).filter(Boolean))],
+            tags: cleanTags(value),
           })
         }
         renderValue={(value, getItemProps) =>
@@ -196,9 +187,7 @@ export function RunFilterBar({ filters, onChange }: Props) {
         <Button
           size="small"
           startIcon={<FilterAltOffIcon />}
-          onClick={() =>
-            onChange({ status: [], tags: [], validity: 'valid' })
-          }
+          onClick={() => onChange(defaultRunFilters)}
         >
           {t('runs.filters.clear')}
         </Button>
@@ -207,13 +196,32 @@ export function RunFilterBar({ filters, onChange }: Props) {
   )
 }
 
+type OptionFilterProps = {
+  label: string
+  /** The query of the names to choose from. */
+  options: { data?: string[]; isPending: boolean }
+  value: string | undefined
+  onChange: (value: string | undefined) => void
+}
+
 /**
- * The options of a filter, plus its current value when that is not among
- * them (a shared link, a name from before an alias, options still loading).
+ * Picks one name from a list. The current value is offered even when it is
+ * not in the list (a shared link, a name from before an alias, options
+ * still loading).
  */
-function withValue(options: string[] | undefined, value: string | undefined) {
-  const all = options ?? []
-  return value && !all.includes(value) ? [value, ...all] : all
+function OptionFilter({ label, options, value, onChange }: OptionFilterProps) {
+  const names = options.data ?? []
+  return (
+    <Autocomplete
+      size="small"
+      sx={fieldSx}
+      options={value && !names.includes(value) ? [value, ...names] : names}
+      loading={options.isPending}
+      value={value ?? null}
+      onChange={(_, next) => onChange(next ?? undefined)}
+      renderInput={(params) => <TextField {...params} label={label} />}
+    />
+  )
 }
 
 type DayFieldProps = {

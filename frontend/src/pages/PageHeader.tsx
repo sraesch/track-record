@@ -1,7 +1,7 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import type { ReactNode } from 'react'
-import { usePageTitle } from '../usePageTitle'
+import { useTranslation } from 'react-i18next'
 
 type Props = {
   title: string
@@ -14,9 +14,11 @@ type Props = {
 
 /** Title block of a page; also sets the browser tab title. */
 export function PageHeader({ title, description, before, actions }: Props) {
-  usePageTitle(title)
+  const { t } = useTranslation()
   return (
     <Box sx={{ mb: 3 }}>
+      {/* React puts it into <head>: "<title> · Track Record". */}
+      <title>{`${title} · ${t('app.name')}`}</title>
       {before}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
         <Typography variant="h5" component="h1" sx={{ flexGrow: 1 }}>

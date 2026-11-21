@@ -4,6 +4,12 @@ server {
     server_name _;
     root /usr/share/nginx/html;
 
+    # Compress the app's own files. Proxied API responses are left alone
+    # (gzip_proxied is off by default), so streamed results are not held
+    # back in a compression buffer (NFR-7).
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
     # Backend UI API (no tokens; the ingress/auth proxy guards access).
     # Long timeouts and no buffering: comparisons and exports stream (NFR-7).
     location /ui/api/ {

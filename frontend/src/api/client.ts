@@ -4,8 +4,7 @@ import createClient from 'openapi-fetch'
 import i18n from '../i18n'
 import type { components, paths } from './schema'
 
-export type { paths }
-export type Schemas = components['schemas']
+type Schemas = components['schemas']
 export type Problem = Schemas['Problem']
 export type RunSummary = Schemas['RunSummary']
 export type RunStatus = Schemas['RunStatus']

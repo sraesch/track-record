@@ -14,7 +14,7 @@ type Props = {
 }
 
 function App({ router, queryClient }: Props) {
-  const [defaultClient] = useState(createQueryClient)
+  const [defaultClient] = useState(() => createQueryClient())
   return (
     <QueryClientProvider client={queryClient ?? defaultClient}>
       <ThemeProvider theme={theme}>

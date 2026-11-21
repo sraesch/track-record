@@ -1,12 +1,12 @@
-import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import LinearProgress from '@mui/material/LinearProgress'
-import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
+import { EmptyState } from '../pages/EmptyState'
+import { ErrorAlert } from '../pages/ErrorAlert'
 import { PageHeader } from '../pages/PageHeader'
 import { useRunList } from './queries'
 import { RunFilterBar } from './RunFilterBar'
@@ -37,6 +37,18 @@ export function RunListPage() {
   const loaded = runs.data?.pages.flatMap((page) => page.runs) ?? []
   const filtered = hasActiveFilters(filters)
 
+  // A failed "Load more" retries that page; anything else, the whole list.
+  const errorAlert = runs.isError && (
+    <ErrorAlert
+      message={t(runs.isFetchNextPageError ? 'runs.moreError' : 'runs.error', {
+        message: runs.error.message,
+      })}
+      onRetry={() =>
+        runs.isFetchNextPageError ? runs.fetchNextPage() : runs.refetch()
+      }
+    />
+  )
+
   return (
     <>
       <PageHeader
@@ -53,26 +65,10 @@ export function RunListPage() {
       {/* Without rows, an error takes the whole area; with rows (a failed
           "Load more" or background refetch), the rows stay and the error
           is shown below them. */}
-      {runs.isError && !runs.data ? (
-        <Alert
-          severity="error"
-          action={
-            <Button color="inherit" size="small" onClick={() => runs.refetch()}>
-              {t('common.retry')}
-            </Button>
-          }
-        >
-          {t('runs.error', { message: runs.error.message })}
-        </Alert>
-      ) : !runs.data ? null : loaded.length === 0 ? (
-        <Paper
-          variant="outlined"
-          sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}
-        >
-          <Typography>
-            {filtered ? t('runs.noMatch') : t('runs.empty')}
-          </Typography>
-        </Paper>
+      {!runs.data ? (
+        errorAlert
+      ) : loaded.length === 0 ? (
+        <EmptyState>{filtered ? t('runs.noMatch') : t('runs.empty')}</EmptyState>
       ) : (
         <>
           <RunTable runs={loaded} onTagClick={addTag} />
@@ -81,7 +77,7 @@ export function RunListPage() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              mt: 1.5,
+              my: 1.5,
             }}
           >
             <Typography variant="body2" color="text.secondary">
@@ -101,29 +97,7 @@ export function RunListPage() {
               </Button>
             )}
           </Box>
-          {runs.isError && (
-            <Alert
-              severity="error"
-              sx={{ mt: 1.5 }}
-              action={
-                <Button
-                  color="inherit"
-                  size="small"
-                  onClick={() =>
-                    runs.isFetchNextPageError
-                      ? runs.fetchNextPage()
-                      : runs.refetch()
-                  }
-                >
-                  {t('common.retry')}
-                </Button>
-              }
-            >
-              {t(runs.isFetchNextPageError ? 'runs.moreError' : 'runs.error', {
-                message: runs.error.message,
-              })}
-            </Alert>
-          )}
+          {errorAlert}
         </>
       )}
     </>

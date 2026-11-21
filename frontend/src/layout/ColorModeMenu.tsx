@@ -28,10 +28,10 @@ export function ColorModeMenu() {
 
   return (
     <>
+      {/* The tooltip also labels the button. */}
       <Tooltip title={t('colorMode.label')}>
         <IconButton
           color="inherit"
-          aria-label={t('colorMode.label')}
           aria-haspopup="menu"
           aria-controls={anchor ? 'color-mode-menu' : undefined}
           aria-expanded={anchor ? 'true' : undefined}

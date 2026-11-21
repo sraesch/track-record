@@ -1,7 +1,6 @@
 {
   "app": {
-    "name": "Track Record",
-    "tagline": "Benchmark results, kept forever."
+    "name": "Track Record"
   },
   "nav": {
     "label": "Main navigation",

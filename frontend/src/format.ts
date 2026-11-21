@@ -2,9 +2,26 @@ import i18n from './i18n'
 
 // Formatting of values for display, in the current UI language.
 
+// Building an Intl formatter is the expensive part; keep one per language
+// and style instead of one per call (two per table row).
+const dateTimeFormats = new Map<string, Intl.DateTimeFormat>()
+
+function dateTimeFormat(
+  style: 'short' | 'long',
+  options: Intl.DateTimeFormatOptions,
+) {
+  const key = `${i18n.language}:${style}`
+  let format = dateTimeFormats.get(key)
+  if (!format) {
+    format = new Intl.DateTimeFormat(i18n.language, options)
+    dateTimeFormats.set(key, format)
+  }
+  return format
+}
+
 /** Date and time in the browser's time zone, e.g. "20 Nov 2026, 09:11". */
 export function formatDateTime(iso: string): string {
-  return new Intl.DateTimeFormat(i18n.language, {
+  return dateTimeFormat('short', {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(iso))
@@ -12,7 +29,7 @@ export function formatDateTime(iso: string): string {
 
 /** Full timestamp with seconds and time zone, for tooltips. */
 export function formatTimestamp(iso: string): string {
-  return new Intl.DateTimeFormat(i18n.language, {
+  return dateTimeFormat('long', {
     dateStyle: 'full',
     timeStyle: 'long',
   }).format(new Date(iso))

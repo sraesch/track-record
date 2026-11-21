@@ -30,6 +30,7 @@ export function AppLayout() {
   const [overlayOpen, setOverlayOpen] = useState(false)
 
   const menuOpen = wide ? dockedOpen : overlayOpen
+  const menuLabel = menuOpen ? t('nav.close') : t('nav.open')
   const toggleMenu = () =>
     wide ? setDockedOpen((open) => !open) : setOverlayOpen((open) => !open)
 
@@ -45,11 +46,11 @@ export function AppLayout() {
         }}
       >
         <Toolbar>
-          <Tooltip title={menuOpen ? t('nav.close') : t('nav.open')}>
+          {/* The tooltip also labels the button. */}
+          <Tooltip title={menuLabel}>
             <IconButton
               color="inherit"
               edge="start"
-              aria-label={menuOpen ? t('nav.close') : t('nav.open')}
               aria-expanded={menuOpen}
               aria-controls="side-menu"
               onClick={toggleMenu}

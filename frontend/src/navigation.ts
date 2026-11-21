@@ -13,13 +13,13 @@ import AccountTreeIcon from '@mui/icons-material/AccountTree'
 // section 4). Routes (routes.tsx) are built from the same list, so menu and
 // URLs cannot drift apart.
 
-export type NavItem = {
+type NavItem = {
   id: NavItemId
   path: string
   icon: SvgIconComponent
 }
 
-export type NavSection = {
+type NavSection = {
   id: 'analysis' | 'definitions' | 'administration'
   items: readonly NavItem[]
 }

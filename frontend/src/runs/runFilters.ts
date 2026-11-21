@@ -14,14 +14,27 @@ import type {
 // `from` and `to` are calendar days in the browser's time zone, both
 // inclusive. They filter on the measured start time of a run.
 
-export const runStatuses: readonly RunStatus[] = [
-  'running',
-  'completed',
-  'failed',
-  'aborted',
-]
-export const runTriggers: readonly RunTrigger[] = ['nightly', 'manual', 'ci']
-export const validities: readonly Validity[] = ['valid', 'invalid', 'all']
+// Every value of the API's enums, in display order. A Record makes `tsc`
+// fail when the backend adds a value that is missing here.
+const keysOf = <T extends string>(record: Record<T, true>) =>
+  Object.keys(record) as T[]
+
+export const runStatuses = keysOf<RunStatus>({
+  running: true,
+  completed: true,
+  failed: true,
+  aborted: true,
+})
+export const runTriggers = keysOf<RunTrigger>({
+  nightly: true,
+  manual: true,
+  ci: true,
+})
+export const validities = keysOf<Validity>({
+  valid: true,
+  invalid: true,
+  all: true,
+})
 
 export type RunFilters = {
   suite?: string
@@ -39,7 +52,7 @@ export type RunFilters = {
 }
 
 /** Runs older than this are not expected; also catches half-typed years. */
-export const firstYear = 1970
+const firstYear = 1970
 
 /** A real calendar day as YYYY-MM-DD (not 2026-02-31), from `firstYear` on. */
 export function isDay(value: string | null): value is string {
@@ -64,6 +77,12 @@ function oneOf<T extends string>(
 
 const text = (value: string | null) => value?.trim() || undefined
 
+const day = (value: string | null) => (isDay(value) ? value : undefined)
+
+/** Tags trimmed, without empty ones and each once. */
+export const cleanTags = (tags: string[]) =>
+  [...new Set(tags.map((t) => t.trim()))].filter(Boolean)
+
 /** Reads the filters from a URL query; unknown or malformed values are ignored. */
 export function parseRunFilters(params: URLSearchParams): RunFilters {
   return {
@@ -72,14 +91,17 @@ export function parseRunFilters(params: URLSearchParams): RunFilters {
     trigger: oneOf(runTriggers, params.get('trigger')),
     branch: text(params.get('branch')),
     device: text(params.get('device')),
-    tags: [...new Set(params.getAll('tag').map((t) => t.trim()))].filter(
-      Boolean,
-    ),
+    tags: cleanTags(params.getAll('tag')),
     validity: oneOf(validities, params.get('validity')) ?? 'valid',
-    from: isDay(params.get('from')) ? params.get('from')! : undefined,
-    to: isDay(params.get('to')) ? params.get('to')! : undefined,
+    from: day(params.get('from')),
+    to: day(params.get('to')),
   }
 }
+
+/** No filter set: what an empty query string means. */
+export const defaultRunFilters: RunFilters = parseRunFilters(
+  new URLSearchParams(),
+)
 
 /** Writes the filters as a URL query; defaults are left out. */
 export function runFiltersToParams(filters: RunFilters): URLSearchParams {

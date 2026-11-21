@@ -321,6 +321,11 @@ function loadScenario(day: number) {
   }
 }
 
+const NIGHTLY_SUITE = {
+  name: 'streaming-nightly',
+  definition: { scenarios: ['progressive-load'], samples: 3, warmup: 1, devices: 'lab' },
+}
+
 const SMOKE_SCENARIO = {
   name: 'startup',
   definition: { steps: ['open-viewer', 'load-model', 'first-frame'], timeout_s: 10 },
@@ -505,10 +510,7 @@ function nightlyPlan(day: number, options: { partial?: number } = {}): RunPlan {
   return {
     key,
     body: {
-      suite: {
-        name: 'streaming-nightly',
-        definition: { scenarios: ['progressive-load'], samples: 3, warmup: 1, devices: 'lab' },
-      },
+      suite: NIGHTLY_SUITE,
       sut_version: sut,
       shared_environment: sharedEnvironment(day),
       triggered_by: 'nightly',
@@ -613,11 +615,13 @@ async function seed() {
   const INVALID_DAY = 13
   const CORRECTED_DAY = 27
   const runIds = new Map<string, string>()
+  let correctedPlan: RunPlan | undefined
   const started = Date.now()
 
   // Nightly history, oldest first.
   for (let day = 0; day < DAYS; day++) {
     const plan = nightlyPlan(day, day === FAILED_DAY ? { partial: 10 } : {})
+    if (day === CORRECTED_DAY) correctedPlan = plan
     runIds.set(plan.key, await uploadRun(plan))
     // CI smoke runs on weekdays.
     if (!isWeekend(day)) {
@@ -635,10 +639,7 @@ async function seed() {
   const experiment = await uploadRun({
     key: expKey,
     body: {
-      suite: {
-        name: 'streaming-nightly',
-        definition: { scenarios: ['progressive-load'], samples: 3, warmup: 1, devices: 'lab' },
-      },
+      suite: NIGHTLY_SUITE,
       sut_version: {
         commit: sha('sha1', 'feature/adaptive-lod-26'),
         branch: 'feature/adaptive-lod',
@@ -655,19 +656,21 @@ async function seed() {
     ),
     close: { status: 'completed', ended_at: iso(new Date(expStart.getTime() + 8 * 95_000)) },
   })
+  runIds.set(expKey, experiment)
   console.log('  experiment run')
 
   // A correction: one case execution of a nightly run measured again.
   const correctedRun = runIds.get(`nightly-${CORRECTED_DAY}`)!
-  const corrected = nightlyMatrix().findIndex(
+  const matrix = nightlyMatrix()
+  const corrected = matrix.findIndex(
     (c) => c.asset.mb > 100 && c.bandwidth === 100 && c.pipeline === 'draco' && c.device.name.startsWith('iphone'),
   )
-  const original = nightlyPlan(CORRECTED_DAY).caseExecutions[corrected]!
+  const original = correctedPlan!.caseExecutions[corrected]!
   const correctionStart = at(CORRECTED_DAY, 9, 15)
   const correction = loadCaseExecution(
     `nightly-${CORRECTED_DAY}`,
     0,
-    nightlyMatrix()[corrected]!,
+    matrix[corrected]!,
     { day: CORRECTED_DAY, remeasured: true },
     correctionStart,
   )
@@ -683,13 +686,10 @@ async function seed() {
   const openKey = 'open-manual-run'
   // The evening of the last day, after its nightly run.
   const openStart = at(DAYS - 1, 21, 0)
-  await uploadRun({
+  const openRun = await uploadRun({
     key: openKey,
     body: {
-      suite: {
-        name: 'streaming-nightly',
-        definition: { scenarios: ['progressive-load'], samples: 3, warmup: 1, devices: 'lab' },
-      },
+      suite: NIGHTLY_SUITE,
       sut_version: mainSut(DAYS - 1),
       shared_environment: sharedEnvironment(DAYS - 1),
       triggered_by: 'manual',
@@ -700,6 +700,7 @@ async function seed() {
       .slice(0, 3)
       .map((c, i) => loadCaseExecution(openKey, i, c, { day: DAYS - 1 }, openStart)),
   })
+  runIds.set(openKey, openRun)
   console.log('  open run')
 
   // Attachments.
@@ -779,7 +780,7 @@ async function seed() {
   for (const a of annotations) await call('POST', `${UI}/annotations`, a)
   console.log('  tags, annotations')
 
-  describe(runIds.size + 2)
+  describe(runIds.size)
 }
 
 function describe(runs: number) {

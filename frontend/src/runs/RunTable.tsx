@@ -60,7 +60,6 @@ export function RunTable({ runs, onTagClick }: Props) {
                   if (target.closest('a, button, [role="button"]')) return
                   // Modified clicks (new tab, …) are left to the run link.
                   if (
-                    event.button !== 0 ||
                     event.metaKey ||
                     event.ctrlKey ||
                     event.shiftKey ||
@@ -127,10 +126,7 @@ export function RunTable({ runs, onTagClick }: Props) {
                         size="small"
                         label={tag}
                         aria-label={t('runs.filterByTag', { tag })}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          onTagClick(tag)
-                        }}
+                        onClick={() => onTagClick(tag)}
                       />
                     ))}
                   </Box>

@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { RunSummary } from '../api/client'
+import { runPageSize } from './queries'
 import { mockApi, problem } from '../test/api'
 import { currentQuery, renderApp } from '../test/render'
 
@@ -123,7 +124,7 @@ describe('Run list', () => {
     expect(sent.get('client_device')).toBe('pixel-8')
     expect(sent.getAll('tag')).toEqual(['nightly'])
     expect(sent.get('validity')).toBe('all')
-    expect(sent.get('limit')).toBe('50')
+    expect(sent.get('limit')).toBe(String(runPageSize))
   })
 
   it('puts filter changes into the URL', async () => {

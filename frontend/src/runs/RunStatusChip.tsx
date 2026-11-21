@@ -42,11 +42,9 @@ export function InvalidChip({ reason }: { reason?: string | null }) {
       variant="outlined"
       icon={<BlockIcon />}
       label={t('runs.invalid')}
-      aria-label={
-        reason ? t('runs.invalidReason', { reason }) : t('runs.invalid')
-      }
     />
   )
+  // The tooltip also labels the chip, so screen readers hear the reason.
   return reason ? (
     <Tooltip title={t('runs.invalidReason', { reason })}>{chip}</Tooltip>
   ) : (
