@@ -54,12 +54,22 @@ only in code.
 - Trend comparison key: **case + client device name, after aliases are applied**.
 - Shared environments are deduplicated by fingerprint.
 - Parameters keep their JSON type (number/string/bool). Don't stringify them.
+- Only **raw, measured** values and series are uploaded. Anything computed from
+  them is a derived metric (FR-17), never an uploaded measurement.
+- One series per metric per sample. x never decreases but may repeat.
+- Every metric, series x-dimension and, where it applies, numeric parameter has
+  a unit. Units come from the predefined catalogue; others are allowed but are
+  not converted (FR-13a).
 
 **Ingestion**
 - Incremental: create run → add case executions/samples/series → close run.
   Partial data must survive a harness crash (FR-1).
 - Status lifecycle `running → completed | failed | aborted`; stale `running`
-  runs time out to `aborted` (FR-2).
+  runs time out to `aborted` (FR-2). Stale means no upload for the timeout in
+  **server time** since the last upload (creating the run counts). Never use the
+  measured start time: runs are also uploaded after the fact or imported.
+- Run start/end are measured times from the harness. Trends and time filters
+  use them, not the upload time.
 - Every write is **idempotent** through client-generated IDs (FR-3) and
   validated against the published schema (FR-4).
 
@@ -85,7 +95,19 @@ only in code.
 - Invalid runs are excluded from analysis by default but can be included on
   request (FR-9). Warmup samples are excluded from aggregation by default (FR-12).
 - Aliases apply equally in UI, REST API and MCP. Put alias resolution in the
-  shared query layer, not in one interface.
+  shared query layer, not in one interface. Aliases also cover case parameter
+  values and keep their JSON type.
+- Comparison (FR-16) runs along a dimension: the run, the client device or case
+  parameters. Everything not compared is the matching key; the user may take
+  parameters out of it. **Never pool samples of different runs.** Mark columns
+  that come from different SUT versions or shared environments.
+- A derived metric can have **no value** (e.g. threshold never reached); an
+  uploaded measurement always has one. No value is not missing data: show it,
+  count it in aggregates, and don't compute differences against it (FR-12a).
+- Derived metrics may use other derived metrics, without cycles. Each version
+  pins the exact versions it uses (FR-17).
+- Every run, case execution and analysis view has a URL that reproduces it,
+  filters included. Keep view state in the URL (FR-21).
 - The derived metric DSL is the **same** in UI, API and MCP, and must stay
   safe: a fixed set of operators and functions, no loops, no I/O, no
   `eval` of host-language code. Validate on save: syntax, referenced metrics
@@ -97,7 +119,8 @@ only in code.
 
 - No user identity in the app. Don't add users, roles or annotation authors.
 - `/api` and `/mcp` authenticate with API tokens (stored only as hashes).
-  Scopes: `read`, `annotate` (read + tags/annotations), `write` (ingestion).
+  Scopes: `read`, `annotate` (read + tags/annotations), `write` (ingestion,
+  including the tags a run is created with).
 - **Invalidation and deletion must not be reachable with any token**, only from
   the web UI. Hard delete requires typing the run ID to confirm.
 - MCP is read + tags/annotations only: no uploads, invalidation or deletion.

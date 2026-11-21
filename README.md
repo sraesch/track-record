@@ -12,19 +12,26 @@ trends over time and versions, series overlays and derived metrics.
 - **Incremental ingestion** from an external benchmark harness: a run is opened,
   case executions, samples and series are added as they finish, and the run is
   closed. Partial results survive harness crashes. Uploads are idempotent and
-  schema-validated.
+  schema-validated. Only raw, measured values are uploaded; everything computed
+  from them is a derived metric.
 - **Immutable, versioned data**: results never change after upload (corrections
   create revisions). Suites, scenarios, metrics, derived metrics and aliases are
   versioned, and results reference the exact versions used. Raw data is kept
   indefinitely.
 - **Analysis**: filtering on any dimension, sample aggregation (mean, median,
   percentiles, stddev, confidence intervals), unit conversion and normalization,
-  parameters as axes, run-vs-run comparison, trend views with annotations, and
-  series operations (overlay, resample, aggregate, downsample).
+  parameters as axes, side-by-side comparison of runs, devices or parameter
+  values, trend views with annotations, and series operations (overlay,
+  resample, aggregate, downsample).
 - **Derived metrics** written in a small, safe DSL and evaluated at query time,
   so they also apply to historical runs:
   `bytes / time`, `max(series.fps)`, `time_to(series.loaded, 0.9)`,
-  `moving_avg(series.fps, 1.0)`.
+  `moving_avg(series.fps, 1.0)`. They can build on each other, and a result can
+  be "no value" (e.g. a threshold that is never reached).
+- **Units** for metrics, series and numeric parameters, from a predefined
+  catalogue with conversions.
+- **Shareable links**: every run and every analysis view has a URL that
+  reproduces it.
 - **Export** of query results as CSV, Parquet or JSON.
 
 ### Non-goals
@@ -43,9 +50,9 @@ trends over time and versions, series overlays and derived metrics.
 | **Case** | Scenario version + assets + parameter values. The unit compared across runs. |
 | **Case execution** | One case run on one client device within a run. Holds the samples. |
 | **Sample** | One repetition (may be warmup). Holds scalar measurements and series. |
-| **Series** | Ordered (x, y) points of a metric for one sample, up to ~10k points. |
+| **Series** | Ordered (x, y) points of a metric for one sample, up to ~10k points. One series per metric per sample. |
 | **Client device** | Identified by a stable name. Detail changes are marked in trends but do not break them. |
-| **Alias** | Global, versioned mapping that renames or merges dimension values. |
+| **Alias** | Global, versioned mapping that renames or merges dimension values, including case parameter values. |
 
 Trends are keyed by **case + client device name** (after aliases are applied).
 A changed scenario definition is a new scenario version, and so a new case: its
@@ -91,10 +98,11 @@ Design decisions are recorded in [docs/adr/](docs/adr/).
 
 ## Expected volume
 
-1–5 runs per day, 10k+ series per run with up to ~10k points each. That is up to
-~100M points per run at the upper end. To start simple, series points are stored
-in PostgreSQL, one row per point. If the real volume turns out too large, storage
-moves to arrays or compressed blocks
+1–5 large runs per day, or a few dozen small ones. A large run has 10k+ series
+with up to ~10k points each. That is up to ~100M points per run at the upper
+end. To start simple, series points are stored in PostgreSQL, one row per point.
+If the real volume turns out too large, storage moves to arrays or compressed
+blocks
 ([ADR 0002](docs/adr/0002-series-storage.md)).
 
 | Operation | Target |
