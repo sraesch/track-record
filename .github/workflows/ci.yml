@@ -27,3 +27,12 @@ jobs:
       - uses: actions/checkout@v7
       - name: Run pgTAP tests
         run: db/test.sh
+
+  database-image:
+    name: Database image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and check the image
+        run: db/image-test.sh

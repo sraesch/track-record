@@ -1,0 +1,6 @@
+# The image only needs the migrations and the scripts that apply them.
+*
+!Dockerfile
+!migrate.sh
+!image/initdb.sh
+!migrations/*.sql

@@ -10,8 +10,8 @@ derived metrics). [docs/requirements.md](docs/requirements.md) is the source of
 truth for scope. Cite requirement IDs (`FR-n`, `NFR-n`) in commits, PRs and
 design notes when a change implements or affects one.
 
-**Status:** database schema and tests exist ([db/](db/README.md)); no backend
-or frontend yet. Add build, test and run commands here as they appear. Do not
+**Status:** database schema, tests and database image exist
+([db/](db/README.md)); no backend or frontend yet. Add build, test and run commands here as they appear. Do not
 invent commands that don't exist in the repo.
 
 ## Commands
@@ -19,6 +19,9 @@ invent commands that don't exist in the repo.
 ```bash
 db/test.sh                        # pgTAP tests in a throwaway PostgreSQL 18 container (needs Docker)
 db/test.sh /db/tests/04_runs.sql  # selected test files (container paths)
+db/image-test.sh                  # build the database image (track-record-db) and check it
+docker build --tag track-record-db db   # build the database image only
+db/migrate.sh                     # apply pending migrations to $PGHOST/$PGDATABASE (needs psql)
 ```
 
 ## Database
@@ -27,6 +30,11 @@ db/test.sh /db/tests/04_runs.sql  # selected test files (container paths)
   migration that has been merged. Conventions are in
   [ADR 0004](docs/adr/0004-database-schema.md).
 - Every schema change comes with pgTAP tests in `db/tests/`.
+- Migrations are applied only by `db/migrate.sh`, which records them with a
+  checksum in `schema_migration` and refuses changed or missing ones. The
+  image `track-record-db` ([ADR 0006](docs/adr/0006-database-image.md))
+  applies them on first start and runs them as a job (`track-record-migrate`)
+  for upgrades.
 - Results are protected by triggers (`TR001`/`TR002`); never work around them.
   Hard delete only through `delete_run()`.
 - Create definitions and dimensions through the `ensure_*` functions, not raw
@@ -53,10 +61,11 @@ OpenAPI for the REST API.
 CI is GitHub Actions ([ADR 0005](docs/adr/0005-ci.md)): `.github/workflows/ci.yml`
 runs on pull requests and on pushes to `develop` and `main`. Its jobs call the
 local test commands; when a new part gets tests, add a job that runs the same
-command. There is no delivery pipeline yet.
+command. CI builds and checks the database image but publishes nothing.
 
-Still open: Rust crates (HTTP, DB access/migrations, MCP), DSL grammar, cache
-strategy, charting library, repo layout, delivery (images, Helm chart, releases).
+Still open: Rust crates (HTTP, DB access, MCP), DSL grammar, cache strategy,
+charting library, repo layout, delivery (registry, image tags, Helm chart,
+releases).
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
 only in code.
 

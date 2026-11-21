@@ -11,10 +11,8 @@ pg_ctl --wait --log=/tmp/postgres.log \
     --options="-c listen_addresses='' -c fsync=off -c full_page_writes=off" start >/dev/null
 createdb track_record
 
-for migration in /db/migrations/*.sql; do
-    psql --no-psqlrc --quiet --single-transaction -v ON_ERROR_STOP=1 \
-        --file="$migration" >/dev/null
-done
+# The same script the database image uses.
+bash /db/migrate.sh >/dev/null
 
 psql --no-psqlrc --quiet -v ON_ERROR_STOP=1 --command='CREATE EXTENSION pgtap' >/dev/null
 

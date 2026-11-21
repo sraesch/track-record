@@ -1,23 +1,71 @@
 # Database
 
-PostgreSQL 18 schema and pgTAP tests. Design decisions are in
-[ADR 0004](../docs/adr/0004-database-schema.md).
+PostgreSQL 18 schema, migration runner, database image and pgTAP tests.
+Design decisions are in [ADR 0004](../docs/adr/0004-database-schema.md)
+(schema) and [ADR 0006](../docs/adr/0006-database-image.md) (image and
+migrations).
 
 ## Layout
 
 ```
 db/
   migrations/      Numbered SQL migrations, applied in order, one transaction each
+  migrate.sh       Applies pending migrations (track-record-migrate in the image)
+  Dockerfile       Database image: postgres:18 plus migrations and runner
+  image/           Files copied into the image
+  image-test.sh    Builds the image and checks it
   tests/           pgTAP tests, one file per area
   tests/lib/       Shared test fixtures (included with \ir)
   test/            Docker image and script for the test run
   test.sh          Runs the tests
 ```
 
+## Migrations
+
+`migrate.sh` applies the migrations that are not applied yet, in version
+order, each in its own transaction. Applied migrations are recorded in
+`schema_migration` with a SHA-256 checksum. The script stops with an error if
+an applied migration has changed or is missing, so never edit a merged
+migration: add a new one. Several runs at once are safe.
+
+It connects through the standard libpq variables and needs `psql`:
+
+```bash
+PGHOST=localhost PGUSER=postgres PGDATABASE=track_record db/migrate.sh
+```
+
+## Database image
+
+```bash
+docker build --tag track-record-db db
+```
+
+Run it as the database server. On first start with an empty data directory,
+all migrations are applied to `track_record` (`POSTGRES_PASSWORD` is
+required, as in the `postgres` image):
+
+```bash
+docker run --detach --name track-record-db --env POSTGRES_PASSWORD=secret \
+    --publish 5432:5432 --volume track-record-data:/var/lib/postgresql track-record-db
+```
+
+Run it as a migration job against an existing database, e.g. after an
+upgrade. A restarted server does not migrate by itself:
+
+```bash
+docker run --rm --env PGHOST=db.example --env PGUSER=postgres \
+    --env PGPASSWORD=secret --env PGDATABASE=track_record \
+    track-record-db track-record-migrate
+```
+
+`db/image-test.sh` builds the image and checks first start, a rerun that
+applies nothing, refusal of changed and missing migrations, and an upgrade.
+
 ## Running the tests
 
 Needs Docker. The script builds a PostgreSQL 18 image with pgTAP, applies all
-migrations to a throwaway database and runs every test file with `pg_prove`:
+migrations to a throwaway database with `migrate.sh` and runs every test file
+with `pg_prove`:
 
 ```bash
 db/test.sh
