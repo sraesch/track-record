@@ -1,18 +1,19 @@
-import { useTranslation } from 'react-i18next'
+import CssBaseline from '@mui/material/CssBaseline'
+import { ThemeProvider } from '@mui/material/styles'
+import { type createBrowserRouter, RouterProvider } from 'react-router'
+import { theme } from './theme'
 
-function App() {
-  const { t } = useTranslation()
+type Props = {
+  /** A browser router in the app, a memory router in tests. */
+  router: ReturnType<typeof createBrowserRouter>
+}
 
+function App({ router }: Props) {
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>{t('app.name')}</h1>
-        <p>{t('app.tagline')}</p>
-      </header>
-      <main className="app-main">
-        <p>{t('home.placeholder')}</p>
-      </main>
-    </div>
+    <ThemeProvider theme={theme}>
+      <CssBaseline enableColorScheme />
+      <RouterProvider router={router} />
+    </ThemeProvider>
   )
 }
 

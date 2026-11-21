@@ -3,7 +3,79 @@
     "name": "Track Record",
     "tagline": "Benchmark results, kept forever."
   },
-  "home": {
-    "placeholder": "Runs, comparisons and trends will appear here."
+  "nav": {
+    "label": "Main navigation",
+    "open": "Open navigation",
+    "close": "Close navigation",
+    "home": "Track Record home",
+    "sections": {
+      "analysis": "Analysis",
+      "definitions": "Definitions",
+      "administration": "Administration"
+    },
+    "items": {
+      "runs": "Runs",
+      "compare": "Compare",
+      "trends": "Trends",
+      "series": "Series",
+      "suites": "Suites & scenarios",
+      "metrics": "Metrics",
+      "derivedMetrics": "Derived metrics",
+      "aliases": "Aliases",
+      "tokens": "API tokens"
+    }
+  },
+  "colorMode": {
+    "label": "Color mode",
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "pages": {
+    "runs": {
+      "description": "All benchmark runs with their status, SUT version, environment and tags. Filter by any dimension and open a run for its details."
+    },
+    "compare": {
+      "description": "Compare runs, client devices or parameter values side by side, with absolute and relative differences against a reference."
+    },
+    "trends": {
+      "description": "Follow a metric of one case on one client device across runs, over time or over SUT versions."
+    },
+    "series": {
+      "description": "Overlay series from different samples and runs, resample and aggregate them."
+    },
+    "suites": {
+      "description": "Suites, scenarios and test cases with all their versions."
+    },
+    "metrics": {
+      "description": "Metric definitions with their units and direction, and the unit catalogue."
+    },
+    "derivedMetrics": {
+      "description": "Define derived metrics in the DSL. They are computed at query time, also for historical runs."
+    },
+    "aliases": {
+      "description": "Rename or merge device names, parameter values and other dimension values. Aliases apply everywhere."
+    },
+    "tokens": {
+      "description": "API tokens for the benchmark harness and MCP clients. Create and revoke them here."
+    },
+    "runDetail": {
+      "title": "Run {{runId}}",
+      "description": "Case executions, samples, series, tags, annotations and attachments of this run.",
+      "back": "All runs"
+    },
+    "notFound": {
+      "title": "Page not found",
+      "description": "There is no page at {{path}}.",
+      "home": "Go to the run list"
+    },
+    "error": {
+      "title": "Something went wrong",
+      "description": "This page could not be shown. Reload it, or go back to the run list.",
+      "home": "Go to the run list"
+    }
+  },
+  "placeholder": {
+    "notBuilt": "This view is not built yet."
   }
 }

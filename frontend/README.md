@@ -1,19 +1,34 @@
 # Frontend
 
 Web UI for Track Record: TypeScript (strict), React, Vite, Vitest and
-react-i18next. Setup decisions are in
-[ADR 0010](../docs/adr/0010-frontend-scaffold.md).
+react-i18next, with MUI components and React Router. Setup decisions are in
+[ADR 0010](../docs/adr/0010-frontend-scaffold.md), the shell (app bar, side
+menu, routing) in [ADR 0011](../docs/adr/0011-ui-shell.md).
+
+## Adding a view
+
+1. Add an entry to `src/navigation.ts` (id, path, icon); it appears in the
+   side menu and gets a route.
+2. Add `nav.items.<id>` and `pages.<id>.description` to the locale file.
+3. Replace its `PlaceholderPage` route in `src/routes.tsx` with the page.
+   Pages start with `<PageHeader>`; view state goes into the URL (FR-21).
 
 ## Layout
 
 ```
 frontend/
   index.html            Vite entry
-  src/main.tsx          Bootstraps React and i18n
-  src/App.tsx           App shell
+  src/main.tsx          Bootstraps React, i18n and the router
+  src/App.tsx           Theme and router providers
+  src/routes.tsx        All routes (React Router)
+  src/navigation.ts     Side menu entries; routes are built from them
+  src/theme.ts          MUI theme: light and dark color schemes
+  src/layout/           App bar, side menu, color mode menu
+  src/pages/            Pages and the page header
   src/i18n/             i18next setup, typed keys, locale files
     locales/en/         English translations (JSON, one file per namespace)
   src/test/setup.ts     Vitest setup: jest-dom matchers, i18n, cleanup
+  src/test/viewport.ts  setViewportWidth(): screen width for useMediaQuery
   vite.config.ts        Vite and Vitest config, dev proxy to the backend
   test.sh               lint, type check, tests and build (what CI runs)
   scripts/seed.ts       Test data for UI development (npm run seed)

@@ -15,8 +15,8 @@ design notes when a change implements or affects one.
 ingestion, retrieval, tags/annotations, aliases, tokens, the UI-only
 operations, the derived metric DSL and analysis (aggregates, trends,
 comparisons, series views, export) and the MCP server. The frontend
-([frontend/](frontend/README.md)) is a scaffold: Vite, React, i18n and tests,
-no views yet. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
+([frontend/](frontend/README.md)) has the shell (app bar, side menu, routes
+for every view, color modes); the views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 
@@ -76,6 +76,10 @@ npm run seed                      # test data for UI development (in frontend/; 
 - Tests sit next to the code as `*.test.ts(x)` (Vitest, jsdom, Testing
   Library). Vitest globals are off: import `describe`/`it`/`expect`.
 - The UI only calls the UI port (`/ui/api`), with relative URLs.
+- MUI components and React Router ([ADR 0011](docs/adr/0011-ui-shell.md)).
+  Views are listed once in `src/navigation.ts` (side menu and routes);
+  pages start with `<PageHeader>`. Import icons per file
+  (`@mui/icons-material/ShowChart`). View state lives in the URL (FR-21).
 - The image (`frontend/Dockerfile`) is nginx serving the build and proxying
   `/ui/api` to `TR_UI_API_UPSTREAM`. `deploy/local/` runs the whole stack on
   Docker Desktop Kubernetes for trying the UI; it is not the Helm chart.
@@ -130,9 +134,10 @@ Backend crates are decided in ADR 0008: axum, sqlx (runtime queries),
 utoipa (OpenAPI from code), rmcp for MCP; workspace in `backend/`.
 
 Frontend tooling is decided in ADR 0010: npm, oxlint, Vitest with jsdom and
-Testing Library.
+Testing Library. Component library (MUI) and routing (React Router) in
+ADR 0011.
 
-Still open: cache strategy, charting library, frontend routing and layout,
+Still open: cache strategy, charting library, frontend data fetching,
 API client generation, Helm chart, release notes, publishing the server image.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
 only in code.

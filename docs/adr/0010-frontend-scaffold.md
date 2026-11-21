@@ -62,3 +62,5 @@ needs no tokens.
 Routing and URL state (FR-21) · API client generated from
 `backend/openapi/ui.json` · data fetching and caching · charting library ·
 component library and layout · ingress and publishing the UI image.
+Component library, layout and routing are decided in
+[ADR 0011](0011-ui-shell.md).
