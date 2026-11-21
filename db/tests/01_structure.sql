@@ -8,7 +8,8 @@ SELECT tables_are('public', ARRAY[
     'alias', 'alias_version', 'unit',
     'sut_version', 'environment', 'client_device', 'asset', 'test_case', 'test_case_asset',
     'run', 'case_execution', 'sample', 'measurement', 'series', 'series_point',
-    'attachment', 'run_tag', 'test_case_tag', 'annotation', 'api_token'
+    'attachment', 'run_tag', 'test_case_tag', 'annotation', 'api_token',
+    'schema_migration'  -- written by db/migrate.sh, not by a migration
 ]);
 
 SELECT views_are('public', ARRAY[

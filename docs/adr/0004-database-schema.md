@@ -12,8 +12,8 @@ behind it.
 ## Decision
 
 - **Migrations** are plain SQL files `db/migrations/NNNN_name.sql`, applied
-  in order, one transaction each. The Rust migration tool is still open; this
-  naming works with `sqlx`.
+  in order, one transaction each, by `db/migrate.sh`
+  ([ADR 0006](0006-database-image.md)). This naming also works with `sqlx`.
 - **IDs:** results (runs, case executions, samples, series, attachments) use
   client-generated UUIDs as primary keys, so a retried upload hits the
   existing row (FR-3). Definitions and dimensions use `bigint` identities.
