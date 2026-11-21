@@ -38,6 +38,15 @@ needs no tokens.
 - **Dev server:** Vite proxies `/ui/api` to a local backend
   (`http://localhost:8081`, override with `TR_UI_API_URL`), so the UI uses
   same-origin relative URLs in development and behind the ingress.
+- **Image:** `frontend/Dockerfile` builds the app and serves it with
+  unprivileged nginx on port 8080. nginx also proxies `/ui/api` to the
+  backend UI port (`TR_UI_API_UPSTREAM`, default `http://server:8081`),
+  without buffering so streamed results pass through (NFR-7), and falls back
+  to `index.html` for client-side routes (FR-21).
+- **Local stack:** `deploy/local/` runs database, server and UI on Docker
+  Desktop Kubernetes with plain kustomize manifests (`up.sh`, `forward.sh`,
+  `down.sh`). It is for trying the UI, not a deployment format; the Helm
+  chart is still open.
 
 ## Consequences
 
@@ -52,4 +61,4 @@ needs no tokens.
 
 Routing and URL state (FR-21) · API client generated from
 `backend/openapi/ui.json` · data fetching and caching · charting library ·
-component library and layout · serving the built UI (image, ingress).
+component library and layout · ingress and publishing the UI image.

@@ -35,6 +35,10 @@ docker build --file backend/Dockerfile --tag track-record-server .   # backend i
 frontend/test.sh                  # frontend: npm ci, oxlint, tsc, vitest, build (needs Node.js 24)
 frontend/test.sh -- App           # selected frontend tests (arguments go to vitest run)
 npm run dev                       # frontend dev server (in frontend/; proxies /ui/api to localhost:8081)
+docker build --tag track-record-frontend frontend   # web UI image (nginx; proxies /ui/api to server:8081)
+deploy/local/up.sh                # whole stack on Docker Desktop Kubernetes (build, push, deploy)
+deploy/local/forward.sh           # UI on localhost:8088, machine API on localhost:8089
+deploy/local/down.sh              # remove the local stack and its data
 ```
 
 ## Backend
@@ -71,6 +75,9 @@ npm run dev                       # frontend dev server (in frontend/; proxies /
 - Tests sit next to the code as `*.test.ts(x)` (Vitest, jsdom, Testing
   Library). Vitest globals are off: import `describe`/`it`/`expect`.
 - The UI only calls the UI port (`/ui/api`), with relative URLs.
+- The image (`frontend/Dockerfile`) is nginx serving the build and proxying
+  `/ui/api` to `TR_UI_API_UPSTREAM`. `deploy/local/` runs the whole stack on
+  Docker Desktop Kubernetes for trying the UI; it is not the Helm chart.
 
 ## Database
 
@@ -110,7 +117,7 @@ CI is GitHub Actions ([ADR 0005](docs/adr/0005-ci.md)): `.github/workflows/ci.ym
 runs on pull requests and on pushes to `develop` and `main`. Its jobs call the
 local test commands; when a new part gets tests, add a job that runs the same
 command (`backend` runs `backend/test.sh` and builds the server image,
-`frontend` runs `frontend/test.sh`). After
+`frontend` runs `frontend/test.sh` and builds the UI image). After
 the checks pass, pushes to `develop`, `main` and `v*` tags
 publish `ghcr.io/<owner>/track-record-db` for amd64 and arm64
 ([ADR 0007](docs/adr/0007-image-publishing.md)); pull requests never

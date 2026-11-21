@@ -1,0 +1,13 @@
+# Local development stack for Docker Desktop Kubernetes. Not for production:
+# fixed password, single replicas, no auth proxy. Use deploy/local/up.sh.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: track-record
+resources:
+  - namespace.yaml
+  - db.yaml
+  - server.yaml
+  - frontend.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: track-record

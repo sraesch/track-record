@@ -16,6 +16,8 @@ frontend/
   src/test/setup.ts     Vitest setup: jest-dom matchers, i18n, cleanup
   vite.config.ts        Vite and Vitest config, dev proxy to the backend
   test.sh               lint, type check, tests and build (what CI runs)
+  Dockerfile            Image: nginx serving the build, proxying /ui/api
+  nginx.conf.template   nginx config (TR_UI_API_UPSTREAM substituted at start)
 ```
 
 ## Commands
@@ -45,6 +47,19 @@ Arguments after `--` go to `vitest run`, e.g. `frontend/test.sh -- App`.
 The dev server proxies `/ui/api` to the backend's UI port at
 `http://localhost:8081` (see [backend/README.md](../backend/README.md)).
 Point it elsewhere with `TR_UI_API_URL=http://host:port npm run dev`.
+
+To try the UI against the whole stack in local Kubernetes, see
+[deploy/local/](../deploy/local/README.md).
+
+## Image
+
+```bash
+docker build --tag track-record-frontend frontend
+```
+
+nginx on port 8080 serves the app and proxies `/ui/api` to
+`TR_UI_API_UPSTREAM` (default `http://server:8081`). The upstream host must
+resolve when nginx starts.
 
 ## Translations
 

@@ -69,6 +69,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Run lint, type check, tests and build
         run: frontend/test.sh
+      - name: Build the frontend image
+        run: docker build --tag track-record-frontend frontend
 
   # Pushes ghcr.io/<owner>/track-record-db after all checks passed. Never runs
   # for pull requests.
