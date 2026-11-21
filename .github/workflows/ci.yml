@@ -86,3 +86,25 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  # Deletes sha- images beyond the newest 10, unless they carry another tag.
+  # Runs after every publish.
+  cleanup-database-images:
+    name: Clean up old database images
+    needs: publish-database-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    # One cleanup at a time, across branches and tags.
+    concurrency:
+      group: ghcr-cleanup-track-record-db
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Delete old sha- images
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+        run: .github/scripts/cleanup-images.sh "$OWNER" track-record-db 10

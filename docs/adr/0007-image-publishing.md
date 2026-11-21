@@ -34,12 +34,29 @@ GitHub.
 - **Least privilege:** only the publish job gets `packages: write`; the
   workflow default stays `contents: read`. All actions in the workflow are
   pinned to commit hashes, as ADR 0005 requires once a job can write.
+- **Cleanup after every publish:** the job `cleanup-database-images` runs
+  `.github/scripts/cleanup-images.sh`. Of all images with a `sha-` tag, the
+  newest 10 are kept; older ones are deleted if `sha-` tags are their only
+  tags. Images with any other tag (`develop`, `main`, `latest`, releases)
+  are never deleted.
+  - A multi-platform image is one tagged index version plus untagged child
+    versions (platforms, attestations). The script deletes an index with its
+    children, index first, and never a child that a kept image references.
+  - Other untagged versions are left alone, because they may belong to a
+    publish that is still running.
+  - It is our own script (gh, curl, jq) rather than a third-party action, so
+    no outside code holds the delete permission. It has a `--dry-run` mode
+    and can be run locally with a personal token (`delete:packages`).
 
 ## Consequences
 
-- Every merge to `develop` publishes an image, so the registry fills up with
-  `sha-` tags. Delete old untagged or `sha-` versions by hand or with a
-  cleanup job if that matters.
+- At most 10 `sha-` images plus the branch and release images stay in the
+  registry. Rolling back further than 10 builds means using a release or
+  rebuilding from the commit.
+- Cleanup runs one at a time (concurrency group) so that two pushes don't
+  delete the same versions.
+- If a delete fails halfway, an index may be gone while some of its children
+  remain as untagged versions. They are harmless and can be deleted by hand.
 - A release is a git tag `v*` pushed to the commit to release. Release notes
   and a changelog are not decided yet.
 - The image built for publishing is not byte-identical to the one the image

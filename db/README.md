@@ -44,9 +44,10 @@ CI publishes it to `ghcr.io/sraesch/track-record-db` (amd64 and arm64,
 | `develop`, `main` | Latest push to that branch |
 | `latest` | Latest push to `main` |
 | `1.2.3`, `1.2` | Release tag `v1.2.3` |
-| `sha-<short>` | One commit; never changes |
+| `sha-<short>` | One commit; never changes. Only the newest 10 are kept |
 
-Pin `sha-<short>` or `1.2.3` in deployments. To build it locally:
+Pin `1.2.3` in long-lived deployments: `sha-` images beyond the newest 10 are
+deleted after each publish, unless they also carry another tag. To build it locally:
 
 ```bash
 docker build --tag track-record-db db
