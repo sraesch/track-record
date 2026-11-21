@@ -44,7 +44,18 @@ pub async fn check_schema(pool: &PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, ToSchema)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    sqlx::Type,
+    ToSchema,
+    schemars::JsonSchema,
+)]
 #[sqlx(type_name = "run_status", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum RunStatus {
@@ -54,7 +65,18 @@ pub enum RunStatus {
     Aborted,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, ToSchema)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    sqlx::Type,
+    ToSchema,
+    schemars::JsonSchema,
+)]
 #[sqlx(type_name = "run_trigger", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum RunTrigger {

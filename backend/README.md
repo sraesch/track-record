@@ -1,7 +1,8 @@
 # Backend
 
 Rust service that ingests benchmark results and serves them over a REST
-API. Design decisions are in [ADR 0008](../docs/adr/0008-backend-service.md).
+API and an MCP server. Design decisions are in
+[ADR 0008](../docs/adr/0008-backend-service.md).
 
 ## Layout
 
@@ -13,6 +14,7 @@ backend/
   crates/server/        track-record-server: HTTP, database, attachments, jobs
     src/api/            Handlers and the two routers
     src/service/        Service layer shared by all interfaces
+    src/mcp/            MCP server and tools (/mcp on the machine port)
     src/series_store.rs The only code touching series points
     src/attachment_store.rs  The only code touching attachment files
     tests/              Integration tests (one database per test)
@@ -54,6 +56,7 @@ cargo run -p track-record-server -- serve
 | `TR_STALE_RUN_CHECK_INTERVAL` | `1m` | How often to check |
 | `TR_MAX_BODY_BYTES` | 256 MiB | Maximum JSON request body |
 | `TR_DATABASE_MAX_CONNECTIONS` | `16` | Pool size |
+| `TR_MCP_ALLOWED_HOSTS` | empty | Comma-separated `Host` values accepted on `/mcp` (`host` or `host:port`); empty disables the check |
 | `RUST_LOG` | `info` | Log filter; logs are JSON |
 
 The server does not migrate the database. It refuses to start if a migration
@@ -126,4 +129,23 @@ For example:
 curl -s -X POST localhost:8081/ui/api/v1/analysis/aggregates \
   -H 'Content-Type: application/json' \
   -d '{"metric": "load_time", "unit": "ms", "filter": {"sut_branch": "main"}}'
+```
+
+## MCP
+
+`/mcp` on the machine port is an MCP server (streamable HTTP, stateless, JSON
+responses). It authenticates with the same API tokens as `/api`:
+
+- any token gets the read tools: runs and case executions, the catalogue
+  (suites, scenarios, test cases, metrics, devices, derived metrics,
+  annotations), `aggregates`, `trend`, `compare` and the derived metric
+  `validate_derived_metric` / `evaluate_derived_metric`;
+- an `annotate` token also gets the tag and annotation tools.
+
+There are no upload, invalidation or deletion tools. Tool parameters are the
+REST request bodies, and results are the REST response bodies. To connect a
+client, e.g. Claude Code:
+
+```bash
+claude mcp add --transport http track-record http://localhost:8080/mcp   --header "Authorization: Bearer trk_..."
 ```

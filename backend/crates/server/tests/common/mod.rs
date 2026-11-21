@@ -99,6 +99,7 @@ impl TestApp {
             pool: pool.clone(),
             attachments: Arc::new(AttachmentStore::new(attachment_dir.path())),
             max_body_bytes: 64 * 1024 * 1024,
+            mcp_allowed_hosts: Vec::new(),
         };
         state.attachments.init().await.unwrap();
 

@@ -100,7 +100,7 @@ pub struct Annotation {
 const ANNOTATION_SELECT: &str =
     "SELECT id, run_id, test_case_id, occurred_at, body, created_at, updated_at FROM annotation";
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, ToSchema, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateAnnotation {
     pub run_id: Option<Uuid>,
@@ -110,13 +110,13 @@ pub struct CreateAnnotation {
     pub body: String,
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, ToSchema, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateAnnotation {
     pub body: String,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, IntoParams)]
+#[derive(Debug, Clone, Default, Deserialize, IntoParams, schemars::JsonSchema)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub struct AnnotationQuery {

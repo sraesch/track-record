@@ -2,7 +2,8 @@
 //!
 //! - **Machine port:** `/api/v1/...` with API tokens. Read endpoints accept
 //!   any scope, tag/annotation endpoints need `annotate`, ingestion needs
-//!   `write`. UI-only endpoints are not routed here at all.
+//!   `write`. UI-only endpoints are not routed here at all. `/mcp` is the MCP
+//!   server (any scope; the scope decides which tools exist).
 //! - **UI port:** `/ui/api/v1/...` without tokens, behind the auth proxy:
 //!   read, annotate and the UI-only endpoints (invalidate, delete, tokens,
 //!   aliases). No ingestion.
@@ -197,7 +198,11 @@ pub fn ui_api(state: &AppState) -> (Router<AppState>, OpenApiDoc) {
 /// The machine listener's app.
 pub fn machine_router(state: AppState) -> Router {
     let (router, doc) = machine_api(&state);
+    let mcp = Router::new()
+        .route_service("/mcp", crate::mcp::service(state.clone()))
+        .layer(from_fn_with_state(state.clone(), require_read));
     router
+        .merge(mcp)
         .route("/api/openapi.json", get(move || async move { Json(doc) }))
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))

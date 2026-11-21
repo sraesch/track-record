@@ -6,9 +6,9 @@ trends over time and versions, series overlays and derived metrics.
 
 > **Status:** early stage. The requirements are fixed
 > ([docs/requirements.md](docs/requirements.md)). The database schema
-> ([db/](db/README.md)) and the backend's REST API for ingestion, retrieval,
-> derived metrics and analysis ([backend/](backend/README.md)) exist; MCP and
-> the web UI follow.
+> ([db/](db/README.md)) and the backend ([backend/](backend/README.md)) with
+> the REST API for ingestion, retrieval, derived metrics and analysis and the
+> MCP server exist; the web UI follows.
 
 ## What it does
 
