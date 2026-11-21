@@ -10,16 +10,32 @@ derived metrics). [docs/requirements.md](docs/requirements.md) is the source of
 truth for scope. Cite requirement IDs (`FR-n`, `NFR-n`) in commits, PRs and
 design notes when a change implements or affects one.
 
-**Status:** no code yet. Tech stack, build, test and run commands are still to be
-decided. When they are, add them to this file. Do not invent commands that don't
-exist in the repo.
+**Status:** no code yet. Build, test and run commands are still to be decided.
+When they are, add them to this file. Do not invent commands that don't exist in
+the repo.
 
-Decided by the requirements: Kubernetes + Helm, stateless backend, a relational
-DB (e.g. PostgreSQL) for metadata, S3-compatible object storage, OpenAPI for the
-REST API, an MCP server, a web UI.
+## Tech stack
 
-Left open as design decisions: series block format, DSL grammar, cache strategy.
-Record such decisions in `docs/` (e.g. `docs/adr/`) rather than only in code.
+Decided in [ADR 0001](docs/adr/0001-technology-stack.md):
+
+- **Database:** PostgreSQL; database tests with **pgTAP**.
+- **Backend:** all services in **Rust** (REST API, MCP server, jobs); tests with
+  `cargo test`.
+- **Frontend:** **TypeScript (strict)**, **React**, **Vite**; tests with
+  **Vitest**; i18n with **react-i18next**. No hard-coded user-facing strings in
+  components.
+- **Series storage:** PostgreSQL, one row per point
+  ([ADR 0002](docs/adr/0002-series-storage.md)).
+- **Attachments:** files on a shared `ReadWriteMany` volume, metadata in
+  PostgreSQL ([ADR 0003](docs/adr/0003-attachment-storage.md)).
+
+Also fixed by the requirements: Kubernetes + Helm, stateless backend,
+OpenAPI for the REST API.
+
+Still open: Rust crates (HTTP, DB access/migrations, MCP), DSL grammar, cache
+strategy, charting library, repo layout, CI.
+Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
+only in code.
 
 ## Invariants (do not break these)
 
@@ -48,9 +64,17 @@ Record such decisions in `docs/` (e.g. `docs/adr/`) rather than only in code.
   validated against the published schema (FR-4).
 
 **Storage and performance**
-- Series are **never stored one row per point**. Each series is a compressed
-  block (object storage or blob), with only metadata in the relational DB
-  (NFR-4). Volume is ~10⁸ points per run and terabytes over the lifetime.
+- Series points are stored in PostgreSQL, **one row per point**
+  ([ADR 0002](docs/adr/0002-series-storage.md), NFR-4). This is deliberately
+  simple; don't optimize it without measurements.
+- All reads and writes of points go through the **series store module**. No
+  other code touches the points table, so storage can later move to arrays or
+  compressed blocks without changing anything else. Derived metric reductions
+  and transforms run in Rust on series returned by that module.
+- A series and all its points are written in one transaction (bulk insert).
+- All attachment file access goes through the **attachment store module**.
+  Files are written atomically (temp file + rename), never overwritten, and
+  stored under their ID, never under a user-supplied name.
 - Caches (e.g. series reduction results) are optional, never the source of
   truth, and must be rebuildable from raw data (NFR-5).
 - Operations that may take more than a few seconds (comparisons, exports)

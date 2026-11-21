@@ -74,16 +74,28 @@ See [docs/requirements.md](docs/requirements.md) for the full domain model.
 ## Deployment
 
 - Kubernetes via a Helm chart, with a stateless, horizontally scalable backend.
-- PostgreSQL (or similar) for metadata; S3-compatible object storage for
-  attachments and compressed series blocks.
-- Backups of both the database and object storage are required. They are the
+- PostgreSQL for metadata and series data; a shared `ReadWriteMany` volume for
+  attachments.
+- Backups of both the database and the attachment volume are required. They are the
   only way to recover a hard-deleted run.
+
+## Tech stack
+
+| Area | Choice |
+|---|---|
+| Database | PostgreSQL, tested with pgTAP |
+| Backend | Rust |
+| Web frontend | TypeScript (strict), React, Vite, Vitest, react-i18next |
+
+Design decisions are recorded in [docs/adr/](docs/adr/).
 
 ## Expected volume
 
 1–5 runs per day, 10k+ series per run with up to ~10k points each. That is up to
-~100M points per run and terabytes over the system's lifetime, so series are
-stored as compressed blocks, never as one row per point.
+~100M points per run at the upper end. To start simple, series points are stored
+in PostgreSQL, one row per point. If the real volume turns out too large, storage
+moves to arrays or compressed blocks
+([ADR 0002](docs/adr/0002-series-storage.md)).
 
 | Operation | Target |
 |---|---|

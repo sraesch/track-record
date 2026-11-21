@@ -51,7 +51,8 @@ This system stores, manages and supports the analysis of benchmark results.
 - **FR-3** Uploads are idempotent (client-generated IDs), so retries don't create
   duplicates.
 - **FR-4** Uploads are validated against a documented schema (OpenAPI / JSON Schema).
-- **FR-5** Attachments are uploaded alongside results and stored in object storage.
+- **FR-5** Attachments are uploaded alongside results and stored as files on a
+  shared volume (see [ADR 0003](adr/0003-attachment-storage.md)).
 
 ### Data integrity, versioning & lifecycle
 - **FR-6** Uploaded results are immutable. Corrections create new revisions.
@@ -119,7 +120,7 @@ This system stores, manages and supports the analysis of benchmark results.
 ## 5. Non-Functional Requirements
 
 - **NFR-1 Deployment:** Kubernetes (Helm chart). Stateless backend that can scale
-  horizontally. S3-compatible object storage for attachments.
+  horizontally. A shared `ReadWriteMany` volume for attachments.
 - **NFR-2 Access:**
   - **Web UI:** authentication is done by an ingress/auth proxy in front of the
     system. The app has **no user identity**: everyone with access has the same
@@ -135,10 +136,11 @@ This system stores, manages and supports the analysis of benchmark results.
   - More than 10k series per run, up to ~10k points each, so up to ~100M points per
     run and roughly 10¹⁰–10¹¹ points per year.
   - With indefinite retention, plan for **terabytes over the system's lifetime**.
-- **NFR-4 Series storage:** given NFR-3, series must **not** be stored as one row
-  per point. Store each series as a compressed block (e.g. delta + zstd, or Parquet
-  in object storage), with metadata in a relational database (e.g. PostgreSQL;
-  ~10⁷ series rows per year).
+- **NFR-4 Series storage:** to avoid premature optimization, series points are
+  initially stored in PostgreSQL, one row per point (see
+  [ADR 0002](adr/0002-series-storage.md)). All access to series data goes through
+  one storage component, so it can move to compressed blocks (e.g. delta + zstd,
+  or Parquet in object storage) if the real volume requires it.
 - **NFR-5 Query cost:** derived metrics are computed at query time over many series
   (a full run comparison touches 10⁸+ points). Results of series reductions may be
   **cached** (never treated as the source of truth) if needed to meet NFR-6.
@@ -153,7 +155,7 @@ This system stores, manages and supports the analysis of benchmark results.
 - **NFR-7 Long operations:** operations that may take longer than a few seconds
   (comparisons, exports) show progress in the UI. In the API they either stream
   results or run as jobs that can be polled.
-- **NFR-8 Backup/restore** of the database and object storage. Because hard delete
+- **NFR-8 Backup/restore** of the database and the attachment volume. Because hard delete
   is immediate (FR-10), backups are the only way to recover deleted runs. Backup
   retention must be documented.
 
