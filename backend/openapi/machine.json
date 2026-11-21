@@ -1,0 +1,3343 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "track-record machine API",
+    "description": "Benchmark results store. See docs/requirements.md for the FR/NFR ids referenced in operation descriptions.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/aliases": {
+      "get": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "Aliases with their current target (FR-14).",
+        "operationId": "list_aliases",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Alias"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/annotations": {
+      "get": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "Annotations, filtered by run, test case or time range.",
+        "operationId": "list_annotations",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "test_case_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Point-in-time annotations at or after this time.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Point-in-time annotations before this time.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Annotation"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "Create an annotation on a run, a test case or a point in time.",
+        "operationId": "create_annotation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAnnotation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Annotation"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/annotations/{annotation_id}": {
+      "get": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "An annotation.",
+        "operationId": "get_annotation",
+        "parameters": [
+          {
+            "name": "annotation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Annotation"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "Delete an annotation.",
+        "operationId": "delete_annotation",
+        "parameters": [
+          {
+            "name": "annotation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "Edit an annotation's text.",
+        "operationId": "update_annotation",
+        "parameters": [
+          {
+            "name": "annotation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAnnotation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Annotation"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assets": {
+      "get": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "Assets.",
+        "operationId": "list_assets",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Asset"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/attachments/{attachment_id}": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Attachment metadata.",
+        "operationId": "get_attachment",
+        "parameters": [
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentMeta"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/attachments/{attachment_id}/content": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Download an attachment.",
+        "operationId": "download_attachment",
+        "parameters": [
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file",
+            "content": {
+              "application/octet-stream": {}
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/case-executions/{case_execution_id}": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Case execution with samples, measurements and series metadata.",
+        "operationId": "get_case_execution",
+        "parameters": [
+          {
+            "name": "case_execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseExecutionDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/client-devices": {
+      "get": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "Client devices with their names after aliases.",
+        "operationId": "list_client_devices",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ClientDevice"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{environment_id}": {
+      "get": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "An environment (shared environment or device details).",
+        "operationId": "get_environment",
+        "parameters": [
+          {
+            "name": "environment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Environment"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/metrics": {
+      "get": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "Metrics with all versions.",
+        "operationId": "list_metrics",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Metric"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List runs, newest measured start first (FR-11).",
+        "operationId": "list_runs",
+        "parameters": [
+          {
+            "name": "suite",
+            "in": "query",
+            "description": "Suite name.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sut_commit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sut_branch",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sut_tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sut_build_config",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "started_after",
+            "in": "query",
+            "description": "Measured start time at or after this time.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "started_before",
+            "in": "query",
+            "description": "Measured start time before this time.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Status; repeat for several.",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/RunStatus"
+              }
+            }
+          },
+          {
+            "name": "triggered_by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RunTrigger"
+            }
+          },
+          {
+            "name": "shared_environment_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "client_device",
+            "in": "query",
+            "description": "Client device name after aliases.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scenario",
+            "in": "query",
+            "description": "Scenario name.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "asset",
+            "in": "query",
+            "description": "Asset name.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "param",
+            "in": "query",
+            "description": "Parameter filter `name=value`, repeatable. The value is read as JSON\n(`size=10` is a number, `mode=\"10\"` a string); anything that is not a\nJSON scalar is a string (`mode=fast`).",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "description": "Metric name with a measurement or series in the run.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "description": "Tag; repeat to require several.",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "validity",
+            "in": "query",
+            "description": "Valid runs by default (FR-9).",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Validity"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1 to 500 (default 50).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "`next_cursor` of the previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Run detail with tags, annotations and attachments.",
+        "operationId": "get_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Create a run.",
+        "description": "Idempotent: the same content again returns 200, different content 409.",
+        "operationId": "create_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Client-generated run id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRun"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Run already existed with this content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Run created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Run exists with other content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/attachments": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Attachments of a run.",
+        "operationId": "list_attachments",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AttachmentMeta"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/attachments/{attachment_id}": {
+      "put": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Upload an attachment (raw body).",
+        "description": "`Content-Type` is stored for download. With `X-Content-SHA256` (hex) the\nbody is checked. Same id and content again returns 200.",
+        "operationId": "upload_attachment",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "file_name",
+            "in": "query",
+            "description": "Original file name, used only for download (never as a path).",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "case_execution_id",
+            "in": "query",
+            "description": "Case execution of the run the file belongs to.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sample_id",
+            "in": "query",
+            "description": "Sample of that case execution the file belongs to.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Content-SHA256",
+            "in": "header",
+            "description": "Expected SHA-256, hex",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/case-executions": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Case executions of a run. Superseded ones are hidden by default.",
+        "operationId": "list_case_executions",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "include_superseded",
+            "in": "query",
+            "description": "Include case executions replaced by a correction.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CaseExecutionSummary"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/case-executions/{case_execution_id}": {
+      "put": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Add a case execution, optionally with its samples and series.",
+        "description": "The whole request is one transaction. New case executions need a running\nrun; corrections (`supersedes_id`) may be added to finished runs.",
+        "operationId": "create_case_execution",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "case_execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCaseExecution"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Everything already existed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicting content, or the run is not running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/case-executions/{case_execution_id}/samples/{sample_id}": {
+      "put": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Add a sample, optionally with its series.",
+        "operationId": "create_sample",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "case_execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sample_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSample"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/case-executions/{case_execution_id}/samples/{sample_id}/series/{series_id}": {
+      "put": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Add a series to a sample. The series and all points are one transaction.",
+        "operationId": "create_series",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "case_execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sample_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "series_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSeries"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/close": {
+      "post": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Close a run with its final status.",
+        "description": "Sending the same status again is a no-op. A run that was aborted for\ninactivity cannot be closed (409).",
+        "operationId": "close_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseRun"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Run already has another terminal status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/tags/{tag}": {
+      "put": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "Add a tag to a run. Adding an existing tag is a no-op.",
+        "operationId": "add_run_tag",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "Remove a tag from a run.",
+        "operationId": "remove_run_tag",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenarios": {
+      "get": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "Scenarios with all versions.",
+        "operationId": "list_scenarios",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VersionedDefinition"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/series/{series_id}": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Series metadata.",
+        "operationId": "get_series",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesMeta"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/series/{series_id}/points": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Points of a series.",
+        "operationId": "get_series_points",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesPoints"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/suites": {
+      "get": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "Suites with all versions.",
+        "operationId": "list_suites",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VersionedDefinition"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sut-versions": {
+      "get": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "SUT versions, newest first.",
+        "operationId": "list_sut_versions",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SutVersion"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/test-cases": {
+      "get": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "Test cases (scenario version + assets + parameters).",
+        "operationId": "list_test_cases",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "query",
+            "description": "Scenario name.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TestCaseSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/test-cases/{test_case_id}": {
+      "get": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "A test case.",
+        "operationId": "get_test_case",
+        "parameters": [
+          {
+            "name": "test_case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCaseSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/test-cases/{test_case_id}/tags/{tag}": {
+      "put": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "Add a tag to a test case.",
+        "operationId": "add_test_case_tag",
+        "parameters": [
+          {
+            "name": "test_case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "Remove a tag from a test case.",
+        "operationId": "remove_test_case_tag",
+        "parameters": [
+          {
+            "name": "test_case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/units": {
+      "get": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "The predefined unit catalogue (FR-13a).",
+        "operationId": "list_units",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Unit"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Alias": {
+        "type": "object",
+        "required": [
+          "id",
+          "dimension",
+          "source",
+          "target",
+          "version",
+          "updated_at"
+        ],
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "description": "`client_device` or `parameter:<name>`."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source": {
+            "type": "object"
+          },
+          "target": {
+            "type": "object",
+            "description": "Current target; `null` if the alias was removed."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "Annotation": {
+        "type": "object",
+        "description": "A free-text note on exactly one of: a run, a test case or a point in\ntime.",
+        "required": [
+          "id",
+          "body",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "occurred_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "run_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "test_case_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Asset": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at"
+        ],
+        "properties": {
+          "content_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "AssetInput": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "content_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "AssetRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "content_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "AttachmentMeta": {
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "file_name",
+          "content_type",
+          "size_bytes",
+          "sha256",
+          "created_at"
+        ],
+        "properties": {
+          "case_execution_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sample_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "sha256": {
+            "type": "string",
+            "description": "SHA-256 of the content, hex."
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CaseExecutionDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CaseExecutionSummary"
+          },
+          {
+            "type": "object",
+            "required": [
+              "device_details",
+              "samples"
+            ],
+            "properties": {
+              "device_details": {
+                "type": "object",
+                "description": "Details of the client device for this execution."
+              },
+              "samples": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SampleDetail"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CaseExecutionSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "test_case",
+          "client_device",
+          "device_environment_id",
+          "created_at",
+          "sample_count"
+        ],
+        "properties": {
+          "client_device": {
+            "$ref": "#/components/schemas/DeviceRef"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "device_environment_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sample_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "superseded_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Set if a correction replaced this case execution."
+          },
+          "supersedes_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "test_case": {
+            "$ref": "#/components/schemas/TestCaseSummary"
+          }
+        }
+      },
+      "ClientDevice": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "resolved_name",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "resolved_name": {
+            "type": "string",
+            "description": "Name after aliases."
+          }
+        }
+      },
+      "ClientDeviceInput": {
+        "type": "object",
+        "required": [
+          "name",
+          "details"
+        ],
+        "properties": {
+          "details": {
+            "type": "object",
+            "description": "Device details (model, OS, driver, build). A change is marked in\ntrends but does not split them."
+          },
+          "name": {
+            "type": "string",
+            "description": "Stable name of the device, e.g. `pixel-8-lab-1`."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CloseRun": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Measured end time; defaults to now."
+          },
+          "status": {
+            "$ref": "#/components/schemas/CloseStatus"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CloseStatus": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "failed"
+        ]
+      },
+      "CreateAnnotation": {
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "occurred_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "A point in time, e.g. \"switched to new compression\"."
+          },
+          "run_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "test_case_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateCaseExecution": {
+        "type": "object",
+        "description": "Adds a case execution to a running run, or a correction (`supersedes_id`)\nto any run (FR-6). Samples may be sent inline or added later.",
+        "required": [
+          "test_case",
+          "client_device"
+        ],
+        "properties": {
+          "client_device": {
+            "$ref": "#/components/schemas/ClientDeviceInput"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "metrics": {
+            "type": "object",
+            "description": "Definitions of the metrics used in `samples`.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetricInput"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "samples": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SampleInput"
+            }
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "supersedes_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Case execution of the same run, test case and device this one\ncorrects."
+          },
+          "test_case": {
+            "$ref": "#/components/schemas/TestCaseInput"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateRun": {
+        "type": "object",
+        "description": "Creates a run (FR-1). The run starts as `running`.",
+        "required": [
+          "suite",
+          "sut_version",
+          "shared_environment",
+          "triggered_by",
+          "started_at"
+        ],
+        "properties": {
+          "shared_environment": {
+            "type": "object",
+            "description": "Details of the shared environment (server, backend, ...). Identical\ndetails are stored once (fingerprint)."
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Measured start time from the harness. Trends and time filters use it."
+          },
+          "suite": {
+            "$ref": "#/components/schemas/NamedDefinition"
+          },
+          "sut_version": {
+            "$ref": "#/components/schemas/SutVersionInput"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags the run is created with."
+          },
+          "triggered_by": {
+            "$ref": "#/components/schemas/RunTrigger"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateSample": {
+        "type": "object",
+        "description": "Adds one sample to a case execution.",
+        "required": [
+          "repetition"
+        ],
+        "properties": {
+          "is_warmup": {
+            "type": "boolean"
+          },
+          "measurements": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MeasurementValue"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetricInput"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "repetition": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesInput"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateSeries": {
+        "type": "object",
+        "description": "Adds one series to a sample.",
+        "required": [
+          "metric",
+          "x_dimension",
+          "x_unit",
+          "x",
+          "y"
+        ],
+        "properties": {
+          "metric": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetricInput"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "x": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "x_dimension": {
+            "type": "string"
+          },
+          "x_unit": {
+            "type": "string"
+          },
+          "y": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "DefinitionVersion": {
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "definition",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "definition": {
+            "type": "object"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "DeviceRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "resolved_name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string",
+            "description": "Stable name as uploaded."
+          },
+          "resolved_name": {
+            "type": "string",
+            "description": "Name after aliases; trends and comparisons use this."
+          }
+        }
+      },
+      "Environment": {
+        "type": "object",
+        "required": [
+          "id",
+          "details",
+          "fingerprint",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "details": {
+            "type": "object"
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "SHA-256 of the details, hex."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "IngestResponse": {
+        "type": "object",
+        "description": "Result of an idempotent write.",
+        "required": [
+          "id",
+          "created"
+        ],
+        "properties": {
+          "created": {
+            "type": "boolean",
+            "description": "False if everything already existed with identical content (a retry)."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "MeasurementOut": {
+        "type": "object",
+        "required": [
+          "metric",
+          "metric_version_id",
+          "metric_version",
+          "unit",
+          "value"
+        ],
+        "properties": {
+          "metric": {
+            "type": "string"
+          },
+          "metric_version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "metric_version_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "MeasurementValue": {
+        "oneOf": [
+          {
+            "type": "number",
+            "format": "double"
+          },
+          {
+            "type": "boolean"
+          }
+        ],
+        "description": "A measured value: a number, or a boolean for boolean metrics."
+      },
+      "Metric": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "versions"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetricVersion"
+            }
+          }
+        }
+      },
+      "MetricDirection": {
+        "type": "string",
+        "enum": [
+          "higher_is_better",
+          "lower_is_better"
+        ]
+      },
+      "MetricInput": {
+        "type": "object",
+        "description": "Definition of a metric used in the request. Identical definitions map to\nthe same metric version.",
+        "required": [
+          "unit",
+          "value_type",
+          "direction"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/MetricDirection"
+          },
+          "unit": {
+            "type": "string",
+            "description": "Unit symbol; `\"\"` for dimensionless (FR-13a)."
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/MetricValueType"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MetricValueType": {
+        "type": "string",
+        "enum": [
+          "float",
+          "integer",
+          "boolean"
+        ]
+      },
+      "MetricVersion": {
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "unit",
+          "value_type",
+          "direction",
+          "description",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/MetricDirection"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/MetricValueType"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "NamedDefinition": {
+        "type": "object",
+        "required": [
+          "name",
+          "definition"
+        ],
+        "properties": {
+          "definition": {
+            "description": "Free-form JSON definition. Identical definitions map to the same\nversion; a changed definition is a new version."
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Problem": {
+        "type": "object",
+        "description": "Problem details (RFC 9457). `code` is a stable, machine-readable error\ncode.",
+        "required": [
+          "title",
+          "status",
+          "code",
+          "detail"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable error code, e.g. `conflict` or `series_incomplete`."
+          },
+          "detail": {
+            "type": "string",
+            "description": "Explanation of this occurrence."
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP status code.",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string",
+            "description": "Short summary of the problem type."
+          }
+        }
+      },
+      "RunDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RunSummary"
+          },
+          {
+            "type": "object",
+            "required": [
+              "shared_environment",
+              "last_upload_at",
+              "case_execution_count",
+              "annotations",
+              "attachments"
+            ],
+            "properties": {
+              "annotations": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Annotation"
+                }
+              },
+              "attachments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AttachmentMeta"
+                }
+              },
+              "case_execution_count": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "last_upload_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Last upload of anything for this run, in server time (FR-2)."
+              },
+              "shared_environment": {
+                "type": "object",
+                "description": "Details of the shared environment."
+              }
+            }
+          }
+        ]
+      },
+      "RunList": {
+        "type": "object",
+        "required": [
+          "runs"
+        ],
+        "properties": {
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass as `cursor` to get the next page; absent on the last page."
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunSummary"
+            }
+          }
+        }
+      },
+      "RunStatus": {
+        "type": "string",
+        "enum": [
+          "running",
+          "completed",
+          "failed",
+          "aborted"
+        ]
+      },
+      "RunSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "suite",
+          "sut_version",
+          "shared_environment_id",
+          "triggered_by",
+          "status",
+          "started_at",
+          "is_valid",
+          "created_at",
+          "tags"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Upload time on the server."
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "invalid_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_valid": {
+            "type": "boolean"
+          },
+          "shared_environment_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Measured start time."
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "suite": {
+            "$ref": "#/components/schemas/SuiteRef"
+          },
+          "sut_version": {
+            "$ref": "#/components/schemas/SutVersion"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "triggered_by": {
+            "$ref": "#/components/schemas/RunTrigger"
+          }
+        }
+      },
+      "RunTrigger": {
+        "type": "string",
+        "enum": [
+          "nightly",
+          "manual",
+          "ci"
+        ]
+      },
+      "SampleDetail": {
+        "type": "object",
+        "required": [
+          "id",
+          "repetition",
+          "is_warmup",
+          "created_at",
+          "measurements",
+          "series"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "is_warmup": {
+            "type": "boolean"
+          },
+          "measurements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MeasurementOut"
+            }
+          },
+          "repetition": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesMeta"
+            }
+          }
+        }
+      },
+      "SampleInput": {
+        "type": "object",
+        "required": [
+          "id",
+          "repetition"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "is_warmup": {
+            "type": "boolean"
+          },
+          "measurements": {
+            "type": "object",
+            "description": "Metric name -> value; every metric must be defined in `metrics`.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MeasurementValue"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "repetition": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesInput"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SeriesInput": {
+        "type": "object",
+        "description": "A raw, measured series: one per metric and sample. x never decreases.",
+        "required": [
+          "id",
+          "metric",
+          "x_dimension",
+          "x_unit",
+          "x",
+          "y"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "metric": {
+            "type": "string",
+            "description": "Metric name; must be defined in `metrics`."
+          },
+          "x": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "x_dimension": {
+            "type": "string",
+            "description": "What x measures, e.g. `time` or `transferred`."
+          },
+          "x_unit": {
+            "type": "string",
+            "description": "Unit of x; `\"\"` for dimensionless."
+          },
+          "y": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SeriesMeta": {
+        "type": "object",
+        "required": [
+          "id",
+          "sample_id",
+          "metric",
+          "metric_version_id",
+          "metric_version",
+          "unit",
+          "x_dimension",
+          "x_unit",
+          "point_count"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "metric_version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "metric_version_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "point_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sample_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unit": {
+            "type": "string",
+            "description": "Unit of y (the metric's unit)."
+          },
+          "x_dimension": {
+            "type": "string"
+          },
+          "x_unit": {
+            "type": "string"
+          }
+        }
+      },
+      "SeriesPoints": {
+        "type": "object",
+        "required": [
+          "id",
+          "x",
+          "y"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "x": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          "y": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            }
+          }
+        }
+      },
+      "SuiteRef": {
+        "type": "object",
+        "required": [
+          "suite_version_id",
+          "name",
+          "version"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "suite_version_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SutVersion": {
+        "type": "object",
+        "required": [
+          "id",
+          "commit"
+        ],
+        "properties": {
+          "branch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "build_config": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "commit": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SutVersionInput": {
+        "type": "object",
+        "required": [
+          "commit"
+        ],
+        "properties": {
+          "branch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "build_config": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "commit": {
+            "type": "string"
+          },
+          "tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "TestCaseInput": {
+        "type": "object",
+        "required": [
+          "scenario"
+        ],
+        "properties": {
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssetInput"
+            }
+          },
+          "parameter_units": {
+            "type": "object",
+            "description": "Units of numeric parameters, e.g. `{\"bandwidth\": \"Mbit/s\"}` (FR-13a).",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "parameters": {
+            "type": "object",
+            "description": "Flat object of numbers, strings and booleans. Types are kept."
+          },
+          "scenario": {
+            "$ref": "#/components/schemas/NamedDefinition"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TestCaseSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "scenario",
+          "scenario_version",
+          "scenario_version_id",
+          "parameters",
+          "resolved_parameters",
+          "parameter_units",
+          "assets",
+          "tags"
+        ],
+        "properties": {
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssetRef"
+            }
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "parameter_units": {
+            "type": "object"
+          },
+          "parameters": {
+            "type": "object",
+            "description": "Parameters as uploaded."
+          },
+          "resolved_parameters": {
+            "type": "object",
+            "description": "Parameters after aliases (FR-14)."
+          },
+          "scenario": {
+            "type": "string"
+          },
+          "scenario_version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "scenario_version_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Unit": {
+        "type": "object",
+        "required": [
+          "symbol",
+          "quantity",
+          "to_base",
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "to_base": {
+            "type": "number",
+            "format": "double",
+            "description": "Value in this unit times `to_base` is the value in the base unit of\nthe quantity."
+          }
+        }
+      },
+      "UpdateAnnotation": {
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "VersionedDefinition": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "versions"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DefinitionVersion"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "API token (trk_...) created in the web UI"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "ingestion",
+      "description": "Incremental, idempotent upload of results (FR-1 to FR-5)"
+    },
+    {
+      "name": "runs",
+      "description": "Runs and their results"
+    },
+    {
+      "name": "definitions",
+      "description": "Versioned definitions and dimensions"
+    },
+    {
+      "name": "annotations",
+      "description": "Tags and annotations"
+    }
+  ]
+}

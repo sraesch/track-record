@@ -11,8 +11,11 @@ truth for scope. Cite requirement IDs (`FR-n`, `NFR-n`) in commits, PRs and
 design notes when a change implements or affects one.
 
 **Status:** database schema, tests and database image exist
-([db/](db/README.md)); no backend or frontend yet. Add build, test and run commands here as they appear. Do not
-invent commands that don't exist in the repo.
+([db/](db/README.md)). The Rust backend ([backend/](backend/README.md)) has
+ingestion, retrieval, tags/annotations, aliases, tokens and the UI-only
+operations; analysis (derived metrics, comparisons, trends, export) and MCP
+are not built yet. No frontend yet. Add build, test and run commands here as
+they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 
@@ -23,7 +26,27 @@ db/image-test.sh                  # build the database image (track-record-db) a
 docker build --tag track-record-db db   # build the database image only
 db/migrate.sh                     # apply pending migrations to $PGHOST/$PGDATABASE (needs psql)
 .github/scripts/cleanup-images.sh sraesch track-record-db --dry-run   # show which GHCR images cleanup would delete
+backend/test.sh                   # backend: fmt, clippy, cargo test against a throwaway database (needs Docker)
+backend/test.sh -- ingest         # selected backend tests (arguments go to cargo test)
+cargo run -p track-record-server -- serve          # run the server (in backend/; env vars in backend/README.md)
+cargo run -p track-record-server -- openapi machine > openapi/machine.json   # regenerate (in backend/; also `ui`)
+docker build --file backend/Dockerfile --tag track-record-server .   # backend image (from the repo root)
 ```
+
+## Backend
+
+- Layout and conventions are in [ADR 0008](docs/adr/0008-backend-service.md).
+  Handlers only translate HTTP; logic lives in `service/`, which MCP will
+  share.
+- Two ports: the machine port (`/api`, `/mcp`, API tokens) and the UI port
+  (`/ui/api`, no tokens). UI-only operations (invalidate, delete, tokens,
+  aliases) are routed only on the UI port.
+- Results are written with `PUT` on client UUIDs: 201 on create, 200 for an
+  identical retry, 409 for different content. One transaction per request.
+- After changing an endpoint, regenerate `backend/openapi/*.json`; a test
+  checks them.
+- Integration tests use `tests/common` (`app!()`): a fresh database per test
+  and both ports in-process. Every new endpoint gets integration tests.
 
 ## Database
 
@@ -62,15 +85,19 @@ OpenAPI for the REST API.
 CI is GitHub Actions ([ADR 0005](docs/adr/0005-ci.md)): `.github/workflows/ci.yml`
 runs on pull requests and on pushes to `develop` and `main`. Its jobs call the
 local test commands; when a new part gets tests, add a job that runs the same
-command. After the checks pass, pushes to `develop`, `main` and `v*` tags
+command (`backend` runs `backend/test.sh` and builds the server image). After
+the checks pass, pushes to `develop`, `main` and `v*` tags
 publish `ghcr.io/<owner>/track-record-db` for amd64 and arm64
 ([ADR 0007](docs/adr/0007-image-publishing.md)); pull requests never
 publish. After each publish, `.github/scripts/cleanup-images.sh` deletes
 `sha-` images beyond the newest 10 (index and children together). Actions are
 pinned to commit hashes; keep it that way.
 
-Still open: Rust crates (HTTP, DB access, MCP), DSL grammar, cache strategy,
-charting library, repo layout, Helm chart, release notes.
+Backend crates are decided in ADR 0008: axum, sqlx (runtime queries),
+utoipa (OpenAPI from code), rmcp for MCP; workspace in `backend/`.
+
+Still open: DSL grammar, cache strategy, charting library, frontend layout,
+Helm chart, release notes, publishing the server image.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
 only in code.
 
