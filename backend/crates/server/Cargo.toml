@@ -24,6 +24,8 @@ hex.workspace = true
 humantime.workspace = true
 parquet.workspace = true
 percent-encoding.workspace = true
+rmcp = { workspace = true, features = ["server", "macros", "transport-streamable-http-server"] }
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -41,6 +43,7 @@ uuid.workspace = true
 
 [dev-dependencies]
 reqwest.workspace = true
+rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
 tempfile.workspace = true
 
 [lints]

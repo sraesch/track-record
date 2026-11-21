@@ -8,6 +8,7 @@ pub mod config;
 pub mod db;
 pub mod error;
 pub mod jobs;
+pub mod mcp;
 pub mod series_store;
 pub mod service;
 
@@ -29,6 +30,8 @@ pub struct AppState {
     pub pool: PgPool,
     pub attachments: Arc<AttachmentStore>,
     pub max_body_bytes: usize,
+    /// `Host` values accepted on `/mcp`; empty disables the check.
+    pub mcp_allowed_hosts: Vec<String>,
 }
 
 impl AppState {
@@ -37,6 +40,7 @@ impl AppState {
             pool,
             attachments: Arc::new(AttachmentStore::new(&config.attachment_root)),
             max_body_bytes: config.max_body_bytes,
+            mcp_allowed_hosts: config.mcp_allowed_hosts.clone(),
         }
     }
 }
@@ -110,6 +114,7 @@ pub fn openapi_json(which: &str) -> Option<String> {
         pool,
         attachments: Arc::new(AttachmentStore::new("/nonexistent")),
         max_body_bytes: 0,
+        mcp_allowed_hosts: Vec::new(),
     };
     let doc = match which {
         "machine" => api::machine_api(&state).1,

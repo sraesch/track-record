@@ -14,7 +14,7 @@ design notes when a change implements or affects one.
 ([db/](db/README.md)). The Rust backend ([backend/](backend/README.md)) has
 ingestion, retrieval, tags/annotations, aliases, tokens, the UI-only
 operations, the derived metric DSL and analysis (aggregates, trends,
-comparisons, series views, export); MCP is not built yet. No frontend yet. Add build, test and run commands here as
+comparisons, series views, export) and the MCP server. No frontend yet. Add build, test and run commands here as
 they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
@@ -36,8 +36,8 @@ docker build --file backend/Dockerfile --tag track-record-server .   # backend i
 ## Backend
 
 - Layout and conventions are in [ADR 0008](docs/adr/0008-backend-service.md).
-  Handlers only translate HTTP; logic lives in `service/`, which MCP will
-  share.
+  Handlers only translate HTTP; logic lives in `service/`, which the MCP
+  tools (`src/mcp/`) share.
 - Two ports: the machine port (`/api`, `/mcp`, API tokens) and the UI port
   (`/ui/api`, no tokens). UI-only operations (invalidate, delete, tokens,
   aliases) are routed only on the UI port.
@@ -45,6 +45,10 @@ docker build --file backend/Dockerfile --tag track-record-server .   # backend i
   identical retry, 409 for different content. One transaction per request.
 - After changing an endpoint, regenerate `backend/openapi/*.json`; a test
   checks them.
+- MCP (`/mcp`, rmcp, stateless) shows tools by token scope: read tools for
+  every scope, tag/annotation tools only for `annotate`. Tool parameters are
+  the REST request types (`schemars::JsonSchema` next to `ToSchema`); service
+  errors become tool errors with the REST `code`. Tests in `tests/mcp.rs`.
 - Integration tests use `tests/common` (`app!()`): a fresh database per test
   and both ports in-process. Every new endpoint gets integration tests.
 - The derived metric DSL and the analysis conventions are in

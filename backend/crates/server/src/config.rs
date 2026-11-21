@@ -23,6 +23,10 @@ pub struct Config {
     pub stale_run_check_interval: Duration,
     /// Maximum size of a JSON request body.
     pub max_body_bytes: usize,
+    /// `Host` header values accepted on `/mcp` (`TR_MCP_ALLOWED_HOSTS`,
+    /// comma-separated, `host` or `host:port`). Empty disables the check;
+    /// the API token already keeps browsers out.
+    pub mcp_allowed_hosts: Vec<String>,
 }
 
 impl Config {
@@ -61,6 +65,13 @@ impl Config {
             stale_run_timeout: parse_duration("TR_STALE_RUN_TIMEOUT", "1h")?,
             stale_run_check_interval: parse_duration("TR_STALE_RUN_CHECK_INTERVAL", "1m")?,
             max_body_bytes: parse_number("TR_MAX_BODY_BYTES", 256 * 1024 * 1024)?,
+            mcp_allowed_hosts: get("TR_MCP_ALLOWED_HOSTS")
+                .unwrap_or_default()
+                .split(',')
+                .map(str::trim)
+                .filter(|h| !h.is_empty())
+                .map(str::to_owned)
+                .collect(),
         };
         if config.machine_addr == config.ui_addr {
             bail!("TR_MACHINE_ADDR and TR_UI_ADDR must differ");
@@ -97,6 +108,24 @@ mod tests {
         assert_eq!(c.ui_addr.port(), 8081);
         assert_eq!(c.stale_run_timeout, Duration::from_secs(3600));
         assert_eq!(c.stale_run_check_interval, Duration::from_secs(60));
+        assert!(c.mcp_allowed_hosts.is_empty());
+    }
+
+    #[test]
+    fn mcp_allowed_hosts_are_a_comma_list() {
+        let c = Config::from_lookup(lookup(&[
+            ("DATABASE_URL", "x"),
+            ("TR_ATTACHMENT_ROOT", "/data"),
+            (
+                "TR_MCP_ALLOWED_HOSTS",
+                " track-record.example.com, localhost:8080 ,",
+            ),
+        ]))
+        .unwrap();
+        assert_eq!(
+            c.mcp_allowed_hosts,
+            ["track-record.example.com", "localhost:8080"]
+        );
     }
 
     #[test]

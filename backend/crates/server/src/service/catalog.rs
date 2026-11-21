@@ -228,7 +228,7 @@ pub async fn assets(pool: &PgPool) -> ApiResult<Vec<Asset>> {
     .await?)
 }
 
-#[derive(Debug, Clone, Default, Deserialize, IntoParams)]
+#[derive(Debug, Clone, Default, Deserialize, IntoParams, schemars::JsonSchema)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub struct TestCaseQuery {

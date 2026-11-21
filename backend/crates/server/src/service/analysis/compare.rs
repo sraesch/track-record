@@ -34,7 +34,9 @@ use crate::service::derived::{self, Prepared};
 use crate::service::query::Aliases;
 use crate::service::runs::RunFilter;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, ToSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, ToSchema, schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum CompareDimension {
     /// Run A vs. run B; values are run ids.
@@ -45,7 +47,7 @@ pub enum CompareDimension {
     Parameters,
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, ToSchema, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CompareRequest {
     /// Runs to compare (FR-11): one run or a filtered set.

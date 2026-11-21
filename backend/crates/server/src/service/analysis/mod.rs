@@ -594,7 +594,7 @@ pub async fn eval_scalars(
 
 // Aggregates (FR-12) ------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, ToSchema, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AggregatesRequest {
     /// Run filter (FR-11). `limit` and `cursor` do not apply.
@@ -712,7 +712,18 @@ pub async fn aggregates(pool: &PgPool, req: &AggregatesRequest) -> ApiResult<Agg
 
 // Trend (FR-18) ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize, ToSchema)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Deserialize,
+    Serialize,
+    ToSchema,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum TrendOrder {
     /// By measured start time.
@@ -723,7 +734,7 @@ pub enum TrendOrder {
     SutVersion,
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, ToSchema, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TrendRequest {
     /// Any test case of the case. Test cases whose parameters are equal

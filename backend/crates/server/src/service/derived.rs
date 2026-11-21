@@ -271,7 +271,7 @@ pub struct Validation {
     pub inputs: ExpressionInputs,
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, ToSchema, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ValidateExpression {
     pub expression: String,
@@ -704,7 +704,7 @@ pub async fn get(pool: &PgPool, name: &str) -> ApiResult<DerivedMetric> {
 
 // Evaluation on one case execution -------------------------------------------------
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, ToSchema, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct EvaluateRequest {
     pub case_execution_id: Uuid,

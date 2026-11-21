@@ -26,7 +26,18 @@ use crate::service::query::{Aliases, parameter_dimension};
 
 // Run list ----------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize, ToSchema)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Deserialize,
+    Serialize,
+    ToSchema,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Validity {
     /// Only valid runs (default).
@@ -42,7 +53,7 @@ pub enum Validity {
 /// parameters, metric) match runs with at least one current case execution
 /// that satisfies all of them. Device and parameter filters use the values
 /// after aliases.
-#[derive(Debug, Clone, Default, Deserialize, IntoParams, ToSchema)]
+#[derive(Debug, Clone, Default, Deserialize, IntoParams, ToSchema, schemars::JsonSchema)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub struct RunFilter {
@@ -621,7 +632,7 @@ async fn case_execution_summaries(
         .collect())
 }
 
-#[derive(Debug, Clone, Default, Deserialize, IntoParams)]
+#[derive(Debug, Clone, Default, Deserialize, IntoParams, schemars::JsonSchema)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub struct CaseExecutionListQuery {
