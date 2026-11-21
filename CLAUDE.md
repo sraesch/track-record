@@ -14,8 +14,10 @@ design notes when a change implements or affects one.
 ([db/](db/README.md)). The Rust backend ([backend/](backend/README.md)) has
 ingestion, retrieval, tags/annotations, aliases, tokens, the UI-only
 operations, the derived metric DSL and analysis (aggregates, trends,
-comparisons, series views, export) and the MCP server. No frontend yet. Add build, test and run commands here as
-they appear. Do not invent commands that don't exist in the repo.
+comparisons, series views, export) and the MCP server. The frontend
+([frontend/](frontend/README.md)) has the shell (app bar, side menu, routes
+for every view, color modes) and the run list; the other views are
+placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 
@@ -31,6 +33,15 @@ backend/test.sh -- ingest         # selected backend tests (arguments go to carg
 cargo run -p track-record-server -- serve          # run the server (in backend/; env vars in backend/README.md)
 cargo run -p track-record-server -- openapi machine > openapi/machine.json   # regenerate (in backend/; also `ui`)
 docker build --file backend/Dockerfile --tag track-record-server .   # backend image (from the repo root)
+frontend/test.sh                  # frontend: npm ci, oxlint, tsc, vitest, build (needs Node.js 24)
+frontend/test.sh -- App           # selected frontend tests (arguments go to vitest run)
+npm run dev                       # frontend dev server (in frontend/; proxies /ui/api to localhost:8081)
+docker build --tag track-record-frontend frontend   # web UI image (nginx; proxies /ui/api to server:8081)
+deploy/local/up.sh                # whole stack on Docker Desktop Kubernetes (build, push, deploy)
+deploy/local/forward.sh           # UI on localhost:8088, machine API on localhost:8089
+deploy/local/down.sh              # remove the local stack and its data
+npm run seed                      # test data for UI development (in frontend/; needs an empty database, forward.sh)
+npm run generate:api              # regenerate src/api/schema.d.ts from backend/openapi/ui.json (in frontend/)
 ```
 
 ## Backend
@@ -44,7 +55,8 @@ docker build --file backend/Dockerfile --tag track-record-server .   # backend i
 - Results are written with `PUT` on client UUIDs: 201 on create, 200 for an
   identical retry, 409 for different content. One transaction per request.
 - After changing an endpoint, regenerate `backend/openapi/*.json`; a test
-  checks them.
+  checks them. For `ui.json`, also regenerate the frontend types
+  (`npm run generate:api` in `frontend/`).
 - MCP (`/mcp`, rmcp, stateless) shows tools by token scope: read tools for
   every scope, tag/annotation tools only for `annotate`. Tool parameters are
   the REST request types (`schemars::JsonSchema` next to `ToSchema`); service
@@ -56,6 +68,31 @@ docker build --file backend/Dockerfile --tag track-record-server .   # backend i
   (parse, unit check, evaluation) lives in `track-record-core::dsl` without
   I/O; `service::derived` loads definitions and sample inputs. The metric of
   every analysis view is a DSL expression.
+
+## Frontend
+
+- Layout and tooling are in [ADR 0010](docs/adr/0010-frontend-scaffold.md):
+  one Vite app in `frontend/`, npm with a checked-in lockfile, oxlint.
+- All user-facing text goes through `useTranslation()`; add keys to
+  `src/i18n/locales/en/*.json`. Keys are typed, so unknown keys fail `tsc`.
+  The no-literal-string rule is not linted; check it in review.
+- Tests sit next to the code as `*.test.ts(x)` (Vitest, jsdom, Testing
+  Library). Vitest globals are off: import `describe`/`it`/`expect`.
+- The UI only calls the UI port (`/ui/api`), with relative URLs.
+- MUI components and React Router ([ADR 0011](docs/adr/0011-ui-shell.md)).
+  Views are listed once in `src/navigation.ts` (side menu and routes);
+  pages start with `<PageHeader>`. Import icons per file
+  (`@mui/icons-material/ShowChart`). View state lives in the URL (FR-21).
+- API access ([ADR 0012](docs/adr/0012-frontend-data-access.md)): types
+  generated from `backend/openapi/ui.json` into `src/api/schema.d.ts`
+  (`npm run generate:api`; `test.sh` fails when stale), `openapi-fetch`
+  client in `src/api/client.ts`, TanStack Query for fetching. Tests fake
+  the API with `mockApi()` (`src/test/api.ts`) and render with `renderApp()`.
+- After changing a UI endpoint: regenerate the backend OpenAPI documents,
+  then `npm run generate:api` in `frontend/`.
+- The image (`frontend/Dockerfile`) is nginx serving the build and proxying
+  `/ui/api` to `TR_UI_API_UPSTREAM`. `deploy/local/` runs the whole stack on
+  Docker Desktop Kubernetes for trying the UI; it is not the Helm chart.
 
 ## Database
 
@@ -94,7 +131,8 @@ OpenAPI for the REST API.
 CI is GitHub Actions ([ADR 0005](docs/adr/0005-ci.md)): `.github/workflows/ci.yml`
 runs on pull requests and on pushes to `develop` and `main`. Its jobs call the
 local test commands; when a new part gets tests, add a job that runs the same
-command (`backend` runs `backend/test.sh` and builds the server image). After
+command (`backend` runs `backend/test.sh` and builds the server image,
+`frontend` runs `frontend/test.sh` and builds the UI image). After
 the checks pass, pushes to `develop`, `main` and `v*` tags
 publish `ghcr.io/<owner>/track-record-db` for amd64 and arm64
 ([ADR 0007](docs/adr/0007-image-publishing.md)); pull requests never
@@ -105,8 +143,11 @@ pinned to commit hashes; keep it that way.
 Backend crates are decided in ADR 0008: axum, sqlx (runtime queries),
 utoipa (OpenAPI from code), rmcp for MCP; workspace in `backend/`.
 
-Still open: cache strategy, charting library, frontend layout,
-Helm chart, release notes, publishing the server image.
+Frontend tooling is decided in ADR 0010: npm, oxlint, Vitest with jsdom and
+Testing Library. Component library (MUI) and routing (React Router) in
+ADR 0011; API types, client and TanStack Query in ADR 0012.
+
+Still open: cache strategy, charting library, Helm chart, release notes, publishing the server image.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
 only in code.
 

@@ -1,0 +1,83 @@
+# Backend (track-record-server, ADR 0008): machine port 8080 (/api, /mcp,
+# API tokens) and UI port 8081 (/ui/api, no tokens).
+#
+# The init container applies pending migrations with track-record-migrate
+# from the database image, so a rebuilt image with new migrations upgrades
+# the database on the next up.sh. Production runs this as a job (ADR 0006).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: attachments
+spec:
+  # ReadWriteMany in production (ADR 0003); one node and one replica here.
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+spec:
+  replicas: 1
+  # The attachment volume is ReadWriteOnce: never run two pods at once.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: server }
+  template:
+    metadata:
+      labels: { app: server }
+    spec:
+      initContainers:
+        - name: migrate
+          image: localhost:30500/track-record-db:local
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - until pg_isready --quiet; do sleep 1; done; exec track-record-migrate
+          env:
+            - { name: PGHOST, value: db }
+            - { name: PGUSER, value: postgres }
+            - { name: PGDATABASE, value: track_record }
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef: { name: db, key: password }
+      containers:
+        - name: server
+          image: localhost:30500/track-record-server:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: db, key: password }
+            - name: DATABASE_URL
+              value: postgres://postgres:$(DB_PASSWORD)@db:5432/track_record
+            - { name: TR_ATTACHMENT_ROOT, value: /data/attachments }
+            - { name: RUST_LOG, value: info }
+          ports:
+            - { name: machine, containerPort: 8080 }
+            - { name: ui, containerPort: 8081 }
+          livenessProbe:
+            httpGet: { path: /healthz, port: ui }
+          readinessProbe:
+            httpGet: { path: /readyz, port: ui }
+            periodSeconds: 5
+          volumeMounts:
+            - { name: attachments, mountPath: /data/attachments }
+      volumes:
+        - name: attachments
+          persistentVolumeClaim:
+            claimName: attachments
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+spec:
+  selector: { app: server }
+  ports:
+    - { name: machine, port: 8080, targetPort: machine }
+    - { name: ui, port: 8081, targetPort: ui }

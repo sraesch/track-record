@@ -1,0 +1,148 @@
+{
+  "app": {
+    "name": "Track Record"
+  },
+  "nav": {
+    "label": "Main navigation",
+    "open": "Open navigation",
+    "close": "Close navigation",
+    "home": "Track Record home",
+    "sections": {
+      "analysis": "Analysis",
+      "definitions": "Definitions",
+      "administration": "Administration"
+    },
+    "items": {
+      "runs": "Runs",
+      "compare": "Compare",
+      "trends": "Trends",
+      "series": "Series",
+      "suites": "Suites & scenarios",
+      "metrics": "Metrics",
+      "derivedMetrics": "Derived metrics",
+      "aliases": "Aliases",
+      "tokens": "API tokens"
+    }
+  },
+  "colorMode": {
+    "label": "Color mode",
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "pages": {
+    "runs": {
+      "description": "All benchmark runs with their status, SUT version, environment and tags. Filter by any dimension and open a run for its details."
+    },
+    "compare": {
+      "description": "Compare runs, client devices or parameter values side by side, with absolute and relative differences against a reference."
+    },
+    "trends": {
+      "description": "Follow a metric of one case on one client device across runs, over time or over SUT versions."
+    },
+    "series": {
+      "description": "Overlay series from different samples and runs, resample and aggregate them."
+    },
+    "suites": {
+      "description": "Suites, scenarios and test cases with all their versions."
+    },
+    "metrics": {
+      "description": "Metric definitions with their units and direction, and the unit catalogue."
+    },
+    "derivedMetrics": {
+      "description": "Define derived metrics in the DSL. They are computed at query time, also for historical runs."
+    },
+    "aliases": {
+      "description": "Rename or merge device names, parameter values and other dimension values. Aliases apply everywhere."
+    },
+    "tokens": {
+      "description": "API tokens for the benchmark harness and MCP clients. Create and revoke them here."
+    },
+    "runDetail": {
+      "title": "Run {{runId}}",
+      "description": "Case executions, samples, series, tags, annotations and attachments of this run.",
+      "back": "All runs"
+    },
+    "notFound": {
+      "title": "Page not found",
+      "description": "There is no page at {{path}}.",
+      "home": "Go to the run list"
+    },
+    "error": {
+      "title": "Something went wrong",
+      "description": "This page could not be shown. Reload it, or go back to the run list.",
+      "home": "Go to the run list"
+    }
+  },
+  "placeholder": {
+    "notBuilt": "This view is not built yet."
+  },
+  "common": {
+    "retry": "Retry",
+    "loading": "Loading…",
+    "none": "—",
+    "httpError": "HTTP error {{status}}"
+  },
+  "duration": {
+    "hours": "{{h}} h {{m}} min",
+    "minutes": "{{m}} min {{s}} s",
+    "seconds": "{{s}} s"
+  },
+  "runs": {
+    "columns": {
+      "status": "Status",
+      "started": "Started",
+      "duration": "Duration",
+      "suite": "Suite",
+      "sutVersion": "SUT version",
+      "trigger": "Trigger",
+      "tags": "Tags"
+    },
+    "status": {
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "aborted": "Aborted"
+    },
+    "trigger": {
+      "nightly": "Nightly",
+      "manual": "Manual",
+      "ci": "CI"
+    },
+    "validity": {
+      "valid": "Valid",
+      "invalid": "Invalid",
+      "all": "All"
+    },
+    "invalid": "Invalid",
+    "invalidReason": "Invalid: {{reason}}",
+    "version": "v{{version}}",
+    "stillRunning": "Running",
+    "open": "Open run of {{started}}",
+    "filterByTag": "Filter by tag {{tag}}",
+    "filters": {
+      "label": "Filters",
+      "suite": "Suite",
+      "status": "Status",
+      "trigger": "Trigger",
+      "branch": "Branch",
+      "device": "Client device",
+      "tags": "Tags",
+      "tagsHint": "Type a tag and press Enter",
+      "validity": "Validity",
+      "from": "Started from",
+      "to": "Started until",
+      "any": "Any",
+      "clear": "Clear filters"
+    },
+    "shown_one": "{{count}} run shown",
+    "shown_other": "{{count}} runs shown",
+    "allShown_one": "{{count}} run",
+    "allShown_other": "All {{count}} runs",
+    "loadMore": "Load more",
+    "empty": "No runs yet. Runs appear here once the benchmark harness uploads them.",
+    "noMatch": "No runs match these filters.",
+    "error": "The runs could not be loaded: {{message}}",
+    "moreError": "More runs could not be loaded: {{message}}"
+  }
+}

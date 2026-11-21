@@ -1,0 +1,10 @@
+{
+  "name": "track-record-openapi-codegen",
+  "private": true,
+  "description": "Generates src/api/schema.d.ts from backend/openapi/ui.json. Separate package: openapi-typescript needs the TypeScript 5 compiler API, the app uses TypeScript 7.",
+  "type": "module",
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}
