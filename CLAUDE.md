@@ -12,9 +12,9 @@ design notes when a change implements or affects one.
 
 **Status:** database schema, tests and database image exist
 ([db/](db/README.md)). The Rust backend ([backend/](backend/README.md)) has
-ingestion, retrieval, tags/annotations, aliases, tokens and the UI-only
-operations; analysis (derived metrics, comparisons, trends, export) and MCP
-are not built yet. No frontend yet. Add build, test and run commands here as
+ingestion, retrieval, tags/annotations, aliases, tokens, the UI-only
+operations, the derived metric DSL and analysis (aggregates, trends,
+comparisons, series views, export); MCP is not built yet. No frontend yet. Add build, test and run commands here as
 they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
@@ -47,6 +47,11 @@ docker build --file backend/Dockerfile --tag track-record-server .   # backend i
   checks them.
 - Integration tests use `tests/common` (`app!()`): a fresh database per test
   and both ports in-process. Every new endpoint gets integration tests.
+- The derived metric DSL and the analysis conventions are in
+  [ADR 0009](docs/adr/0009-derived-metric-dsl-and-analysis.md). The DSL
+  (parse, unit check, evaluation) lives in `track-record-core::dsl` without
+  I/O; `service::derived` loads definitions and sample inputs. The metric of
+  every analysis view is a DSL expression.
 
 ## Database
 
@@ -96,7 +101,7 @@ pinned to commit hashes; keep it that way.
 Backend crates are decided in ADR 0008: axum, sqlx (runtime queries),
 utoipa (OpenAPI from code), rmcp for MCP; workspace in `backend/`.
 
-Still open: DSL grammar, cache strategy, charting library, frontend layout,
+Still open: cache strategy, charting library, frontend layout,
 Helm chart, release notes, publishing the server image.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
 only in code.

@@ -17,7 +17,8 @@ use crate::service::catalog::{
 };
 use crate::service::runs::{
     self, AttachmentMeta, CaseExecutionDetail, CaseExecutionListQuery, CaseExecutionSummary,
-    RunDetail, RunFilter, RunList, SeriesMeta, SeriesPoints, SutVersion, TestCaseSummary,
+    RunDetail, RunFilter, RunList, SeriesMeta, SeriesPoints, SeriesPointsQuery, SutVersion,
+    TestCaseSummary,
 };
 
 /// List runs, newest measured start first (FR-11).
@@ -87,15 +88,19 @@ pub async fn get_series(
     Ok(Json(runs::get_series(&state.pool, id).await?))
 }
 
-/// Points of a series.
+/// Points of a series, optionally downsampled for display (FR-19).
 #[utoipa::path(get, path = "/series/{series_id}/points", tag = "runs",
-    params(("series_id" = Uuid, Path)),
-    responses((status = 200, body = SeriesPoints), (status = 404, body = Problem)))]
+    params(("series_id" = Uuid, Path), SeriesPointsQuery),
+    responses((status = 200, body = SeriesPoints), (status = 400, body = Problem),
+              (status = 404, body = Problem)))]
 pub async fn get_series_points(
     State(state): State<AppState>,
     ApiPath(id): ApiPath<Uuid>,
+    ApiQuery(query): ApiQuery<SeriesPointsQuery>,
 ) -> ApiResult<Json<SeriesPoints>> {
-    Ok(Json(runs::get_series_points(&state.pool, id).await?))
+    Ok(Json(
+        runs::get_series_points(&state.pool, id, &query).await?,
+    ))
 }
 
 /// Attachment metadata.

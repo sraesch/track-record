@@ -1,5 +1,6 @@
 //! Endpoints that exist only on the UI port (behind the auth proxy): run
-//! invalidation and hard delete, token management and alias editing.
+//! invalidation and hard delete, token management, alias and derived
+//! metric editing.
 //! No API token can reach them (NFR-2).
 
 use axum::Json;
@@ -10,6 +11,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::error::{ApiJson, ApiPath, ApiResult, Problem};
 use crate::service::catalog::{self, Alias, SetAlias};
+use crate::service::derived::{self, SaveDerivedMetric, SavedDerivedMetric};
 use crate::service::lifecycle::{self, DeleteRun, InvalidateRun};
 use crate::service::tokens::{self, ApiToken, CreateToken, CreatedToken};
 
@@ -98,4 +100,26 @@ pub async fn set_alias(
     ApiJson(req): ApiJson<SetAlias>,
 ) -> ApiResult<Json<Option<Alias>>> {
     Ok(Json(catalog::set_alias(&state.pool, &req).await?))
+}
+
+/// Save a derived metric (FR-17). The expression is validated first
+/// (FR-17a); the derived metric versions it uses are pinned. Content equal
+/// to the latest version returns that version with 200.
+#[utoipa::path(put, path = "/derived-metrics/{name}", tag = "ui",
+    params(("name" = String, Path)),
+    request_body = SaveDerivedMetric,
+    responses((status = 201, body = SavedDerivedMetric), (status = 200, body = SavedDerivedMetric),
+              (status = 422, description = "Invalid expression or a cycle", body = Problem)))]
+pub async fn save_derived_metric(
+    State(state): State<AppState>,
+    ApiPath(name): ApiPath<String>,
+    ApiJson(req): ApiJson<SaveDerivedMetric>,
+) -> ApiResult<(StatusCode, Json<SavedDerivedMetric>)> {
+    let saved = derived::save(&state.pool, &name, &req).await?;
+    let status = if saved.created {
+        StatusCode::CREATED
+    } else {
+        StatusCode::OK
+    };
+    Ok((status, Json(saved)))
 }
