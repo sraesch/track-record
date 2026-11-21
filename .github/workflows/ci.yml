@@ -1,0 +1,29 @@
+# Continuous integration. See docs/adr/0005-ci.md.
+#
+# Each job runs the same command a developer runs locally. Add a job here when
+# a new part of the system gets tests (Rust backend, frontend).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+# A newer push to a pull request cancels the run of the older one. Runs on
+# develop and main always finish.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  database:
+    name: Database tests (pgTAP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run pgTAP tests
+        run: db/test.sh
