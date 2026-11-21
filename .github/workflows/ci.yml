@@ -1,19 +1,24 @@
-# Continuous integration. See docs/adr/0005-ci.md.
+# Continuous integration and image publishing. See docs/adr/0005-ci.md and
+# docs/adr/0007-image-publishing.md.
 #
-# Each job runs the same command a developer runs locally. Add a job here when
-# a new part of the system gets tests (Rust backend, frontend).
+# Each check job runs the same command a developer runs locally. Add a job here
+# when a new part of the system gets tests (Rust backend, frontend).
+#
+# Actions are pinned to commit hashes because the publish job can write
+# packages. The comment after each hash names its release.
 name: CI
 
 on:
   pull_request:
   push:
     branches: [develop, main]
+    tags: ['v*']
 
 permissions:
   contents: read
 
 # A newer push to a pull request cancels the run of the older one. Runs on
-# develop and main always finish.
+# develop, main and tags always finish.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -24,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run pgTAP tests
         run: db/test.sh
 
@@ -33,6 +38,51 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build and check the image
         run: db/image-test.sh
+
+  # Pushes ghcr.io/<owner>/track-record-db after all checks passed. Never runs
+  # for pull requests.
+  publish-database-image:
+    name: Publish database image
+    if: github.event_name == 'push'
+    needs: [database, database-image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Only needed once the Dockerfile gets RUN steps; COPY works without it.
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # develop -> develop; main -> main, latest; every push -> sha-<short>;
+      # v1.2.3 -> 1.2.3, 1.2.
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/track-record-db
+          flavor: latest=false
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+          labels: |
+            org.opencontainers.image.title=track-record-db
+            org.opencontainers.image.description=PostgreSQL 18 with the Track Record schema
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: db
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

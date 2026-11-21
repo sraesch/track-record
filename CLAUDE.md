@@ -61,11 +61,13 @@ OpenAPI for the REST API.
 CI is GitHub Actions ([ADR 0005](docs/adr/0005-ci.md)): `.github/workflows/ci.yml`
 runs on pull requests and on pushes to `develop` and `main`. Its jobs call the
 local test commands; when a new part gets tests, add a job that runs the same
-command. CI builds and checks the database image but publishes nothing.
+command. After the checks pass, pushes to `develop`, `main` and `v*` tags
+publish `ghcr.io/<owner>/track-record-db` for amd64 and arm64
+([ADR 0007](docs/adr/0007-image-publishing.md)); pull requests never
+publish. Actions are pinned to commit hashes; keep it that way.
 
 Still open: Rust crates (HTTP, DB access, MCP), DSL grammar, cache strategy,
-charting library, repo layout, delivery (registry, image tags, Helm chart,
-releases).
+charting library, repo layout, Helm chart, release notes.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
 only in code.
 

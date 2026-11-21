@@ -37,7 +37,7 @@ not exist yet.
   `db/migrate.sh`; `db/image-test.sh` builds the image and checks first start,
   a no-op rerun, refusal of changed and missing migrations, and an upgrade.
   CI runs both.
-- **Not published yet.** CI builds and checks the image but does not push it.
+- **Publishing** is decided in [ADR 0007](0007-image-publishing.md).
 
 ## Consequences
 
@@ -53,5 +53,4 @@ not exist yet.
 
 ## Left for later ADRs
 
-Publishing: container registry, image names and tags, release versioning,
-and the Helm chart.
+The Helm chart, including the migration job.

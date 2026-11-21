@@ -36,6 +36,18 @@ PGHOST=localhost PGUSER=postgres PGDATABASE=track_record db/migrate.sh
 
 ## Database image
 
+CI publishes it to `ghcr.io/sraesch/track-record-db` (amd64 and arm64,
+[ADR 0007](../docs/adr/0007-image-publishing.md)):
+
+| Tag | Points to |
+|---|---|
+| `develop`, `main` | Latest push to that branch |
+| `latest` | Latest push to `main` |
+| `1.2.3`, `1.2` | Release tag `v1.2.3` |
+| `sha-<short>` | One commit; never changes |
+
+Pin `sha-<short>` or `1.2.3` in deployments. To build it locally:
+
 ```bash
 docker build --tag track-record-db db
 ```
