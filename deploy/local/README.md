@@ -35,6 +35,15 @@ deploy/local/down.sh
 
 removes everything, including the database and attachment volumes.
 
+### Test data
+
+With `forward.sh` running, fill the empty database with about a month of
+realistic runs (see [frontend/README.md](../../frontend/README.md#test-data)):
+
+```bash
+cd frontend && npm run seed
+```
+
 ### An API token for the harness or MCP
 
 Tokens are created on the UI port, e.g. through the UI's proxy:

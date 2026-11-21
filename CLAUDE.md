@@ -39,6 +39,7 @@ docker build --tag track-record-frontend frontend   # web UI image (nginx; proxi
 deploy/local/up.sh                # whole stack on Docker Desktop Kubernetes (build, push, deploy)
 deploy/local/forward.sh           # UI on localhost:8088, machine API on localhost:8089
 deploy/local/down.sh              # remove the local stack and its data
+npm run seed                      # test data for UI development (in frontend/; needs an empty database, forward.sh)
 ```
 
 ## Backend

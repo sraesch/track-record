@@ -13,7 +13,8 @@
     "lint": "oxlint --deny-warnings",
     "test": "vitest run",
     "test:watch": "vitest",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed": "node scripts/seed.ts"
   },
   "dependencies": {
     "i18next": "^27.2.3",
