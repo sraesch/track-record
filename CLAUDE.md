@@ -22,6 +22,7 @@ db/test.sh /db/tests/04_runs.sql  # selected test files (container paths)
 db/image-test.sh                  # build the database image (track-record-db) and check it
 docker build --tag track-record-db db   # build the database image only
 db/migrate.sh                     # apply pending migrations to $PGHOST/$PGDATABASE (needs psql)
+.github/scripts/cleanup-images.sh sraesch track-record-db --dry-run   # show which GHCR images cleanup would delete
 ```
 
 ## Database
@@ -64,7 +65,9 @@ local test commands; when a new part gets tests, add a job that runs the same
 command. After the checks pass, pushes to `develop`, `main` and `v*` tags
 publish `ghcr.io/<owner>/track-record-db` for amd64 and arm64
 ([ADR 0007](docs/adr/0007-image-publishing.md)); pull requests never
-publish. Actions are pinned to commit hashes; keep it that way.
+publish. After each publish, `.github/scripts/cleanup-images.sh` deletes
+`sha-` images beyond the newest 10 (index and children together). Actions are
+pinned to commit hashes; keep it that way.
 
 Still open: Rust crates (HTTP, DB access, MCP), DSL grammar, cache strategy,
 charting library, repo layout, Helm chart, release notes.
