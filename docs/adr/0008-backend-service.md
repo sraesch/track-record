@@ -123,5 +123,6 @@ a missing database a failure instead.
 
 ## Left for later
 
-Derived metric DSL grammar (ADR 0009, with the analysis endpoints), the MCP
-tool set, image publishing for the server, and the Helm chart.
+The MCP tool set, image publishing for the server, and the Helm chart. The
+derived metric DSL and the analysis endpoints are in
+[ADR 0009](0009-derived-metric-dsl-and-analysis.md).

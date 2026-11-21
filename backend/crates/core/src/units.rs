@@ -78,6 +78,15 @@ impl Dimension {
     pub fn inverse(&self) -> Self {
         self.pow(-1)
     }
+
+    /// Square root, if every exponent is even.
+    pub fn sqrt(&self) -> Option<Self> {
+        self.0
+            .iter()
+            .map(|(name, e)| (e % 2 == 0).then(|| (name.clone(), e / 2)))
+            .collect::<Option<BTreeMap<_, _>>>()
+            .map(Self)
+    }
 }
 
 /// Dimension of a catalogue quantity. Quantities unknown here are treated as
@@ -141,6 +150,19 @@ impl ResolvedUnit {
             dimension: self.dimension.mul(&other.dimension.inverse()),
             to_base: self.to_base / other.to_base,
         }
+    }
+
+    /// Square root of the unit, if its dimension has one (e.g. `s^2` -> `s`).
+    pub fn sqrt(&self) -> Option<ResolvedUnit> {
+        Some(ResolvedUnit {
+            symbol: if self.symbol.is_empty() {
+                String::new()
+            } else {
+                format!("sqrt({})", self.symbol)
+            },
+            dimension: self.dimension.sqrt()?,
+            to_base: self.to_base.sqrt(),
+        })
     }
 
     pub fn powi(&self, exp: i32) -> ResolvedUnit {
@@ -472,6 +494,9 @@ pub(crate) mod tests {
         assert_eq!(ResolvedUnit::dimensionless().div(&s).symbol, "1/s");
         assert_eq!(b.div(&rate).symbol, "B/(B/s)");
         assert!(rate.powi(0).dimension.is_dimensionless());
+        let s2 = s.powi(2).sqrt().unwrap();
+        assert_eq!(s2.dimension, s.dimension);
+        assert!(s.sqrt().is_none());
     }
 
     #[test]

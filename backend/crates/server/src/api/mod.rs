@@ -9,6 +9,7 @@
 //!
 //! Both serve `/healthz` and `/readyz`, and their own OpenAPI document.
 
+pub mod analysis;
 pub mod annotate;
 pub mod read;
 pub mod ui;
@@ -45,6 +46,7 @@ pub const UI_PREFIX: &str = "/ui/api/v1";
         (name = "runs", description = "Runs and their results"),
         (name = "definitions", description = "Versioned definitions and dimensions"),
         (name = "annotations", description = "Tags and annotations"),
+        (name = "analysis", description = "Aggregates, trends, comparisons, series views and export (FR-12 to FR-20)"),
         (name = "ui", description = "Web UI only: never reachable with an API token"),
     )
 )]
@@ -74,6 +76,16 @@ fn read_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(read::list_aliases))
         .routes(routes!(read::list_annotations))
         .routes(routes!(read::get_annotation))
+        .routes(routes!(analysis::list_derived_metrics))
+        .routes(routes!(analysis::get_derived_metric))
+        .routes(routes!(analysis::validate_expression))
+        .routes(routes!(analysis::evaluate_expression))
+        .routes(routes!(analysis::aggregates))
+        .routes(routes!(analysis::trend))
+        .routes(routes!(analysis::compare))
+        .routes(routes!(analysis::series_overlay))
+        .routes(routes!(analysis::series_aggregate))
+        .routes(routes!(analysis::export))
 }
 
 fn annotate_routes() -> OpenApiRouter<AppState> {
@@ -108,6 +120,7 @@ fn ui_only_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(ui::list_tokens, ui::create_token))
         .routes(routes!(ui::revoke_token))
         .routes(routes!(ui::set_alias))
+        .routes(routes!(ui::save_derived_metric))
 }
 
 #[derive(serde::Serialize, ToSchema)]

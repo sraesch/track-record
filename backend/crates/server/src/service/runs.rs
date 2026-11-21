@@ -16,6 +16,8 @@ use sqlx::{PgPool, Postgres, QueryBuilder};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
+use track_record_core::series::Series;
+
 use crate::db::{RunStatus, RunTrigger};
 use crate::error::{ApiError, ApiResult};
 use crate::series_store;
@@ -40,10 +42,13 @@ pub enum Validity {
 /// parameters, metric) match runs with at least one current case execution
 /// that satisfies all of them. Device and parameter filters use the values
 /// after aliases.
-#[derive(Debug, Clone, Default, Deserialize, IntoParams)]
+#[derive(Debug, Clone, Default, Deserialize, IntoParams, ToSchema)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub struct RunFilter {
+    /// Run id; repeat for several.
+    #[serde(default)]
+    pub run_id: Vec<Uuid>,
     /// Suite name.
     pub suite: Option<String>,
     pub sut_commit: Option<String>,
@@ -263,6 +268,30 @@ pub fn push_run_conditions(
     f: &RunFilter,
     aliases: &Aliases,
 ) -> ApiResult<()> {
+    push_run_level_conditions(q, f);
+    let has_ce_filter = f.client_device.is_some()
+        || f.scenario.is_some()
+        || f.asset.is_some()
+        || f.metric.is_some()
+        || !f.param.is_empty();
+    if !has_ce_filter {
+        return Ok(());
+    }
+    q.push(
+        " AND EXISTS (SELECT 1 FROM current_case_execution ce \
+          JOIN test_case tc ON tc.id = ce.test_case_id \
+          JOIN scenario_version scv ON scv.id = tc.scenario_version_id \
+          JOIN scenario sc ON sc.id = scv.scenario_id \
+          JOIN client_device cd ON cd.id = ce.client_device_id \
+          WHERE ce.run_id = r.id",
+    );
+    push_case_execution_conditions(q, f, aliases)?;
+    q.push(")");
+    Ok(())
+}
+
+/// Appends the conditions of a filter that apply to the run itself.
+pub fn push_run_level_conditions(q: &mut QueryBuilder<'_, Postgres>, f: &RunFilter) {
     match f.validity {
         Validity::Valid => q.push(" AND r.is_valid"),
         Validity::Invalid => q.push(" AND NOT r.is_valid"),
@@ -298,28 +327,26 @@ pub fn push_run_conditions(
     if let Some(id) = f.shared_environment_id {
         q.push(" AND r.shared_environment_id = ").push_bind(id);
     }
+    if !f.run_id.is_empty() {
+        q.push(" AND r.id = ANY(")
+            .push_bind(f.run_id.clone())
+            .push(")");
+    }
     for tag in &f.tag {
         q.push(" AND EXISTS (SELECT 1 FROM run_tag rt WHERE rt.run_id = r.id AND rt.tag = ")
             .push_bind(tag.clone())
             .push(")");
     }
+}
 
-    let has_ce_filter = f.client_device.is_some()
-        || f.scenario.is_some()
-        || f.asset.is_some()
-        || f.metric.is_some()
-        || !f.param.is_empty();
-    if !has_ce_filter {
-        return Ok(());
-    }
-    q.push(
-        " AND EXISTS (SELECT 1 FROM current_case_execution ce \
-          JOIN test_case tc ON tc.id = ce.test_case_id \
-          JOIN scenario_version scv ON scv.id = tc.scenario_version_id \
-          JOIN scenario sc ON sc.id = scv.scenario_id \
-          JOIN client_device cd ON cd.id = ce.client_device_id \
-          WHERE ce.run_id = r.id",
-    );
+/// Appends the case execution conditions of a filter (device, scenario,
+/// asset, parameters, metric). Expects `current_case_execution ce`,
+/// `test_case tc`, `scenario sc` and `client_device cd` in scope.
+pub fn push_case_execution_conditions(
+    q: &mut QueryBuilder<'_, Postgres>,
+    f: &RunFilter,
+    aliases: &Aliases,
+) -> ApiResult<()> {
     if let Some(device) = &f.client_device {
         q.push(" AND cd.name = ANY(")
             .push_bind(aliases.raw_device_names(device))
@@ -357,7 +384,6 @@ pub fn push_run_conditions(
         .push_bind(metric.clone())
         .push(")");
     }
-    q.push(")");
     Ok(())
 }
 
@@ -805,14 +831,38 @@ pub struct SeriesPoints {
     pub y: Vec<f32>,
 }
 
-pub async fn get_series_points(pool: &PgPool, series_id: Uuid) -> ApiResult<SeriesPoints> {
+#[derive(Debug, Clone, Default, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(deny_unknown_fields)]
+pub struct SeriesPointsQuery {
+    /// Downsample for display to at most this many points, keeping the
+    /// minimum and maximum of each bucket (FR-19). At least 2.
+    pub max_points: Option<usize>,
+}
+
+pub async fn get_series_points(
+    pool: &PgPool,
+    series_id: Uuid,
+    query: &SeriesPointsQuery,
+) -> ApiResult<SeriesPoints> {
     let points = series_store::load_by_id(pool, series_id)
         .await?
         .ok_or_else(|| ApiError::not_found(format!("series {series_id} not found")))?;
+    let Some(max_points) = query.max_points else {
+        return Ok(SeriesPoints {
+            id: series_id,
+            x: points.x,
+            y: points.y,
+        });
+    };
+    if max_points < 2 {
+        return Err(ApiError::bad_request("max_points must be at least 2"));
+    }
+    let reduced = Series::from_f32(&points.x, &points.y).downsample(max_points);
     Ok(SeriesPoints {
         id: series_id,
-        x: points.x,
-        y: points.y,
+        x: reduced.x.iter().map(|v| *v as f32).collect(),
+        y: reduced.y.iter().map(|v| *v as f32).collect(),
     })
 }
 

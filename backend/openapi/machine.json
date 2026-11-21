@@ -34,6 +34,309 @@
         }
       }
     },
+    "/api/v1/analysis/aggregates": {
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Aggregates across samples per run, case and client device (FR-12).",
+        "operationId": "aggregates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AggregatesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AggregatesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/compare": {
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Compare side by side along a dimension (FR-16), streamed (NFR-7).",
+        "description": "The response is NDJSON: a `start` event, `progress` events, one `row`\nevent per matching key, and `done` (or `error`) last.",
+        "operationId": "compare",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "NDJSON stream of events",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompareEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/export": {
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Export per-sample values or aggregates as CSV, NDJSON or Parquet\n(FR-20), streamed.",
+        "operationId": "export",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The file (text/csv, application/x-ndjson or application/vnd.apache.parquet)",
+            "content": {
+              "application/octet-stream": {}
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/series/aggregate": {
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Aggregate series across samples per run, case and device: percentiles\nper grid point, e.g. a median with a band (FR-19).",
+        "operationId": "series_aggregate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesViewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesAggregateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/series/overlay": {
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Overlay series of many samples, optionally resampled onto a common grid\n(FR-19).",
+        "operationId": "series_overlay",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesViewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverlayResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analysis/trend": {
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Trend of a case, metric and client device across runs (FR-18).",
+        "operationId": "trend",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrendResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/annotations": {
       "get": {
         "tags": [
@@ -432,6 +735,154 @@
         }
       }
     },
+    "/api/v1/derived-metrics": {
+      "get": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "Derived metrics with all versions (FR-17).",
+        "operationId": "list_derived_metrics",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DerivedMetric"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/derived-metrics/evaluate": {
+      "post": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "Evaluate an expression or a saved derived metric on the samples of a\ncase execution.",
+        "operationId": "evaluate_expression",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluateResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/derived-metrics/validate": {
+      "post": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "Validate a DSL expression (FR-17a): syntax, references and units.",
+        "description": "Always 200; `valid` says whether it passed, `diagnostics` point at the\nproblems by byte offset.",
+        "operationId": "validate_expression",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateExpression"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Validation"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/derived-metrics/{name}": {
+      "get": {
+        "tags": [
+          "definitions"
+        ],
+        "summary": "A derived metric with all versions.",
+        "operationId": "get_derived_metric",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DerivedMetric"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/environments/{environment_id}": {
       "get": {
         "tags": [
@@ -506,6 +957,19 @@
         "summary": "List runs, newest measured start first (FR-11).",
         "operationId": "list_runs",
         "parameters": [
+          {
+            "name": "run_id",
+            "in": "query",
+            "description": "Run id; repeat for several.",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
           {
             "name": "suite",
             "in": "query",
@@ -1569,7 +2033,7 @@
         "tags": [
           "runs"
         ],
-        "summary": "Points of a series.",
+        "summary": "Points of a series, optionally downsampled for display (FR-19).",
         "operationId": "get_series_points",
         "parameters": [
           {
@@ -1580,6 +2044,16 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "max_points",
+            "in": "query",
+            "description": "Downsample for display to at most this many points, keeping the\nminimum and maximum of each bucket (FR-19). At least 2.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         ],
         "responses": {
@@ -1589,6 +2063,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SeriesPoints"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -1842,6 +2326,105 @@
   },
   "components": {
     "schemas": {
+      "AggregateGroup": {
+        "type": "object",
+        "required": [
+          "run",
+          "case",
+          "client_device",
+          "case_execution_ids",
+          "stats"
+        ],
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseInfo"
+          },
+          "case_execution_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "client_device": {
+            "type": "string",
+            "description": "Device name after aliases."
+          },
+          "run": {
+            "$ref": "#/components/schemas/RunRef"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/Stats"
+          }
+        }
+      },
+      "AggregatesRequest": {
+        "type": "object",
+        "required": [
+          "metric"
+        ],
+        "properties": {
+          "confidence": {
+            "type": "number",
+            "format": "double",
+            "description": "Level of the confidence interval; default 0.95."
+          },
+          "filter": {
+            "$ref": "#/components/schemas/RunFilter",
+            "description": "Run filter (FR-11). `limit` and `cursor` do not apply."
+          },
+          "include_warmup": {
+            "type": "boolean",
+            "description": "Include warmup samples (FR-12; excluded by default)."
+          },
+          "metric": {
+            "type": "string",
+            "description": "The metric: an uploaded scalar metric (`load_time`), a derived metric\n(`derived.throughput`) or any scalar DSL expression."
+          },
+          "percentiles": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number",
+              "format": "double"
+            },
+            "description": "Percentiles in [0, 100]; default 5, 25, 75, 95."
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Convert values to this unit (FR-13)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "AggregatesResponse": {
+        "type": "object",
+        "required": [
+          "metric",
+          "groups",
+          "excluded"
+        ],
+        "properties": {
+          "excluded": {
+            "$ref": "#/components/schemas/Excluded"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AggregateGroup"
+            },
+            "description": "One group per run, case and client device, in run order."
+          },
+          "metric": {
+            "$ref": "#/components/schemas/MetricInfo"
+          }
+        }
+      },
       "Alias": {
         "type": "object",
         "required": [
@@ -2065,6 +2648,29 @@
           }
         }
       },
+      "BandValues": {
+        "type": "object",
+        "required": [
+          "p",
+          "values"
+        ],
+        "properties": {
+          "p": {
+            "type": "number",
+            "format": "double"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            }
+          }
+        }
+      },
       "CaseExecutionDetail": {
         "allOf": [
           {
@@ -2160,6 +2766,76 @@
           }
         }
       },
+      "CaseInfo": {
+        "type": "object",
+        "description": "A case: scenario version, assets and parameters after aliases.",
+        "required": [
+          "scenario",
+          "scenario_version",
+          "scenario_version_id",
+          "assets",
+          "parameters",
+          "parameter_units",
+          "test_case_ids"
+        ],
+        "properties": {
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssetRef"
+            }
+          },
+          "parameter_units": {
+            "type": "object"
+          },
+          "parameters": {
+            "type": "object",
+            "description": "Parameters after aliases (only those in the matching key, for a\ncomparison)."
+          },
+          "scenario": {
+            "type": "string"
+          },
+          "scenario_version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "scenario_version_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "test_case_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Test cases that make up this case; several when aliases merge\nparameter values."
+          }
+        }
+      },
+      "CellRun": {
+        "type": "object",
+        "required": [
+          "run",
+          "stats",
+          "excluded_parameters"
+        ],
+        "properties": {
+          "excluded_parameters": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Values of the parameters taken out of the matching key, as objects."
+          },
+          "run": {
+            "$ref": "#/components/schemas/RunRef"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/Stats"
+          }
+        }
+      },
       "ClientDevice": {
         "type": "object",
         "required": [
@@ -2230,6 +2906,305 @@
           "completed",
           "failed"
         ]
+      },
+      "CompareCell": {
+        "type": "object",
+        "required": [
+          "value",
+          "is_reference",
+          "runs",
+          "not_computable",
+          "sut_version_differs",
+          "shared_environment_differs"
+        ],
+        "properties": {
+          "difference": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Difference",
+                "description": "Latest run vs. the reference cell's latest run."
+              }
+            ]
+          },
+          "is_reference": {
+            "type": "boolean"
+          },
+          "not_computable": {
+            "type": "boolean",
+            "description": "True if this cell or the reference has no value, so no difference\ncan be computed (FR-12a)."
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CellRun"
+            },
+            "description": "One aggregate per run, oldest first. The last is the one compared."
+          },
+          "shared_environment_differs": {
+            "type": "boolean",
+            "description": "The latest run has another shared environment than the reference's."
+          },
+          "sut_version_differs": {
+            "type": "boolean",
+            "description": "The latest run has another SUT version than the reference's."
+          },
+          "value": {
+            "type": "object",
+            "description": "The dimension value of this column."
+          }
+        }
+      },
+      "CompareDimension": {
+        "type": "string",
+        "enum": [
+          "run",
+          "client_device",
+          "parameters"
+        ]
+      },
+      "CompareEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "First event: what is compared.",
+            "required": [
+              "metric",
+              "dimension",
+              "values",
+              "total_samples",
+              "type"
+            ],
+            "properties": {
+              "dimension": {
+                "$ref": "#/components/schemas/CompareDimension"
+              },
+              "metric": {
+                "$ref": "#/components/schemas/MetricInfo"
+              },
+              "reference": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "total_samples": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "start"
+                ]
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Samples evaluated so far.",
+            "required": [
+              "done",
+              "total",
+              "type"
+            ],
+            "properties": {
+              "done": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "progress"
+                ]
+              }
+            }
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CompareRow"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "row"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "description": "Last event on success.",
+            "required": [
+              "rows",
+              "excluded",
+              "type"
+            ],
+            "properties": {
+              "excluded": {
+                "$ref": "#/components/schemas/Excluded"
+              },
+              "rows": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "done"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Last event on failure.",
+            "required": [
+              "code",
+              "detail",
+              "type"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "error"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "One line of the NDJSON stream."
+      },
+      "CompareRequest": {
+        "type": "object",
+        "required": [
+          "metric",
+          "dimension"
+        ],
+        "properties": {
+          "confidence": {
+            "type": "number",
+            "format": "double"
+          },
+          "dimension": {
+            "$ref": "#/components/schemas/CompareDimension"
+          },
+          "exclude_from_key": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Parameters taken out of the matching key."
+          },
+          "filter": {
+            "$ref": "#/components/schemas/RunFilter",
+            "description": "Runs to compare (FR-11): one run or a filtered set."
+          },
+          "include_warmup": {
+            "type": "boolean"
+          },
+          "metric": {
+            "type": "string",
+            "description": "A scalar metric: uploaded, derived or any DSL expression."
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The compared parameters, for `dimension = parameters`."
+          },
+          "percentiles": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "reference": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The reference value; default the first value."
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "values": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "object"
+            },
+            "description": "Values of the dimension to show, in this order. Default: all values\nfound (runs by start time, others sorted)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CompareRow": {
+        "type": "object",
+        "required": [
+          "case",
+          "cells"
+        ],
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseInfo",
+            "description": "The matching key: the case without compared and excluded parameters."
+          },
+          "cells": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompareCell"
+            },
+            "description": "Only columns with results, in column order."
+          },
+          "client_device": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Device name after aliases; absent when devices are compared."
+          }
+        }
       },
       "CreateAnnotation": {
         "type": "object",
@@ -2472,6 +3447,76 @@
           }
         }
       },
+      "DerivedMetric": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "versions"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DerivedMetricVersion"
+            },
+            "description": "Oldest first."
+          }
+        }
+      },
+      "DerivedMetricVersion": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "version",
+          "expression",
+          "unit",
+          "description",
+          "created_at",
+          "uses"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": "string"
+          },
+          "expression": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "uses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsedVersion"
+            },
+            "description": "Exact versions of the derived metrics it uses (FR-17)."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "DeviceRef": {
         "type": "object",
         "required": [
@@ -2491,6 +3536,57 @@
           "resolved_name": {
             "type": "string",
             "description": "Name after aliases; trends and comparisons use this."
+          }
+        }
+      },
+      "Difference": {
+        "type": "object",
+        "required": [
+          "absolute"
+        ],
+        "properties": {
+          "absolute": {
+            "type": "number",
+            "format": "double",
+            "description": "Mean minus the reference mean."
+          },
+          "ratio": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Mean divided by the reference mean (normalization, FR-13)."
+          },
+          "relative": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "`absolute` divided by the absolute reference mean; absent if the\nreference mean is 0."
+          }
+        }
+      },
+      "DslDiagnostic": {
+        "type": "object",
+        "required": [
+          "message",
+          "start",
+          "end"
+        ],
+        "properties": {
+          "end": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "message": {
+            "type": "string"
+          },
+          "start": {
+            "type": "integer",
+            "description": "Byte offsets of the part of the expression the message refers to.",
+            "minimum": 0
           }
         }
       },
@@ -2520,6 +3616,235 @@
           }
         }
       },
+      "EvaluateRequest": {
+        "type": "object",
+        "required": [
+          "case_execution_id"
+        ],
+        "properties": {
+          "case_execution_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expression": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "An ad-hoc expression. Give either this or `name`."
+          },
+          "max_points": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "For series results: downsample to at most this many points.",
+            "minimum": 0
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A saved derived metric."
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Output unit; default: the declared unit, or the expression's unit."
+          },
+          "version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Version of `name`; the latest by default."
+          }
+        },
+        "additionalProperties": false
+      },
+      "EvaluateResponse": {
+        "type": "object",
+        "required": [
+          "expression",
+          "kind",
+          "unit",
+          "samples"
+        ],
+        "properties": {
+          "expression": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "samples": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SampleResult"
+            }
+          },
+          "unit": {
+            "type": "string"
+          },
+          "x_dimension": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "x_unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Excluded": {
+        "type": "object",
+        "description": "Samples left out because the metric does not apply to them.",
+        "required": [
+          "missing",
+          "errors"
+        ],
+        "properties": {
+          "errors": {
+            "type": "integer",
+            "description": "Samples whose inputs do not fit the expression (e.g. units).",
+            "minimum": 0
+          },
+          "first_error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The first such error, for diagnosis."
+          },
+          "missing": {
+            "type": "integer",
+            "description": "Samples without an input of the expression (not measured).",
+            "minimum": 0
+          }
+        }
+      },
+      "ExportFormat": {
+        "type": "string",
+        "enum": [
+          "csv",
+          "json",
+          "parquet"
+        ]
+      },
+      "ExportLevel": {
+        "type": "string",
+        "enum": [
+          "samples",
+          "aggregates"
+        ]
+      },
+      "ExportRequest": {
+        "type": "object",
+        "required": [
+          "metric",
+          "format"
+        ],
+        "properties": {
+          "confidence": {
+            "type": "number",
+            "format": "double"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/RunFilter"
+          },
+          "format": {
+            "$ref": "#/components/schemas/ExportFormat"
+          },
+          "include_warmup": {
+            "type": "boolean"
+          },
+          "level": {
+            "$ref": "#/components/schemas/ExportLevel"
+          },
+          "metric": {
+            "type": "string",
+            "description": "A scalar metric: uploaded, derived or any DSL expression."
+          },
+          "percentiles": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number",
+              "format": "double"
+            },
+            "description": "For `level = aggregates`."
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExpressionInputs": {
+        "type": "object",
+        "required": [
+          "metrics",
+          "series"
+        ],
+        "properties": {
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Uploaded scalar metrics the expression needs (including through the\nderived metrics it uses)."
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Uploaded series it needs."
+          }
+        }
+      },
+      "GridSpec": {
+        "type": "object",
+        "description": "A common x grid: `points` evenly spaced values from `from` to `to`.\nWithout `from`/`to` the grid covers the series (per group when\naggregating).",
+        "properties": {
+          "from": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "points": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Number of grid points, 2 to 10000 (default 200).",
+            "minimum": 0
+          },
+          "to": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
       "IngestResponse": {
         "type": "object",
         "description": "Result of an idempotent write.",
@@ -2537,6 +3862,13 @@
             "format": "uuid"
           }
         }
+      },
+      "InterpParam": {
+        "type": "string",
+        "enum": [
+          "linear",
+          "step"
+        ]
       },
       "MeasurementOut": {
         "type": "object",
@@ -2609,6 +3941,28 @@
           "higher_is_better",
           "lower_is_better"
         ]
+      },
+      "MetricInfo": {
+        "type": "object",
+        "required": [
+          "expression",
+          "kind",
+          "unit"
+        ],
+        "properties": {
+          "expression": {
+            "type": "string",
+            "description": "The metric expression as requested."
+          },
+          "kind": {
+            "type": "string",
+            "description": "`scalar` or `series`."
+          },
+          "unit": {
+            "type": "string",
+            "description": "Unit of all values."
+          }
+        }
       },
       "MetricInput": {
         "type": "object",
@@ -2697,6 +4051,132 @@
         },
         "additionalProperties": false
       },
+      "OverlayResponse": {
+        "type": "object",
+        "required": [
+          "metric",
+          "x_unit",
+          "x_dimension",
+          "series",
+          "truncated",
+          "excluded"
+        ],
+        "properties": {
+          "excluded": {
+            "$ref": "#/components/schemas/Excluded"
+          },
+          "grid": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number",
+              "format": "double"
+            },
+            "description": "The common grid, if one was requested."
+          },
+          "metric": {
+            "$ref": "#/components/schemas/MetricInfo"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverlaySeries"
+            }
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True if more series matched than `max_series`."
+          },
+          "x_dimension": {
+            "type": "string"
+          },
+          "x_unit": {
+            "type": "string"
+          }
+        }
+      },
+      "OverlaySeries": {
+        "type": "object",
+        "required": [
+          "run",
+          "case",
+          "client_device",
+          "case_execution_id",
+          "sample_id",
+          "repetition",
+          "is_warmup",
+          "y"
+        ],
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseInfo"
+          },
+          "case_execution_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "client_device": {
+            "type": "string"
+          },
+          "is_warmup": {
+            "type": "boolean"
+          },
+          "repetition": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "run": {
+            "$ref": "#/components/schemas/RunRef"
+          },
+          "sample_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "x": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number",
+              "format": "double"
+            },
+            "description": "x values; absent when resampled onto the grid."
+          },
+          "y": {
+            "type": "array",
+            "items": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "description": "y values; null where the series has no value at a grid point."
+          }
+        }
+      },
+      "PercentileValue": {
+        "type": "object",
+        "required": [
+          "p"
+        ],
+        "properties": {
+          "p": {
+            "type": "number",
+            "format": "double"
+          },
+          "value": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
+      },
       "Problem": {
         "type": "object",
         "description": "Problem details (RFC 9457). `code` is a stable, machine-readable error\ncode.",
@@ -2771,6 +4251,153 @@
           }
         ]
       },
+      "RunFilter": {
+        "type": "object",
+        "description": "Run filters (FR-11). Filters on case executions (device, scenario, asset,\nparameters, metric) match runs with at least one current case execution\nthat satisfies all of them. Device and parameter filters use the values\nafter aliases.",
+        "properties": {
+          "asset": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Asset name."
+          },
+          "client_device": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Client device name after aliases."
+          },
+          "cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`next_cursor` of the previous page."
+          },
+          "limit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Page size, 1 to 500 (default 50)."
+          },
+          "metric": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Metric name with a measurement or series in the run."
+          },
+          "param": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Parameter filter `name=value`, repeatable. The value is read as JSON\n(`size=10` is a number, `mode=\"10\"` a string); anything that is not a\nJSON scalar is a string (`mode=fast`)."
+          },
+          "run_id": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Run id; repeat for several."
+          },
+          "scenario": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Scenario name."
+          },
+          "shared_environment_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "started_after": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Measured start time at or after this time."
+          },
+          "started_before": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Measured start time before this time."
+          },
+          "status": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunStatus"
+            },
+            "description": "Status; repeat for several."
+          },
+          "suite": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Suite name."
+          },
+          "sut_branch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sut_build_config": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sut_commit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sut_tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tag": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tag; repeat to require several."
+          },
+          "triggered_by": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunTrigger"
+              }
+            ]
+          },
+          "validity": {
+            "$ref": "#/components/schemas/Validity",
+            "description": "Valid runs by default (FR-9)."
+          }
+        },
+        "additionalProperties": false
+      },
       "RunList": {
         "type": "object",
         "required": [
@@ -2789,6 +4416,41 @@
             "items": {
               "$ref": "#/components/schemas/RunSummary"
             }
+          }
+        }
+      },
+      "RunRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "started_at",
+          "status",
+          "is_valid",
+          "sut_version",
+          "shared_environment_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "is_valid": {
+            "type": "boolean"
+          },
+          "shared_environment_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Measured start time."
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "sut_version": {
+            "$ref": "#/components/schemas/SutVersion"
           }
         }
       },
@@ -2955,6 +4617,145 @@
         },
         "additionalProperties": false
       },
+      "SampleResult": {
+        "type": "object",
+        "required": [
+          "sample_id",
+          "repetition",
+          "is_warmup",
+          "status"
+        ],
+        "properties": {
+          "is_warmup": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why the status is `missing` or `error`."
+          },
+          "repetition": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sample_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "series": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SeriesValue",
+                "description": "Series result, x in `x_unit`."
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/SampleStatus"
+          },
+          "value": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Scalar result."
+          }
+        }
+      },
+      "SampleStatus": {
+        "type": "string",
+        "enum": [
+          "value",
+          "no_value",
+          "missing",
+          "error"
+        ]
+      },
+      "SeriesAggregateResponse": {
+        "type": "object",
+        "required": [
+          "metric",
+          "x_unit",
+          "x_dimension",
+          "groups",
+          "excluded"
+        ],
+        "properties": {
+          "excluded": {
+            "$ref": "#/components/schemas/Excluded"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesGroup"
+            }
+          },
+          "metric": {
+            "$ref": "#/components/schemas/MetricInfo"
+          },
+          "x_dimension": {
+            "type": "string"
+          },
+          "x_unit": {
+            "type": "string"
+          }
+        }
+      },
+      "SeriesGroup": {
+        "type": "object",
+        "description": "Series of one run, case and device aggregated across samples.",
+        "required": [
+          "run",
+          "case",
+          "client_device",
+          "n_series",
+          "x",
+          "n",
+          "percentiles"
+        ],
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseInfo"
+          },
+          "client_device": {
+            "type": "string"
+          },
+          "n": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Number of series with a value at each grid point."
+          },
+          "n_series": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "percentiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BandValues"
+            }
+          },
+          "run": {
+            "$ref": "#/components/schemas/RunRef"
+          },
+          "x": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        }
+      },
       "SeriesInput": {
         "type": "object",
         "description": "A raw, measured series: one per metric and sample. x never decreases.",
@@ -3074,6 +4875,181 @@
               "type": "number",
               "format": "float"
             }
+          }
+        }
+      },
+      "SeriesValue": {
+        "type": "object",
+        "required": [
+          "x",
+          "y"
+        ],
+        "properties": {
+          "x": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "y": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        }
+      },
+      "SeriesViewRequest": {
+        "type": "object",
+        "required": [
+          "metric"
+        ],
+        "properties": {
+          "filter": {
+            "$ref": "#/components/schemas/RunFilter"
+          },
+          "grid": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GridSpec",
+                "description": "Resample onto this grid. Required for alignment in an overlay;\naggregation always uses a grid."
+              }
+            ]
+          },
+          "include_warmup": {
+            "type": "boolean"
+          },
+          "interp": {
+            "$ref": "#/components/schemas/InterpParam",
+            "description": "Interpolation for resampling."
+          },
+          "max_points": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Overlay without grid: downsample each series to at most this many\npoints (default 2000).",
+            "minimum": 0
+          },
+          "max_series": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Most series in an overlay (default 500, at most 5000).",
+            "minimum": 0
+          },
+          "metric": {
+            "type": "string",
+            "description": "A series: `series.<name>`, a derived series metric or a series\nexpression."
+          },
+          "percentiles": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number",
+              "format": "double"
+            },
+            "description": "Aggregation: percentiles per grid point (default 25, 50, 75)."
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Unit of y."
+          },
+          "x_unit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Unit of x; default the x unit of the most recent series."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Stats": {
+        "type": "object",
+        "description": "Aggregate across the samples of one run, case and device (FR-12).\nSamples without a value (FR-12a) are counted in `n_no_value` and left\nout of the statistics.",
+        "required": [
+          "n",
+          "n_no_value",
+          "percentiles"
+        ],
+        "properties": {
+          "ci_high": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "ci_low": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Confidence interval of the mean."
+          },
+          "max": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "mean": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "median": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "min": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "n": {
+            "type": "integer",
+            "description": "Samples with a value.",
+            "minimum": 0
+          },
+          "n_no_value": {
+            "type": "integer",
+            "description": "Samples without a value.",
+            "minimum": 0
+          },
+          "percentiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PercentileValue"
+            }
+          },
+          "stddev": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
           }
         }
       },
@@ -3248,6 +5224,158 @@
           }
         }
       },
+      "TrendMarker": {
+        "type": "string",
+        "enum": [
+          "device_details_changed",
+          "shared_environment_changed",
+          "sut_version_changed"
+        ]
+      },
+      "TrendOrder": {
+        "type": "string",
+        "enum": [
+          "started_at",
+          "sut_version"
+        ]
+      },
+      "TrendPoint": {
+        "type": "object",
+        "required": [
+          "run",
+          "stats",
+          "device_environment_ids",
+          "markers"
+        ],
+        "properties": {
+          "device_environment_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "markers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrendMarker"
+            }
+          },
+          "relative_to_reference": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Mean divided by the reference run's mean, if a reference is set."
+          },
+          "run": {
+            "$ref": "#/components/schemas/RunRef"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/Stats"
+          }
+        }
+      },
+      "TrendRequest": {
+        "type": "object",
+        "required": [
+          "test_case_id",
+          "client_device",
+          "metric"
+        ],
+        "properties": {
+          "client_device": {
+            "type": "string",
+            "description": "Client device name after aliases."
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/RunFilter",
+            "description": "Further restrictions, e.g. a time range or a branch (FR-11)."
+          },
+          "include_warmup": {
+            "type": "boolean"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "order_by": {
+            "$ref": "#/components/schemas/TrendOrder"
+          },
+          "percentiles": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "reference_run_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Normalize to the mean of this run (FR-13)."
+          },
+          "test_case_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Any test case of the case. Test cases whose parameters are equal\nafter aliases belong to the same case; other scenario versions never\ndo."
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "TrendResponse": {
+        "type": "object",
+        "required": [
+          "metric",
+          "case",
+          "client_device",
+          "points",
+          "annotations",
+          "excluded"
+        ],
+        "properties": {
+          "annotations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Annotation"
+            },
+            "description": "Annotations on the runs, on the case's test cases, and points in time\nwithin the trend."
+          },
+          "case": {
+            "$ref": "#/components/schemas/CaseInfo"
+          },
+          "client_device": {
+            "type": "string"
+          },
+          "excluded": {
+            "$ref": "#/components/schemas/Excluded"
+          },
+          "metric": {
+            "$ref": "#/components/schemas/MetricInfo"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrendPoint"
+            }
+          }
+        }
+      },
       "Unit": {
         "type": "object",
         "required": [
@@ -3284,6 +5412,126 @@
           }
         },
         "additionalProperties": false
+      },
+      "UsedVersion": {
+        "type": "object",
+        "description": "A derived metric version an expression uses.",
+        "required": [
+          "name",
+          "version",
+          "version_id"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "version_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ValidateExpression": {
+        "type": "object",
+        "required": [
+          "expression"
+        ],
+        "properties": {
+          "expression": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name the expression will be saved under; a reference to it, direct\nor through other derived metrics, is a cycle."
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Unit the result must convert to."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Validation": {
+        "type": "object",
+        "required": [
+          "valid",
+          "diagnostics",
+          "uses",
+          "inputs"
+        ],
+        "properties": {
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DslDiagnostic"
+            }
+          },
+          "inferred_unit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Unit the expression has by itself, if valid."
+          },
+          "inputs": {
+            "$ref": "#/components/schemas/ExpressionInputs"
+          },
+          "kind": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`scalar` or `series`, if valid."
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Unit of the result (the declared unit if one was given), if valid."
+          },
+          "uses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsedVersion"
+            },
+            "description": "Derived metric versions referenced directly (latest versions)."
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "x_dimension": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "x_unit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "For a series: unit and dimension of x."
+          }
+        }
+      },
+      "Validity": {
+        "type": "string",
+        "enum": [
+          "valid",
+          "invalid",
+          "all"
+        ]
       },
       "VersionedDefinition": {
         "type": "object",
@@ -3338,6 +5586,10 @@
     {
       "name": "annotations",
       "description": "Tags and annotations"
+    },
+    {
+      "name": "analysis",
+      "description": "Aggregates, trends, comparisons, series views and export (FR-12 to FR-20)"
     }
   ]
 }

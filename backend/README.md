@@ -8,7 +8,8 @@ API. Design decisions are in [ADR 0008](../docs/adr/0008-backend-service.md).
 ```
 backend/
   Cargo.toml            Workspace
-  crates/core/          track-record-core: pure domain logic (units)
+  crates/core/          track-record-core: pure domain logic: units, statistics,
+                        series operations, derived metric DSL (ADR 0009)
   crates/server/        track-record-server: HTTP, database, attachments, jobs
     src/api/            Handlers and the two routers
     src/service/        Service layer shared by all interfaces
@@ -92,5 +93,37 @@ All ids are client-generated UUIDs. The first write returns 201. Repeating it
 with the same content returns 200. Sending other content under the same id
 returns 409. Errors are `application/problem+json` with a stable `code`.
 
-Invalidation, hard delete, token management and alias editing exist only on
-the UI port.
+Invalidation, hard delete, token management, alias editing and saving
+derived metrics exist only on the UI port.
+
+### Derived metrics and analysis
+
+Derived metrics are DSL expressions over the metrics of one sample
+([ADR 0009](../docs/adr/0009-derived-metric-dsl-and-analysis.md)), e.g.
+`bytes / time`, `max(series.fps)`, `time_to(series.loaded, 90, from=t0)` or
+`derived.throughput * 8`:
+
+- `POST /derived-metrics/validate` checks syntax, references and units and
+  returns diagnostics with byte offsets.
+- `PUT /ui/api/v1/derived-metrics/{name}` saves a new version (UI port only).
+- `POST /derived-metrics/evaluate` evaluates an expression or a saved version
+  on the samples of one case execution.
+
+The analysis endpoints take a JSON view spec with a run filter, the metric as
+a DSL expression, an optional unit and `include_warmup`:
+
+| Endpoint | Result |
+|---|---|
+| `POST /analysis/aggregates` | Statistics per run, case and device (FR-12) |
+| `POST /analysis/trend` | One case, metric and device across runs, with markers and annotations (FR-18) |
+| `POST /analysis/compare` | Side-by-side comparison along run, device or parameters, streamed as NDJSON (FR-16) |
+| `POST /analysis/series/overlay`, `/analysis/series/aggregate` | Series on a common grid, percentile bands (FR-19) |
+| `POST /analysis/export` | CSV, NDJSON or Parquet, streamed (FR-20) |
+
+For example:
+
+```bash
+curl -s -X POST localhost:8081/ui/api/v1/analysis/aggregates \
+  -H 'Content-Type: application/json' \
+  -d '{"metric": "load_time", "unit": "ms", "filter": {"sut_branch": "main"}}'
+```

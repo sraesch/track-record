@@ -1,0 +1,439 @@
+//! Recursive descent parser.
+//!
+//! ```text
+//! expr     = additive
+//! additive = product (("+" | "-") product)*
+//! product  = unary (("*" | "/") unary)*
+//! unary    = "-" unary | power
+//! power    = primary ("^" unary)?          right-associative; -2^2 = -(2^2)
+//! primary  = NUMBER UNIT? | name | "series" "." name | "derived" "." name
+//!          | IDENT "(" args? ")" | "(" expr ")"
+//! args     = arg ("," arg)*                positional before named
+//! arg      = IDENT "=" expr | expr
+//! name     = IDENT | `QUOTED`
+//! ```
+
+use super::ast::{BinOp, Expr, ExprKind, NamedArg};
+use super::lexer::{Token, tokenize};
+use super::{Diagnostic, MAX_DEPTH, MAX_SOURCE_LEN, Span};
+
+/// Parses an expression.
+pub fn parse(src: &str) -> Result<Expr, Diagnostic> {
+    if src.len() > MAX_SOURCE_LEN {
+        return Err(Diagnostic::new(
+            Span::new(0, src.len()),
+            format!("expression is longer than {MAX_SOURCE_LEN} bytes"),
+        ));
+    }
+    if src.trim().is_empty() {
+        return Err(Diagnostic::new(
+            Span::new(0, src.len()),
+            "expression is empty",
+        ));
+    }
+    let tokens = tokenize(src)?;
+    let mut p = Parser {
+        tokens,
+        pos: 0,
+        depth: 0,
+    };
+    let expr = p.expr()?;
+    let (token, span) = p.peek();
+    if *token != Token::Eof {
+        return Err(Diagnostic::new(
+            *span,
+            format!("unexpected {} after the expression", token.describe()),
+        ));
+    }
+    // Long chains such as a+b+c+... are deep without nesting; checking and
+    // evaluation recurse, so bound the depth of the tree too.
+    if tree_depth(&expr) > MAX_TREE_DEPTH {
+        return Err(Diagnostic::new(
+            expr.span,
+            format!("expression has more than {MAX_TREE_DEPTH} levels of operations"),
+        ));
+    }
+    Ok(expr)
+}
+
+const MAX_TREE_DEPTH: usize = 256;
+
+fn tree_depth(e: &Expr) -> usize {
+    1 + match &e.kind {
+        ExprKind::Number { .. }
+        | ExprKind::Metric(_)
+        | ExprKind::Series(_)
+        | ExprKind::Derived(_) => 0,
+        ExprKind::Neg(inner) => tree_depth(inner),
+        ExprKind::Binary { lhs, rhs, .. } => tree_depth(lhs).max(tree_depth(rhs)),
+        ExprKind::Call { args, named, .. } => args
+            .iter()
+            .chain(named.iter().map(|n| &n.value))
+            .map(tree_depth)
+            .max()
+            .unwrap_or(0),
+    }
+}
+
+struct Parser {
+    tokens: Vec<(Token, Span)>,
+    pos: usize,
+    depth: usize,
+}
+
+impl Parser {
+    fn peek(&self) -> &(Token, Span) {
+        &self.tokens[self.pos]
+    }
+
+    fn peek_at(&self, offset: usize) -> &Token {
+        &self.tokens[(self.pos + offset).min(self.tokens.len() - 1)].0
+    }
+
+    fn bump(&mut self) -> (Token, Span) {
+        let t = self.tokens[self.pos].clone();
+        if self.pos < self.tokens.len() - 1 {
+            self.pos += 1;
+        }
+        t
+    }
+
+    fn expect(&mut self, token: Token, what: &str) -> Result<Span, Diagnostic> {
+        let (t, span) = self.peek().clone();
+        if t == token {
+            self.bump();
+            Ok(span)
+        } else {
+            Err(Diagnostic::new(
+                span,
+                format!("expected {what}, found {}", t.describe()),
+            ))
+        }
+    }
+
+    fn enter(&mut self) -> Result<(), Diagnostic> {
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            return Err(Diagnostic::new(
+                self.peek().1,
+                format!("expression is nested deeper than {MAX_DEPTH} levels"),
+            ));
+        }
+        Ok(())
+    }
+
+    fn expr(&mut self) -> Result<Expr, Diagnostic> {
+        self.enter()?;
+        let mut lhs = self.product()?;
+        loop {
+            let op = match self.peek().0 {
+                Token::Plus => BinOp::Add,
+                Token::Minus => BinOp::Sub,
+                _ => break,
+            };
+            self.bump();
+            let rhs = self.product()?;
+            lhs = binary(op, lhs, rhs);
+        }
+        self.depth -= 1;
+        Ok(lhs)
+    }
+
+    fn product(&mut self) -> Result<Expr, Diagnostic> {
+        let mut lhs = self.unary()?;
+        loop {
+            let op = match self.peek().0 {
+                Token::Star => BinOp::Mul,
+                Token::Slash => BinOp::Div,
+                _ => break,
+            };
+            self.bump();
+            let rhs = self.unary()?;
+            lhs = binary(op, lhs, rhs);
+        }
+        Ok(lhs)
+    }
+
+    fn unary(&mut self) -> Result<Expr, Diagnostic> {
+        if self.peek().0 == Token::Minus {
+            self.enter()?;
+            let (_, span) = self.bump();
+            let inner = self.unary()?;
+            self.depth -= 1;
+            let span = span.to(inner.span);
+            return Ok(Expr {
+                kind: ExprKind::Neg(Box::new(inner)),
+                span,
+            });
+        }
+        self.power()
+    }
+
+    fn power(&mut self) -> Result<Expr, Diagnostic> {
+        let base = self.primary()?;
+        if self.peek().0 == Token::Caret {
+            self.enter()?;
+            self.bump();
+            let exp = self.unary()?;
+            self.depth -= 1;
+            return Ok(binary(BinOp::Pow, base, exp));
+        }
+        Ok(base)
+    }
+
+    fn name(&mut self, what: &str) -> Result<(String, Span), Diagnostic> {
+        match self.bump() {
+            (Token::Ident(s) | Token::Quoted(s), span) => Ok((s, span)),
+            (t, span) => Err(Diagnostic::new(
+                span,
+                format!("expected {what}, found {}", t.describe()),
+            )),
+        }
+    }
+
+    fn primary(&mut self) -> Result<Expr, Diagnostic> {
+        let (token, span) = self.peek().clone();
+        match token {
+            Token::Number(value) => {
+                self.bump();
+                if let (Token::Unit(unit), unit_span) = self.peek().clone() {
+                    self.bump();
+                    return Ok(Expr {
+                        kind: ExprKind::Number {
+                            value,
+                            unit: Some(unit),
+                        },
+                        span: span.to(unit_span),
+                    });
+                }
+                Ok(Expr {
+                    kind: ExprKind::Number { value, unit: None },
+                    span,
+                })
+            }
+            Token::Quoted(name) => {
+                self.bump();
+                Ok(Expr {
+                    kind: ExprKind::Metric(name),
+                    span,
+                })
+            }
+            Token::Ident(name) => {
+                self.bump();
+                match self.peek().0 {
+                    Token::LParen => self.call(name, span),
+                    Token::Dot => {
+                        self.bump();
+                        let (inner, inner_span) = self.name("a metric name after '.'")?;
+                        let kind = match name.as_str() {
+                            "series" => ExprKind::Series(inner),
+                            "derived" => ExprKind::Derived(inner),
+                            _ => {
+                                return Err(Diagnostic::new(
+                                    span,
+                                    format!(
+                                        "unknown prefix {name:?}: use series.<name> or \
+                                         derived.<name>, or quote names with dots in backticks"
+                                    ),
+                                ));
+                            }
+                        };
+                        Ok(Expr {
+                            kind,
+                            span: span.to(inner_span),
+                        })
+                    }
+                    _ => Ok(Expr {
+                        kind: ExprKind::Metric(name),
+                        span,
+                    }),
+                }
+            }
+            Token::LParen => {
+                self.bump();
+                let inner = self.expr()?;
+                self.expect(Token::RParen, "')'")?;
+                Ok(inner)
+            }
+            Token::Unit(_) => Err(Diagnostic::new(
+                span,
+                "a unit in brackets must follow a number, e.g. 1.5[s]",
+            )),
+            other => Err(Diagnostic::new(
+                span,
+                format!(
+                    "expected a number, a metric or '(', found {}",
+                    other.describe()
+                ),
+            )),
+        }
+    }
+
+    fn call(&mut self, name: String, name_span: Span) -> Result<Expr, Diagnostic> {
+        self.enter()?;
+        self.expect(Token::LParen, "'('")?;
+        let mut args = Vec::new();
+        let mut named: Vec<NamedArg> = Vec::new();
+        if self.peek().0 != Token::RParen {
+            loop {
+                if let (Token::Ident(arg), arg_span) = self.peek().clone()
+                    && *self.peek_at(1) == Token::Eq
+                {
+                    self.bump();
+                    self.bump();
+                    let value = self.expr()?;
+                    if named.iter().any(|n| n.name == arg) {
+                        return Err(Diagnostic::new(
+                            arg_span,
+                            format!("argument {arg} is given twice"),
+                        ));
+                    }
+                    named.push(NamedArg {
+                        name: arg,
+                        span: arg_span.to(value.span),
+                        value,
+                    });
+                } else {
+                    let value = self.expr()?;
+                    if !named.is_empty() {
+                        return Err(Diagnostic::new(
+                            value.span,
+                            "positional arguments must come before named ones",
+                        ));
+                    }
+                    args.push(value);
+                }
+                if self.peek().0 == Token::Comma {
+                    self.bump();
+                } else {
+                    break;
+                }
+            }
+        }
+        let close = self.expect(Token::RParen, "',' or ')'")?;
+        self.depth -= 1;
+        Ok(Expr {
+            kind: ExprKind::Call {
+                name,
+                name_span,
+                args,
+                named,
+            },
+            span: name_span.to(close),
+        })
+    }
+}
+
+fn binary(op: BinOp, lhs: Expr, rhs: Expr) -> Expr {
+    let span = lhs.span.to(rhs.span);
+    Expr {
+        kind: ExprKind::Binary {
+            op,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+        },
+        span,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use proptest::prelude::*;
+
+    use super::*;
+
+    /// Renders the tree with explicit parentheses.
+    fn show(e: &Expr) -> String {
+        match &e.kind {
+            ExprKind::Number { value, unit: None } => format!("{value}"),
+            ExprKind::Number {
+                value,
+                unit: Some(u),
+            } => format!("{value}[{u}]"),
+            ExprKind::Metric(n) => n.clone(),
+            ExprKind::Series(n) => format!("series.{n}"),
+            ExprKind::Derived(n) => format!("derived.{n}"),
+            ExprKind::Neg(e) => format!("(-{})", show(e)),
+            ExprKind::Binary { op, lhs, rhs } => {
+                format!("({} {} {})", show(lhs), op.symbol(), show(rhs))
+            }
+            ExprKind::Call {
+                name, args, named, ..
+            } => {
+                let mut parts: Vec<String> = args.iter().map(show).collect();
+                parts.extend(
+                    named
+                        .iter()
+                        .map(|n| format!("{}={}", n.name, show(&n.value))),
+                );
+                format!("{name}({})", parts.join(", "))
+            }
+        }
+    }
+
+    fn p(src: &str) -> String {
+        show(&parse(src).unwrap())
+    }
+
+    #[test]
+    fn precedence_and_associativity() {
+        assert_eq!(p("a + b * c"), "(a + (b * c))");
+        assert_eq!(p("a - b - c"), "((a - b) - c)");
+        assert_eq!(p("a / b / c"), "((a / b) / c)");
+        assert_eq!(p("-2^2"), "(-(2 ^ 2))");
+        assert_eq!(p("2^3^2"), "(2 ^ (3 ^ 2))");
+        assert_eq!(p("2^-1"), "(2 ^ (-1))");
+        assert_eq!(p("(a + b) * c"), "((a + b) * c)");
+        assert_eq!(p("--a"), "(-(-a))");
+    }
+
+    #[test]
+    fn references_and_calls() {
+        assert_eq!(p("bytes / time"), "(bytes / time)");
+        assert_eq!(p("max(series.fps)"), "max(series.fps)");
+        assert_eq!(
+            p("time_to(series.loaded, 0.9, from=t0, interp=step)"),
+            "time_to(series.loaded, 0.9, from=t0, interp=step)"
+        );
+        assert_eq!(p("derived.throughput * 8"), "(derived.throughput * 8)");
+        assert_eq!(p("`load-time` + 1[ms]"), "(load-time + 1[ms])");
+        assert_eq!(p("series.`frame time`"), "series.frame time");
+        assert_eq!(p("f()"), "f()");
+
+        let e = parse("rekey(series.q, series.bytes, interp=linear) + b").unwrap();
+        let refs = e.references();
+        assert_eq!(refs.series.len(), 2);
+        assert_eq!(refs.metrics.into_iter().collect::<Vec<_>>(), vec!["b"]);
+    }
+
+    #[test]
+    fn errors_point_at_the_problem() {
+        let err = |src: &str| parse(src).unwrap_err();
+        assert_eq!(err("a +").span, Span::new(3, 3));
+        assert_eq!(err("a b").span, Span::new(2, 3));
+        assert_eq!(err("foo.bar").span, Span::new(0, 3));
+        assert!(err("max(a, from=1, b)").message.contains("positional"));
+        assert!(err("max(s, from=1, from=2)").message.contains("twice"));
+        assert!(err("(a + b").message.contains("')'"));
+        assert!(err("[s]").message.contains("must follow a number"));
+        assert!(err("").message.contains("empty"));
+        let deep = format!("{}a{}", "(".repeat(100), ")".repeat(100));
+        assert!(err(&deep).message.contains("nested deeper"));
+        let long = "a+".repeat(3000) + "a";
+        assert!(err(&long).message.contains("longer than"));
+        let chain = "a+".repeat(300) + "a";
+        assert!(err(&chain).message.contains("levels of operations"));
+    }
+
+    proptest! {
+        #[test]
+        fn parser_never_panics(src in "[a-z0-9_ .,()+*/^=`\\[\\]-]{0,80}") {
+            let _ = parse(&src);
+        }
+
+        #[test]
+        fn parser_never_panics_on_unicode(src in "\\PC{0,40}") {
+            let _ = parse(&src);
+        }
+    }
+}
