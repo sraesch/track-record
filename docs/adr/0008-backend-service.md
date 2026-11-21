@@ -136,7 +136,13 @@ missing or revoked token gets 401 before MCP is involved.
   as stored jobs. That keeps the backend stateless and needs no job table.
 - **Image:** `backend/Dockerfile` builds from the repository root (the build
   needs `db/migrations`). It exposes 8080 and 8081 and runs as a non-root
-  user. CI builds it; publishing is left for later.
+  user. CI builds it; publishing is left for later. The runtime base is
+  `gcr.io/distroless/cc-debian13:nonroot` (uid 65532), not `debian:*-slim`:
+  the binary links only libc and libgcc_s (TLS is rustls with built-in root
+  certificates), and a full Debian base brings packages the server never
+  uses (util-linux, perl, sqlite, ncurses) that vulnerability scanners
+  flag. The build stage must use the same Debian release, so the glibc
+  matches.
 
 ### Tests
 
