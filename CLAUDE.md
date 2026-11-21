@@ -50,8 +50,13 @@ Decided in [ADR 0001](docs/adr/0001-technology-stack.md):
 Also fixed by the requirements: Kubernetes + Helm, stateless backend,
 OpenAPI for the REST API.
 
+CI is GitHub Actions ([ADR 0005](docs/adr/0005-ci.md)): `.github/workflows/ci.yml`
+runs on pull requests and on pushes to `develop` and `main`. Its jobs call the
+local test commands; when a new part gets tests, add a job that runs the same
+command. There is no delivery pipeline yet.
+
 Still open: Rust crates (HTTP, DB access/migrations, MCP), DSL grammar, cache
-strategy, charting library, repo layout, CI.
+strategy, charting library, repo layout, delivery (images, Helm chart, releases).
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
 only in code.
 
