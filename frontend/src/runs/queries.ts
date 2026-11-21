@@ -1,4 +1,8 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/react-query'
 import { api, type RunListQuery, unwrap } from '../api/client'
 
 export const runPageSize = 50
@@ -18,6 +22,8 @@ export function useRunList(query: RunListQuery) {
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.next_cursor ?? undefined,
+    // Keep the previous rows on screen while another filter loads.
+    placeholderData: keepPreviousData,
   })
 }
 

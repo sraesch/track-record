@@ -9,11 +9,13 @@ import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RunStatus, RunTrigger, Validity } from '../api/client'
 import { useBranches, useClientDeviceNames, useSuites } from './queries'
 import {
   hasActiveFilters,
+  isDay,
   type RunFilters,
   runStatuses,
   runTriggers,
@@ -44,7 +46,7 @@ export function RunFilterBar({ filters, onChange }: Props) {
       <Autocomplete
         size="small"
         sx={fieldSx}
-        options={suites.data ?? []}
+        options={withValue(suites.data, filters.suite)}
         loading={suites.isPending}
         value={filters.suite ?? null}
         onChange={(_, value) => set({ suite: value ?? undefined })}
@@ -111,7 +113,7 @@ export function RunFilterBar({ filters, onChange }: Props) {
       <Autocomplete
         size="small"
         sx={fieldSx}
-        options={branches.data ?? []}
+        options={withValue(branches.data, filters.branch)}
         loading={branches.isPending}
         value={filters.branch ?? null}
         onChange={(_, value) => set({ branch: value ?? undefined })}
@@ -123,7 +125,7 @@ export function RunFilterBar({ filters, onChange }: Props) {
       <Autocomplete
         size="small"
         sx={fieldSx}
-        options={devices.data ?? []}
+        options={withValue(devices.data, filters.device)}
         loading={devices.isPending}
         value={filters.device ?? null}
         onChange={(_, value) => set({ device: value ?? undefined })}
@@ -161,29 +163,17 @@ export function RunFilterBar({ filters, onChange }: Props) {
         )}
       />
 
-      <TextField
-        type="date"
-        size="small"
-        sx={{ ...fieldSx, maxWidth: 190 }}
+      <DayField
         label={t('runs.filters.from')}
-        value={filters.from ?? ''}
-        onChange={(event) => set({ from: event.target.value || undefined })}
-        slotProps={{
-          inputLabel: { shrink: true },
-          htmlInput: { max: filters.to },
-        }}
+        value={filters.from}
+        max={filters.to}
+        onChange={(from) => set({ from })}
       />
-      <TextField
-        type="date"
-        size="small"
-        sx={{ ...fieldSx, maxWidth: 190 }}
+      <DayField
         label={t('runs.filters.to')}
-        value={filters.to ?? ''}
-        onChange={(event) => set({ to: event.target.value || undefined })}
-        slotProps={{
-          inputLabel: { shrink: true },
-          htmlInput: { min: filters.from },
-        }}
+        value={filters.to}
+        min={filters.from}
+        onChange={(to) => set({ to })}
       />
 
       <ToggleButtonGroup
@@ -214,5 +204,58 @@ export function RunFilterBar({ filters, onChange }: Props) {
         </Button>
       )}
     </Box>
+  )
+}
+
+/**
+ * The options of a filter, plus its current value when that is not among
+ * them (a shared link, a name from before an alias, options still loading).
+ */
+function withValue(options: string[] | undefined, value: string | undefined) {
+  const all = options ?? []
+  return value && !all.includes(value) ? [value, ...all] : all
+}
+
+type DayFieldProps = {
+  label: string
+  value: string | undefined
+  min?: string
+  max?: string
+  onChange: (day: string | undefined) => void
+}
+
+/**
+ * A date filter. While a year is typed, the input passes through days like
+ * 0002-11-01; only complete, plausible days go to the URL, so typing makes
+ * neither history entries nor requests for each digit.
+ */
+function DayField({ label, value, min, max, onChange }: DayFieldProps) {
+  const [draft, setDraft] = useState(value ?? '')
+  const [shown, setShown] = useState(value)
+  if (value !== shown) {
+    // The URL changed (back button, "Clear filters"): show its day.
+    setShown(value)
+    setDraft(value ?? '')
+  }
+  return (
+    <TextField
+      type="date"
+      size="small"
+      sx={{ ...fieldSx, maxWidth: 190 }}
+      label={label}
+      value={draft}
+      onChange={(event) => {
+        const day = event.target.value
+        setDraft(day)
+        if (day === '') {
+          if (value !== undefined) onChange(undefined)
+        } else if (isDay(day) && day !== value) onChange(day)
+      }}
+      onBlur={() => setDraft(value ?? '')}
+      slotProps={{
+        inputLabel: { shrink: true },
+        htmlInput: { min, max },
+      }}
+    />
   )
 }

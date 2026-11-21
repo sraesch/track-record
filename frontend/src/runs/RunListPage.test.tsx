@@ -1,6 +1,6 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { RunSummary } from '../api/client'
 import { mockApi, problem } from '../test/api'
 import { currentQuery, renderApp } from '../test/render'
@@ -89,6 +89,25 @@ describe('Run list', () => {
     expect(router.state.location.pathname).toBe('/runs/r1')
   })
 
+  it('does not open a run when text in its row is selected', async () => {
+    const user = userEvent.setup()
+    mockApi({ '/ui/api/v1/runs': () => ({ runs, next_cursor: null }) })
+    const router = renderApp('/runs')
+    const rows = await bodyRows()
+
+    const selection = vi
+      .spyOn(window, 'getSelection')
+      .mockReturnValue({ toString: () => '168fed94' } as Selection)
+    await user.click(within(rows[0]!).getByText('168fed94'))
+    expect(router.state.location.pathname).toBe('/runs')
+    selection.mockRestore()
+
+    await user.keyboard('{Control>}')
+    await user.click(within(rows[0]!).getByText('168fed94'))
+    await user.keyboard('{/Control}')
+    expect(router.state.location.pathname).toBe('/runs')
+  })
+
   it('sends the filters of the URL to the API', async () => {
     const api = mockApi({
       '/ui/api/v1/runs': () => ({ runs: [], next_cursor: null }),
@@ -132,6 +151,47 @@ describe('Run list', () => {
     expect(currentQuery(router)).toBe('')
   })
 
+  it('keeps the rows on screen while another filter loads', async () => {
+    const user = userEvent.setup()
+    mockApi({
+      '/ui/api/v1/runs': (url) =>
+        url.searchParams.get('validity') === 'all'
+          ? new Promise(() => {}) // never answers
+          : { runs, next_cursor: null },
+    })
+    const router = renderApp('/runs')
+    expect(await bodyRows()).toHaveLength(3)
+
+    await user.click(screen.getByRole('button', { name: 'All' }))
+    expect(currentQuery(router)).toBe('validity=all')
+    expect(await bodyRows()).toHaveLength(3)
+  })
+
+  it('puts only complete dates into the URL', async () => {
+    mockApi({ '/ui/api/v1/runs': () => ({ runs, next_cursor: null }) })
+    const router = renderApp('/runs')
+    await table()
+    const from = screen.getByLabelText('Started from')
+
+    // A year being typed: 0002, 0020, 0202, then 2026.
+    for (const year of ['0002', '0020', '0202']) {
+      fireEvent.change(from, { target: { value: `${year}-11-01` } })
+      expect(currentQuery(router)).toBe('')
+    }
+    fireEvent.change(from, { target: { value: '2026-11-01' } })
+    expect(currentQuery(router)).toBe('from=2026-11-01')
+
+    fireEvent.change(from, { target: { value: '' } })
+    expect(currentQuery(router)).toBe('')
+  })
+
+  it('shows a device of the URL that is not among the options', async () => {
+    renderApp('/runs?device=pixel8-lab1')
+    expect(
+      await screen.findByRole('combobox', { name: 'Client device' }),
+    ).toHaveValue('pixel8-lab1')
+  })
+
   it('filters by a tag when its chip is clicked', async () => {
     const user = userEvent.setup()
     mockApi({ '/ui/api/v1/runs': () => ({ runs, next_cursor: null }) })
@@ -167,6 +227,35 @@ describe('Run list', () => {
     expect(
       api.requests('/ui/api/v1/runs').map((u) => u.searchParams.get('cursor')),
     ).toEqual([null, 'page-2'])
+  })
+
+  it('keeps the loaded runs when loading more fails', async () => {
+    const user = userEvent.setup()
+    let fail = true
+    const api = mockApi({
+      '/ui/api/v1/runs': (url) =>
+        url.searchParams.get('cursor') !== 'page-2'
+          ? { runs: runs.slice(0, 2), next_cursor: 'page-2' }
+          : fail
+            ? problem(502, 'bad_gateway', 'upstream down')
+            : { runs: [runs[2]], next_cursor: null },
+    })
+    renderApp('/runs')
+    expect(await bodyRows()).toHaveLength(2)
+
+    await user.click(screen.getByRole('button', { name: 'Load more' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('More runs could not be loaded: upstream down')
+    expect(await bodyRows()).toHaveLength(2)
+
+    fail = false
+    await user.click(within(alert).getByRole('button', { name: 'Retry' }))
+    await waitFor(async () => expect(await bodyRows()).toHaveLength(3))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // The retry asks for the next page only, not the first one again.
+    expect(
+      api.requests('/ui/api/v1/runs').map((u) => u.searchParams.get('cursor')),
+    ).toEqual([null, 'page-2', 'page-2'])
   })
 
   it('says when there are no runs at all', async () => {

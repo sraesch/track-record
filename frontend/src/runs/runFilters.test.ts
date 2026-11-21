@@ -57,6 +57,14 @@ describe('run list filters', () => {
     })
   })
 
+  it('ignore days that do not exist or are implausibly old', () => {
+    expect(parse('from=2026-02-31&to=0202-11-01')).toMatchObject({
+      from: undefined,
+      to: undefined,
+    })
+    expect(parse('from=2024-02-29').from).toBe('2024-02-29')
+  })
+
   it('become an API query; the end day is inclusive', () => {
     const query = runFiltersToQuery(
       parse('status=failed&tag=a&device=d&branch=b&from=2026-11-01&to=2026-11-20'),

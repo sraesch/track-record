@@ -1,6 +1,7 @@
 // Typed client for the UI API (/ui/api). Types are generated from
 // backend/openapi/ui.json into schema.d.ts (npm run generate:api).
 import createClient from 'openapi-fetch'
+import i18n from '../i18n'
 import type { components, paths } from './schema'
 
 export type { paths }
@@ -27,7 +28,11 @@ export class ApiError extends Error {
   readonly code: string
 
   constructor(status: number, problem: Partial<Problem> | undefined) {
-    super(problem?.detail ?? problem?.title ?? `HTTP ${status}`)
+    super(
+      problem?.detail ??
+        problem?.title ??
+        i18n.t('common.httpError', { status }),
+    )
     this.name = 'ApiError'
     this.status = status
     this.code = problem?.code ?? 'unknown'

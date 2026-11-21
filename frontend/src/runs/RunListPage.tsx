@@ -50,7 +50,10 @@ export function RunListPage() {
         {runs.isFetching && <LinearProgress aria-label={t('common.loading')} />}
       </Box>
 
-      {runs.isError ? (
+      {/* Without rows, an error takes the whole area; with rows (a failed
+          "Load more" or background refetch), the rows stay and the error
+          is shown below them. */}
+      {runs.isError && !runs.data ? (
         <Alert
           severity="error"
           action={
@@ -61,7 +64,7 @@ export function RunListPage() {
         >
           {t('runs.error', { message: runs.error.message })}
         </Alert>
-      ) : runs.isPending ? null : loaded.length === 0 ? (
+      ) : !runs.data ? null : loaded.length === 0 ? (
         <Paper
           variant="outlined"
           sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}
@@ -91,12 +94,36 @@ export function RunListPage() {
                 variant="outlined"
                 size="small"
                 loading={runs.isFetchingNextPage}
+                disabled={runs.isPlaceholderData}
                 onClick={() => runs.fetchNextPage()}
               >
                 {t('runs.loadMore')}
               </Button>
             )}
           </Box>
+          {runs.isError && (
+            <Alert
+              severity="error"
+              sx={{ mt: 1.5 }}
+              action={
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() =>
+                    runs.isFetchNextPageError
+                      ? runs.fetchNextPage()
+                      : runs.refetch()
+                  }
+                >
+                  {t('common.retry')}
+                </Button>
+              }
+            >
+              {t(runs.isFetchNextPageError ? 'runs.moreError' : 'runs.error', {
+                message: runs.error.message,
+              })}
+            </Alert>
+          )}
         </>
       )}
     </>

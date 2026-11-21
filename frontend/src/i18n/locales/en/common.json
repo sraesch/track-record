@@ -81,7 +81,8 @@
   "common": {
     "retry": "Retry",
     "loading": "Loading…",
-    "none": "—"
+    "none": "—",
+    "httpError": "HTTP error {{status}}"
   },
   "duration": {
     "hours": "{{h}} h {{m}} min",
@@ -116,7 +117,7 @@
     },
     "invalid": "Invalid",
     "invalidReason": "Invalid: {{reason}}",
-    "suiteVersion": "{{name}} v{{version}}",
+    "version": "v{{version}}",
     "stillRunning": "Running",
     "open": "Open run of {{started}}",
     "filterByTag": "Filter by tag {{tag}}",
@@ -142,6 +143,7 @@
     "loadMore": "Load more",
     "empty": "No runs yet. Runs appear here once the benchmark harness uploads them.",
     "noMatch": "No runs match these filters.",
-    "error": "The runs could not be loaded: {{message}}"
+    "error": "The runs could not be loaded: {{message}}",
+    "moreError": "More runs could not be loaded: {{message}}"
   }
 }

@@ -38,8 +38,22 @@ export type RunFilters = {
   to?: string
 }
 
-const isDay = (value: string | null): value is string =>
-  value !== null && /^\d{4}-\d{2}-\d{2}$/.test(value)
+/** Runs older than this are not expected; also catches half-typed years. */
+export const firstYear = 1970
+
+/** A real calendar day as YYYY-MM-DD (not 2026-02-31), from `firstYear` on. */
+export function isDay(value: string | null): value is string {
+  const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return false
+  const [y, m, d] = match.slice(1).map(Number) as [number, number, number]
+  const date = new Date(y, m - 1, d)
+  return (
+    y >= firstYear &&
+    date.getFullYear() === y &&
+    date.getMonth() === m - 1 &&
+    date.getDate() === d
+  )
+}
 
 function oneOf<T extends string>(
   allowed: readonly T[],
@@ -83,7 +97,8 @@ export function runFiltersToParams(filters: RunFilters): URLSearchParams {
 }
 
 export function hasActiveFilters(filters: RunFilters): boolean {
-  return runFiltersToParams(filters).size > 0
+  // Not `.size`: Safari before 17 does not have it.
+  return runFiltersToParams(filters).toString() !== ''
 }
 
 /** Local midnight at the start of a YYYY-MM-DD day, plus `days`. */

@@ -47,7 +47,11 @@ if (args.help) {
 
 const UI = `${args.ui.replace(/\/$/, '')}/ui/api/v1`
 const API = `${args.api.replace(/\/$/, '')}/api/v1`
-const CONCURRENCY = Math.max(1, Number(args.concurrency))
+const CONCURRENCY = Number(args.concurrency)
+if (!Number.isInteger(CONCURRENCY) || CONCURRENCY < 1) {
+  console.error(`--concurrency must be a positive integer, not '${args.concurrency}'`)
+  process.exit(2)
+}
 
 // ---------------------------------------------------------------------------
 // Deterministic helpers
@@ -677,7 +681,8 @@ async function seed() {
 
   // A run that is never closed: `running` until the stale timeout aborts it.
   const openKey = 'open-manual-run'
-  const openStart = at(DAYS, 21, 0)
+  // The evening of the last day, after its nightly run.
+  const openStart = at(DAYS - 1, 21, 0)
   await uploadRun({
     key: openKey,
     body: {

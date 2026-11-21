@@ -58,6 +58,17 @@ export function RunTable({ runs, onTagClick }: Props) {
                   // Let links and chips inside the row do their own thing.
                   const target = event.target as HTMLElement
                   if (target.closest('a, button, [role="button"]')) return
+                  // Modified clicks (new tab, …) are left to the run link.
+                  if (
+                    event.button !== 0 ||
+                    event.metaKey ||
+                    event.ctrlKey ||
+                    event.shiftKey ||
+                    event.altKey
+                  )
+                    return
+                  // Selecting text (e.g. to copy a commit) is not a click.
+                  if (window.getSelection()?.toString()) return
                   navigate(href)
                 }}
                 sx={{
@@ -101,7 +112,7 @@ export function RunTable({ runs, onTagClick }: Props) {
                     color="text.secondary"
                     sx={{ ml: 0.5 }}
                   >
-                    v{run.suite.version}
+                    {t('runs.version', { version: run.suite.version })}
                   </Typography>
                 </TableCell>
                 <TableCell>
