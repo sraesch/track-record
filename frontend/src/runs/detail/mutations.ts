@@ -1,8 +1,8 @@
-// Changes to a run from its page: tags, annotations, validity (FR-9) and
+// Changes to a run from its page: tags, validity (FR-9) and
 // hard delete (FR-10). After a change, everything about runs is refetched
 // (the run, its case executions and the run list), so every view shows it.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, expectOk, unwrap } from '../../api/client'
+import { api, expectOk } from '../../api/client'
 import { runKeys } from '../queries'
 
 function useRunMutation<T>(fn: (variables: T) => Promise<unknown>) {
@@ -28,37 +28,6 @@ export function useRemoveRunTag(runId: string) {
     expectOk(
       await api.DELETE('/ui/api/v1/runs/{run_id}/tags/{tag}', {
         params: { path: { run_id: runId, tag } },
-      }),
-    ),
-  )
-}
-
-export function useCreateRunAnnotation(runId: string) {
-  return useRunMutation(async (body: string) =>
-    unwrap(
-      await api.POST('/ui/api/v1/annotations', {
-        body: { body, run_id: runId },
-      }),
-    ),
-  )
-}
-
-export function useUpdateAnnotation() {
-  return useRunMutation(async ({ id, body }: { id: string; body: string }) =>
-    unwrap(
-      await api.PATCH('/ui/api/v1/annotations/{annotation_id}', {
-        params: { path: { annotation_id: id } },
-        body: { body },
-      }),
-    ),
-  )
-}
-
-export function useDeleteAnnotation() {
-  return useRunMutation(async (id: string) =>
-    expectOk(
-      await api.DELETE('/ui/api/v1/annotations/{annotation_id}', {
-        params: { path: { annotation_id: id } },
       }),
     ),
   )

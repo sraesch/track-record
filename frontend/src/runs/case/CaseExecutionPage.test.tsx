@@ -330,6 +330,94 @@ describe('Case execution', () => {
     ).toHaveAttribute('href', pagePath('ce1'))
   })
 
+  it('shows the annotations of the test case', async () => {
+    const api = mockApi({
+      [runPath]: () => runDetail(),
+      [caseExecutionPath('ce1')]: () => caseExecutionDetail('ce1'),
+      '/ui/api/v1/annotations': () => [
+        {
+          id: 'a7',
+          test_case_id: 1,
+          body: 'Model re-exported with fewer draw calls',
+          created_at: '2026-11-18T08:00:00Z',
+          updated_at: '2026-11-19T08:00:00Z',
+        },
+      ],
+    })
+    renderApp(pagePath())
+
+    const notes = within(await section('Test case annotations'))
+    expect(
+      await notes.findByText('Model re-exported with fewer draw calls'),
+    ).toBeInTheDocument()
+    expect(notes.getByText('· edited')).toBeInTheDocument()
+    expect(
+      api.requests('/ui/api/v1/annotations')[0]?.searchParams.get(
+        'test_case_id',
+      ),
+    ).toBe('1')
+  })
+
+  it('adds an annotation to the test case without reloading the run', async () => {
+    const user = userEvent.setup()
+    const bodies: unknown[] = []
+    let annotations: unknown[] = []
+    const api = mockApi({
+      [runPath]: () => runDetail(),
+      [caseExecutionPath('ce1')]: () => caseExecutionDetail('ce1'),
+      '/ui/api/v1/annotations': async (_, request) => {
+        if (request.method !== 'POST') return annotations
+        const body = (await request.json()) as { body: string }
+        bodies.push(body)
+        const created = {
+          id: 'a8',
+          test_case_id: 1,
+          body: body.body,
+          created_at: '2026-11-21T10:00:00Z',
+          updated_at: '2026-11-21T10:00:00Z',
+        }
+        annotations = [created]
+        return created
+      },
+    })
+    renderApp(pagePath())
+
+    const notes = within(await section('Test case annotations'))
+    expect(await notes.findByText('No annotations yet.')).toBeInTheDocument()
+    const runRequests = api.requests(runPath).length
+    await user.type(
+      notes.getByRole('textbox', { name: 'New annotation' }),
+      'Flaky on this device',
+    )
+    await user.click(notes.getByRole('button', { name: 'Add annotation' }))
+
+    expect(await notes.findByText('Flaky on this device')).toBeInTheDocument()
+    expect(bodies).toEqual([{ body: 'Flaky on this device', test_case_id: 1 }])
+    expect(api.requests(runPath)).toHaveLength(runRequests)
+  })
+
+  it('shows an error with a retry when the annotations fail to load', async () => {
+    const user = userEvent.setup()
+    let fail = true
+    mockApi({
+      [runPath]: () => runDetail(),
+      [caseExecutionPath('ce1')]: () => caseExecutionDetail('ce1'),
+      '/ui/api/v1/annotations': () =>
+        fail ? problem(500, 'internal', 'database down') : [],
+    })
+    renderApp(pagePath())
+
+    const notes = within(await section('Test case annotations'))
+    expect(
+      await notes.findByText(
+        'The annotations could not be loaded: database down',
+      ),
+    ).toBeInTheDocument()
+    fail = false
+    await user.click(notes.getByRole('button', { name: 'Retry' }))
+    expect(await notes.findByText('No annotations yet.')).toBeInTheDocument()
+  })
+
   it('warns when the run is invalid', async () => {
     mockApi({
       [runPath]: () =>

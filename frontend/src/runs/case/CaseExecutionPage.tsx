@@ -22,6 +22,7 @@ import { JsonDetails } from '../detail/JsonDetails'
 import { RunAttachments } from '../detail/RunAttachments'
 import { caseExecutionPath, runPath } from '../paths'
 import { useCaseExecution, useRun } from '../queries'
+import { CaseAnnotations } from './CaseAnnotations'
 import { CaseOverview } from './CaseOverview'
 import { CaseParameters } from './CaseParameters'
 import { SampleMeasurements } from './SampleMeasurements'
@@ -186,6 +187,7 @@ function CaseExecutionView({
         <CaseOverview caseExecution={ce} run={run} />
         <Box sx={{ display: 'grid', gap: 2, minWidth: 0 }}>
           <CaseParameters testCase={ce.test_case} />
+          <CaseAnnotations testCaseId={ce.test_case.id} />
           <JsonDetails
             title={t('caseExecution.device.title')}
             emptyText={t('caseExecution.device.empty')}
