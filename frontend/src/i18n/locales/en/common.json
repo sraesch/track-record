@@ -812,5 +812,65 @@
       "confirm": "Delete",
       "done": "{{name}} is deleted."
     }
+  },
+  "tokens": {
+    "showRevoked": "Show revoked",
+    "columns": {
+      "name": "Name",
+      "scope": "Scope",
+      "created": "Created",
+      "lastUsed": "Last used",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "scope": {
+      "read": "Read",
+      "annotate": "Annotate",
+      "write": "Write"
+    },
+    "scopeHelp": {
+      "read": "Read results and analyses through the REST API and MCP.",
+      "annotate": "Read, and add or remove tags and annotations. For MCP clients.",
+      "write": "Read, and upload results, including the tags a run is created with. For the benchmark harness."
+    },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked"
+    },
+    "neverUsed": "Never",
+    "count_one": "{{count}} token",
+    "count_other": "{{count}} tokens",
+    "hiddenCount_one": "{{count}} revoked token is hidden",
+    "hiddenCount_other": "{{count}} revoked tokens are hidden",
+    "empty": "No API tokens yet. Create one for the benchmark harness or an MCP client.",
+    "noActive_one": "No active tokens. {{count}} revoked token is hidden.",
+    "noActive_other": "No active tokens. {{count}} revoked tokens are hidden.",
+    "error": "The API tokens could not be loaded: {{message}}",
+    "create": {
+      "action": "Create token",
+      "title": "Create API token",
+      "confirm": "Create",
+      "nameHelp": "What the token is for, e.g. the client that uses it.",
+      "nameInUse": "An active token already has this name. The list cannot tell them apart.",
+      "limits": "A scope cannot be changed later. No token can invalidate or delete runs; that is only possible in this web UI."
+    },
+    "created": {
+      "title": "Token {{name}} created",
+      "once": "Copy the token now. Only its hash is stored, so it cannot be shown again.",
+      "secret": "Token",
+      "copy": "Copy token",
+      "usage": "Clients send it with every request to the REST API and MCP (scope: {{scope}}):",
+      "header": "Authorization: Bearer <token>",
+      "done": "Done"
+    },
+    "revoke": {
+      "action": "Revoke",
+      "named": "Revoke token {{name}}",
+      "title": "Revoke {{name}}?",
+      "text": "Requests with this token are rejected from now on. A revoked token cannot be made valid again; clients that still use it need a new one.",
+      "lastUsed": "It was last used on {{time}}.",
+      "neverUsed": "It has never been used.",
+      "confirm": "Revoke"
+    }
   }
 }

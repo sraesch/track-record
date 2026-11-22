@@ -24,9 +24,10 @@ attachments), the suites & scenarios page (versions of a suite or scenario
 with what each changed, the test cases of a scenario version with their tags
 and annotations), the aliases page (add, change, remove and set again device
 and parameter aliases), the metrics page (one definition per metric with edit,
-rename and delete, unit catalogue, custom units) and the derived metrics page (list,
+rename and delete, unit catalogue, custom units), the derived metrics page (list,
 uses and users, editor that creates or changes a metric with live validation
-and a preview on a case execution); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
+and a preview on a case execution) and the API tokens page (list, create
+with the secret shown once, revoke); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 
