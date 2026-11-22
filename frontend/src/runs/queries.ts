@@ -1,9 +1,12 @@
 import {
   keepPreviousData,
   useInfiniteQuery,
+  useQueries,
   useQuery,
+  type UseQueryResult,
 } from '@tanstack/react-query'
 import { api, type RunListQuery, unwrap } from '../api/client'
+import type { components } from '../api/schema'
 
 export const runPageSize = 50
 
@@ -19,6 +22,10 @@ export const runKeys = {
   run: (runId: string) => ['runs', 'detail', runId] as const,
   caseExecutions: (runId: string, includeSuperseded: boolean) =>
     ['runs', 'detail', runId, 'case-executions', includeSuperseded] as const,
+  caseExecution: (runId: string, caseExecutionId: string) =>
+    ['runs', 'detail', runId, 'case-execution', caseExecutionId] as const,
+  seriesPoints: (runId: string, seriesId: string, maxPoints: number) =>
+    ['runs', 'detail', runId, 'series', seriesId, maxPoints] as const,
 }
 
 /** Runs matching a query, newest measured start first, page by page. */
@@ -88,5 +95,85 @@ export function useCaseExecutions(
     // but never show the rows of another run.
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[2] === runId ? previous : undefined,
+  })
+}
+
+/**
+ * One case execution with its samples, measurements and series metadata.
+ * `live` refetches it while its run is running, as samples keep coming.
+ */
+export function useCaseExecution(
+  runId: string,
+  caseExecutionId: string,
+  live: boolean,
+) {
+  return useQuery({
+    queryKey: runKeys.caseExecution(runId, caseExecutionId),
+    queryFn: async ({ signal }) =>
+      unwrap(
+        await api.GET('/ui/api/v1/case-executions/{case_execution_id}', {
+          params: { path: { case_execution_id: caseExecutionId } },
+          signal,
+        }),
+      ),
+    refetchInterval: live ? liveRunInterval : false,
+  })
+}
+
+type SeriesPoints = components['schemas']['SeriesPoints']
+
+/** The points of several series, loaded together. */
+export type SeriesPointsResult = {
+  /** In the order of the requested series; undefined while loading. */
+  points: (SeriesPoints | undefined)[]
+  isPending: boolean
+  error: Error | null
+  /** Loads the series that failed again. */
+  retry: () => void
+}
+
+// Outside the hook, so TanStack Query keeps the combined result (and its
+// `points` array) unchanged as long as no query changed.
+function combineSeriesPoints(
+  results: UseQueryResult<SeriesPoints>[],
+): SeriesPointsResult {
+  return {
+    points: results.map((result) => result.data),
+    isPending: results.some((result) => result.isPending),
+    error: results.find((result) => result.error)?.error ?? null,
+    retry: () => {
+      for (const result of results) {
+        if (result.isError) void result.refetch()
+      }
+    },
+  }
+}
+
+/**
+ * The points of several series of a run, downsampled on the server to at
+ * most `maxPoints` each (FR-19). A series is written at once and never
+ * changes, so its points are never refetched.
+ */
+export function useSeriesPoints(
+  runId: string,
+  seriesIds: readonly string[],
+  maxPoints: number,
+): SeriesPointsResult {
+  return useQueries({
+    queries: seriesIds.map((seriesId) => ({
+      queryKey: runKeys.seriesPoints(runId, seriesId, maxPoints),
+      queryFn: async ({ signal }: { signal: AbortSignal }) =>
+        unwrap(
+          await api.GET('/ui/api/v1/series/{series_id}/points', {
+            params: {
+              path: { series_id: seriesId },
+              query: { max_points: maxPoints },
+            },
+            signal,
+          }),
+        ),
+      staleTime: Infinity,
+    })),
+    combine: combineSeriesPoints,
   })
 }

@@ -28,6 +28,8 @@ export default defineConfig({
             // attachment is opened; in `vendor` it would load with the app.
             // Small helpers it shares with others stay in `vendor`.
             { name: 'markdown', test: markdownPackages },
+            // ECharts is loaded with the first chart (ADR 0015).
+            { name: 'charts', test: /node_modules[\\/](echarts|zrender)[\\/]/ },
             { name: 'vendor', test: /node_modules[\\/]/ },
           ],
         },

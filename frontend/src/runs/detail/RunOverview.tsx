@@ -4,16 +4,12 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
 import type { RunDetail } from '../../api/client'
-import {
-  formatDateTime,
-  formatDuration,
-  formatNumber,
-  formatTimestamp,
-  shortCommit,
-} from '../../format'
+import { formatDuration, formatNumber, shortCommit } from '../../format'
 import { CopyButton } from '../../pages/CopyButton'
 import { type Fact, Facts } from '../../pages/Facts'
 import { Section } from '../../pages/Section'
+import { Time } from '../../pages/Time'
+import { codeSx, inlineRow } from '../../pages/styles'
 import { InvalidChip, RunStatusChip } from '../RunStatusChip'
 
 /** What a run is: status, times, suite and SUT version. */
@@ -129,16 +125,3 @@ export function RunOverview({ run }: { run: RunDetail }) {
     </Section>
   )
 }
-
-/** A timestamp; the full one with seconds and time zone in the tooltip. */
-function Time({ iso }: { iso: string }) {
-  return (
-    <Tooltip describeChild title={formatTimestamp(iso)}>
-      <time dateTime={iso}>{formatDateTime(iso)}</time>
-    </Tooltip>
-  )
-}
-
-const codeSx = { fontFamily: 'monospace', overflowWrap: 'anywhere' } as const
-
-const inlineRow = { display: 'inline-flex', alignItems: 'center', gap: 0.5 }

@@ -18,8 +18,8 @@ comparisons, series views, export) and the MCP server. The frontend
 ([frontend/](frontend/README.md)) has the shell (app bar, side menu, routes
 for every view, color modes), the run list and the run detail (tags,
 annotations, case executions, attachments with previews, invalidation,
-deletion); the
-other views, including the case execution page, are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
+deletion) and the case execution page (measurements per sample, a chart
+per series metric with a line per sample, device details, attachments); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 
@@ -97,6 +97,14 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   in a dialog or on their own page (`/runs/:runId/attachments/:id`):
   images in `<img>`, Markdown without its HTML, JSON and text as React
   text. Never render uploaded HTML, and keep the download for every file.
+- Charts are Apache ECharts ([ADR 0015](docs/adr/0015-charting-library.md)),
+  tree-shaken in `src/charts/echarts.ts` and loaded lazily through
+  `<Chart>` (`src/charts/Chart.tsx`, own chunk). Build options in pure,
+  unit-tested functions with colors from `useChartColors()` (resolved MUI
+  color scheme), every chart gets a translated `label` for screen readers.
+  Series points come downsampled from the server (`max_points`) through
+  TanStack Query (`useSeriesPoints`). Tests replace the canvas chart with
+  `src/test/fakeChart.tsx`, which lists the lines.
 - The image (`frontend/Dockerfile`) is nginx serving the build and proxying
   `/ui/api` to `TR_UI_API_UPSTREAM`. `deploy/local/` runs the whole stack on
   Docker Desktop Kubernetes for trying the UI; it is not the Helm chart.
@@ -156,9 +164,10 @@ utoipa (OpenAPI from code), rmcp for MCP; workspace in `backend/`.
 Frontend tooling is decided in ADR 0010: npm, oxlint, Vitest with jsdom and
 Testing Library. Component library (MUI) and routing (React Router) in
 ADR 0011; API types, client and TanStack Query in ADR 0012; Markdown
-rendering (react-markdown) for attachment previews in ADR 0013.
+rendering (react-markdown) for attachment previews in ADR 0013; charting
+library (Apache ECharts) in ADR 0015.
 
-Still open: cache strategy, charting library, Helm chart, release notes.
+Still open: cache strategy, Helm chart, release notes.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
 only in code.
 

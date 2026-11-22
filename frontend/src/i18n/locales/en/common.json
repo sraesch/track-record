@@ -80,7 +80,8 @@
     "cancel": "Cancel",
     "save": "Save",
     "delete": "Delete",
-    "copied": "Copied"
+    "copied": "Copied",
+    "valueWithUnit": "{{value}} {{unit}}"
   },
   "duration": {
     "hours": "{{h}} h {{m}} min",
@@ -208,7 +209,6 @@
       "clear": "Clear filters",
       "parameters": "Parameters",
       "parameter": "{{name}}={{value}}",
-      "parameterWithUnit": "{{name}}={{value}} {{unit}}",
       "assets": "Assets",
       "assetVersion": "{{name}} {{version}}",
       "samples": "Samples",
@@ -270,9 +270,84 @@
     }
   },
   "caseExecution": {
-    "title": "Case execution",
-    "description": "Samples, measurements, series and device details of one case execution.",
-    "back": "Back to the run"
+    "title": "{{scenario}} · {{device}}",
+    "titleLoading": "Case execution",
+    "back": "Back to the run",
+    "notFound": "There is no case execution {{caseExecutionId}}. It may have been deleted with its run.",
+    "gone": "This case execution no longer exists. Its run may have been deleted.",
+    "error": "The case execution could not be loaded: {{message}}",
+    "invalidRun": "Its run is invalid, so analysis leaves this case execution out unless asked to include invalid runs.",
+    "superseded": {
+      "title": "Replaced by a correction",
+      "text": "Analysis uses the correction instead of this upload.",
+      "action": "Open the correction"
+    },
+    "correction": {
+      "title": "Correction",
+      "text": "This replaces an earlier upload of the case execution.",
+      "action": "Open the replaced upload"
+    },
+    "repetition": "Repetition",
+    "warmup": "Warmup",
+    "warmupHint": "Left out of aggregation by default.",
+    "metricVersion": "{{metric}} v{{version}}",
+    "overview": {
+      "title": "Overview",
+      "run": "Run",
+      "runName": "{{suite}} · {{started}}",
+      "openRun": "Open the run",
+      "scenario": "Scenario",
+      "device": "Client device",
+      "samples": "Samples",
+      "warmup": "({{count}} warmup)",
+      "started": "Started",
+      "ended": "Ended",
+      "assets": "Assets",
+      "tags": "Test case tags",
+      "created": "Uploaded",
+      "id": "Case execution ID",
+      "copyId": "Copy case execution ID"
+    },
+    "parameters": {
+      "title": "Parameters",
+      "empty": "This test case has no parameters."
+    },
+    "device": {
+      "title": "Client device details",
+      "empty": "No device details uploaded."
+    },
+    "measurements": {
+      "title": "Measurements",
+      "count_one": "{{count}} sample",
+      "count_other": "{{count}} samples",
+      "countWithWarmup_one": "{{count}} sample, {{warmup}} warmup",
+      "countWithWarmup_other": "{{count}} samples, {{warmup}} warmup",
+      "empty": "No measurements uploaded."
+    },
+    "series": {
+      "title": "Series",
+      "count_one": "{{count}} series",
+      "count_other": "{{count}} series",
+      "metric": "Metric",
+      "unit": "Unit",
+      "x": "x",
+      "xWithUnit": "{{dimension}} ({{unit}})",
+      "points": "Points",
+      "empty": "No series uploaded.",
+      "line": "Repetition {{repetition}}",
+      "lineWarmup": "Repetition {{repetition}} (warmup)",
+      "chartLabel_one": "{{metric}} over {{x}}: {{count}} line, one per sample",
+      "chartLabel_other": "{{metric}} over {{x}}: {{count}} lines, one per sample",
+      "pointsError": "The series could not be loaded: {{message}}"
+    },
+    "attachments": {
+      "toCase": "Case execution",
+      "toSample": "Repetition {{repetition}}"
+    }
+  },
+  "charts": {
+    "failed": "The chart could not be loaded. Reload the page to try again.",
+    "reload": "Reload"
   },
   "attachments": {
     "info": "{{type}} · {{size}}",

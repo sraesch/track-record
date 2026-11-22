@@ -1,6 +1,11 @@
 // Test data for the run detail page: a run with all its parts, as the UI
 // API returns it. Tests change what they need through `overrides`.
-import type { CaseExecutionSummary, RunDetail } from '../../api/client'
+import type {
+  CaseExecutionDetail,
+  CaseExecutionSummary,
+  RunDetail,
+  SampleDetail,
+} from '../../api/client'
 
 export const runId = '0b7e3f52-1c3d-4f7a-9a51-1e2d3c4b5a69'
 export const runPath = `/ui/api/v1/runs/${runId}`
@@ -104,5 +109,66 @@ export function caseExecution(
     sample_count: 4,
     superseded_by: overrides.superseded_by ?? null,
     supersedes_id: overrides.supersedes_id ?? null,
+  }
+}
+
+export const caseExecutionPath = (id: string) =>
+  `/ui/api/v1/case-executions/${id}`
+
+/** A sample with scalar measurements and one series. */
+export function sample(
+  repetition: number,
+  overrides: Partial<SampleDetail> = {},
+): SampleDetail {
+  const id = `s${repetition}`
+  return {
+    id,
+    repetition,
+    is_warmup: repetition === 0,
+    created_at: '2026-11-20T03:10:00Z',
+    measurements: [
+      {
+        metric: 'load_time',
+        metric_version: 1,
+        metric_version_id: 5,
+        unit: 's',
+        value: 5.9 + repetition / 10,
+      },
+      {
+        metric: 'frames_dropped',
+        metric_version: 1,
+        metric_version_id: 3,
+        unit: 'count',
+        value: 8 - repetition,
+      },
+    ],
+    series: [
+      {
+        id: `fps-${id}`,
+        sample_id: id,
+        metric: 'fps',
+        metric_version: 1,
+        metric_version_id: 2,
+        unit: 'fps',
+        x_dimension: 'time',
+        x_unit: 's',
+        point_count: 161,
+      },
+    ],
+    ...overrides,
+  }
+}
+
+/** A case execution with three samples, the first one warmup. */
+export function caseExecutionDetail(
+  id: string,
+  overrides: Partial<CaseExecutionDetail> = {},
+): CaseExecutionDetail {
+  return {
+    ...caseExecution(id),
+    sample_count: 3,
+    device_details: json({ model: 'Pixel 8', os: { name: 'Android', version: '15' } }),
+    samples: [sample(0), sample(1), sample(2)],
+    ...overrides,
   }
 }

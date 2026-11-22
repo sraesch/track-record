@@ -12,7 +12,7 @@ import TableRow from '@mui/material/TableRow'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
-import type { MouseEvent } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 import { Link as RouterLink, useNavigate } from 'react-router'
 import type { AttachmentMeta, CaseExecutionSummary } from '../../api/client'
 import { AttachmentThumbnail } from '../../attachments/AttachmentThumbnail'
@@ -28,8 +28,8 @@ import { attachmentPath, caseExecutionPath } from '../paths'
 
 type Props = {
   attachments: readonly AttachmentMeta[]
-  /** The run's case executions by ID, to name what a file is attached to. */
-  caseExecutions: ReadonlyMap<string, CaseExecutionSummary>
+  /** What a file is attached to: the run, a case execution or a sample. */
+  attachedTo: (attachment: AttachmentMeta) => ReactNode
   /** The URL of this page with an attachment's preview dialog open. */
   previewHref: (attachmentId: string) => string
 }
@@ -42,7 +42,7 @@ type Props = {
  */
 export function RunAttachments({
   attachments,
-  caseExecutions,
+  attachedTo,
   previewHref,
 }: Props) {
   const { t } = useTranslation()
@@ -82,12 +82,7 @@ export function RunAttachments({
                       previewHref={previewHref(attachment.id)}
                     />
                   </TableCell>
-                  <TableCell>
-                    <AttachedTo
-                      attachment={attachment}
-                      caseExecutions={caseExecutions}
-                    />
-                  </TableCell>
+                  <TableCell>{attachedTo(attachment)}</TableCell>
                   <TableCell>
                     <Typography
                       component="code"
@@ -190,9 +185,8 @@ function FileName({
   )
 }
 
-
 /** The run, a case execution or one of its samples. */
-function AttachedTo({
+export function AttachedTo({
   attachment,
   caseExecutions,
 }: {
