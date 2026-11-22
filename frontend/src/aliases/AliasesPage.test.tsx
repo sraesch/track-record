@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { Alias, TestCaseSummary } from '../api/client'
 import { mockApi, problem } from '../test/api'
+import { enterText } from '../test/input'
 import { currentQuery, renderApp } from '../test/render'
 
 type Handler = NonNullable<Parameters<typeof mockApi>[0]>[string]
@@ -139,7 +140,8 @@ describe('Aliases page', () => {
 
     await user.click(screen.getByRole('combobox', { name: 'Dimension' }))
     await user.click(screen.getByRole('option', { name: 'All dimensions' }))
-    await user.type(
+    await enterText(
+      user,
       screen.getByRole('searchbox', { name: 'Search' }),
       'nothing',
     )
@@ -177,7 +179,8 @@ describe('Aliases page', () => {
     const save = within(dialog).getByRole('button', { name: 'Save' })
     expect(save).toBeDisabled()
 
-    await user.type(
+    await enterText(
+      user,
       within(dialog).getByRole('combobox', { name: 'From' }),
       'iphone',
     )
@@ -291,7 +294,7 @@ describe('Aliases page', () => {
     const to = within(dialog).getByRole('combobox', { name: 'To' })
     expect(to).toHaveValue('pixel-8-lab-1')
     await user.clear(to)
-    await user.type(to, 'pixel-8-a')
+    await enterText(user, to, 'pixel-8-a')
     await user.click(within(dialog).getByRole('button', { name: 'Save' }))
 
     await waitFor(() =>

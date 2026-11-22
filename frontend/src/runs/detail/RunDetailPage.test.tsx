@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { CaseExecutionSummary, RunSummary } from '../../api/client'
 import { formatDateTime } from '../../format'
 import { mockApi, problem } from '../../test/api'
+import { enterText } from '../../test/input'
 import { currentQuery, renderApp } from '../../test/render'
 import {
   caseExecution,
@@ -175,7 +176,8 @@ describe('Run detail', () => {
 
     // Parameter values after aliases are searched as name=value.
     await user.clear(screen.getByRole('searchbox', { name: 'Search' }))
-    await user.type(
+    await enterText(
+      user,
       screen.getByRole('searchbox', { name: 'Search' }),
       'pipeline=meshopt',
     )
@@ -230,10 +232,12 @@ describe('Run detail', () => {
     renderApp(`/runs/${runId}`)
 
     const tagSection = within(await section('Tags'))
-    await user.type(
+    await enterText(
+      user,
       tagSection.getByRole('textbox', { name: 'New tag' }),
-      ' needs review {Enter}',
+      ' needs review ',
     )
+    await user.keyboard('{Enter}')
     expect(
       await tagSection.findByRole('button', {
         name: 'Show runs tagged needs review',
@@ -277,8 +281,8 @@ describe('Run detail', () => {
     expect(currentQuery(router)).toBe('tag=release')
   })
 
-  it('adds, edits and deletes annotations', async () => {
-    const user = userEvent.setup()
+  /** The run's annotations behind the API; returns the bodies sent. */
+  function annotationsApi() {
     const bodies: unknown[] = []
     let annotations = runDetail().annotations
     mockApi({
@@ -312,44 +316,70 @@ describe('Run detail', () => {
         return annotations[0]
       },
     })
+    return bodies
+  }
+
+  /** The list item of the annotation the run starts with. */
+  const firstAnnotation = async (notes: ReturnType<typeof within>) =>
+    (await notes.findByText('Switched to the new compression')).closest('li')!
+
+  it('adds an annotation', async () => {
+    const user = userEvent.setup()
+    const bodies = annotationsApi()
     renderApp(`/runs/${runId}`)
     const notes = within(await section('Annotations'))
 
-    await user.type(
+    await enterText(
+      user,
       notes.getByRole('textbox', { name: 'New annotation' }),
       'Lab moved to a new rack',
     )
     await user.click(notes.getByRole('button', { name: 'Add annotation' }))
     expect(await notes.findByText('Lab moved to a new rack')).toBeInTheDocument()
+    expect(bodies).toEqual([{ body: 'Lab moved to a new rack', run_id: runId }])
+  })
 
-    const first = () =>
-      notes.getByText('Switched to the new compression').closest('li')!
+  it('edits an annotation', async () => {
+    const user = userEvent.setup()
+    const bodies = annotationsApi()
+    renderApp(`/runs/${runId}`)
+    const notes = within(await section('Annotations'))
+
     await user.click(
-      within(first()).getByRole('button', { name: 'Edit annotation' }),
+      within(await firstAnnotation(notes)).getByRole('button', {
+        name: 'Edit annotation',
+      }),
     )
     const editor = notes.getByRole('textbox', { name: 'Annotation' })
     expect(editor).toHaveFocus()
     await user.clear(editor)
-    await user.type(editor, 'Switched to zstd')
+    await enterText(user, editor, 'Switched to zstd')
     await user.click(notes.getByRole('button', { name: 'Save' }))
     const edited = (await notes.findByText('Switched to zstd')).closest('li')!
     expect(within(edited).getByText('· edited')).toBeInTheDocument()
+    expect(bodies).toEqual([{ body: 'Switched to zstd' }])
+  })
+
+  it('deletes an annotation after asking', async () => {
+    const user = userEvent.setup()
+    annotationsApi()
+    renderApp(`/runs/${runId}`)
+    const notes = within(await section('Annotations'))
 
     await user.click(
-      within(edited).getByRole('button', { name: 'Delete annotation' }),
+      within(await firstAnnotation(notes)).getByRole('button', {
+        name: 'Delete annotation',
+      }),
     )
     const dialog = await screen.findByRole('dialog', {
       name: 'Delete this annotation?',
     })
     await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
     await waitFor(() =>
-      expect(notes.queryByText('Switched to zstd')).not.toBeInTheDocument(),
+      expect(
+        notes.queryByText('Switched to the new compression'),
+      ).not.toBeInTheDocument(),
     )
-
-    expect(bodies).toEqual([
-      { body: 'Lab moved to a new rack', run_id: runId },
-      { body: 'Switched to zstd' },
-    ])
   })
 
   it('marks the run invalid with a reason and valid again', async () => {
@@ -381,7 +411,7 @@ describe('Run detail', () => {
     expect(confirm).toBeDisabled()
     const reason = within(dialog).getByRole('textbox', { name: 'Reason' })
     await waitFor(() => expect(reason).toHaveFocus())
-    await user.type(reason, '  Throttled network  ')
+    await enterText(user, reason, '  Throttled network  ')
     await user.click(confirm)
 
     expect(
@@ -449,7 +479,7 @@ describe('Run detail', () => {
     })
     const input = within(dialog).getByRole('textbox', { name: 'Run ID' })
     expect(confirm).toBeDisabled()
-    await user.type(input, runId.slice(0, -1))
+    await enterText(user, input, runId.slice(0, -1))
     expect(confirm).toBeDisabled()
     await user.type(input, runId.slice(-1))
     expect(confirm).toBeEnabled()
@@ -472,7 +502,7 @@ describe('Run detail', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Delete' }))
     const dialog = await screen.findByRole('dialog')
-    await user.type(within(dialog).getByRole('textbox'), runId)
+    await enterText(user, within(dialog).getByRole('textbox'), runId)
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RunSummary } from '../api/client'
 import { runPageSize } from './queries'
 import { mockApi, problem } from '../test/api'
+import { enterText } from '../test/input'
 import { currentQuery, renderApp } from '../test/render'
 
 function run(overrides: Partial<RunSummary> & { id: string }): RunSummary {
@@ -223,7 +224,8 @@ describe('Run list', () => {
     await user.click(screen.getByRole('button', { name: 'More filters' }))
     const input = screen.getByRole('combobox', { name: 'Parameters' })
 
-    await user.type(input, ' size = 10 {Enter}')
+    await enterText(user, input, ' size = 10 ')
+    await user.keyboard('{Enter}')
     expect(currentQuery(router)).toBe('param=size%3D10')
 
     // Not name=value: the text stays to be fixed, nothing is filtered.
@@ -233,7 +235,8 @@ describe('Run list', () => {
     expect(screen.getByText(/^Use name=value/)).toBeInTheDocument()
 
     await user.clear(input)
-    await user.type(input, 'mode=fast{Enter}')
+    await enterText(user, input, 'mode=fast')
+    await user.keyboard('{Enter}')
     expect(currentQuery(router)).toBe('param=size%3D10&param=mode%3Dfast')
     expect(screen.queryByText(/^Use name=value/)).not.toBeInTheDocument()
   })
