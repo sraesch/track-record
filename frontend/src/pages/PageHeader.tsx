@@ -20,7 +20,16 @@ export function PageHeader({ title, description, before, actions }: Props) {
       {/* React puts it into <head>: "<title> · Track Record". */}
       <title>{`${title} · ${t('app.name')}`}</title>
       {before}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      {/* Actions move below a title that leaves them no room. */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          columnGap: 2,
+          rowGap: 1,
+        }}
+      >
         <Typography variant="h5" component="h1" sx={{ flexGrow: 1 }}>
           {title}
         </Typography>

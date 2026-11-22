@@ -7,6 +7,10 @@ import type { components, paths } from './schema'
 type Schemas = components['schemas']
 export type Problem = Schemas['Problem']
 export type RunSummary = Schemas['RunSummary']
+export type RunDetail = Schemas['RunDetail']
+export type CaseExecutionSummary = Schemas['CaseExecutionSummary']
+export type AttachmentMeta = Schemas['AttachmentMeta']
+export type Annotation = Schemas['Annotation']
 export type RunStatus = Schemas['RunStatus']
 export type RunTrigger = Schemas['RunTrigger']
 export type Validity = Schemas['Validity']
@@ -38,6 +42,15 @@ export class ApiError extends Error {
   }
 }
 
+/** True for an error that means the requested resource does not exist. */
+export function isNotFound(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    // A malformed ID in the path cannot exist either.
+    (error.status === 404 || error.code === 'invalid_path')
+  )
+}
+
 /** Returns the data of an openapi-fetch result or throws an ApiError. */
 export function unwrap<T>(result: {
   data?: T
@@ -51,4 +64,14 @@ export function unwrap<T>(result: {
     )
   }
   return result.data
+}
+
+/** Checks an openapi-fetch result without a body (204) or throws an ApiError. */
+export function expectOk(result: { error?: unknown; response: Response }) {
+  if (!result.response.ok) {
+    throw new ApiError(
+      result.response.status,
+      result.error as Partial<Problem> | undefined,
+    )
+  }
 }

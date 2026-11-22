@@ -58,11 +58,6 @@
     "tokens": {
       "description": "API tokens for the benchmark harness and MCP clients. Create and revoke them here."
     },
-    "runDetail": {
-      "title": "Run {{runId}}",
-      "description": "Case executions, samples, series, tags, annotations and attachments of this run.",
-      "back": "All runs"
-    },
     "notFound": {
       "title": "Page not found",
       "description": "There is no page at {{path}}.",
@@ -81,7 +76,11 @@
     "retry": "Retry",
     "loading": "Loading…",
     "none": "—",
-    "httpError": "HTTP error {{status}}"
+    "httpError": "HTTP error {{status}}",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "copied": "Copied"
   },
   "duration": {
     "hours": "{{h}} h {{m}} min",
@@ -144,5 +143,132 @@
     "noMatch": "No runs match these filters.",
     "error": "The runs could not be loaded: {{message}}",
     "moreError": "More runs could not be loaded: {{message}}"
+  },
+  "runDetail": {
+    "title": "{{suite}} · {{started}}",
+    "titleLoading": "Run",
+    "back": "All runs",
+    "notFound": "There is no run {{runId}}. It may have been deleted.",
+    "gone": "This run no longer exists. It may have been deleted.",
+    "error": "The run could not be loaded: {{message}}",
+    "overview": {
+      "title": "Overview",
+      "status": "Status",
+      "trigger": "Trigger",
+      "started": "Started",
+      "ended": "Ended",
+      "durationOf": "({{duration}})",
+      "suite": "Suite",
+      "caseExecutions": "Case executions",
+      "commit": "Commit",
+      "copyCommit": "Copy commit",
+      "branch": "Branch",
+      "releaseTag": "Release tag",
+      "buildConfig": "Build configuration",
+      "lastUpload": "Last upload",
+      "created": "First upload",
+      "runId": "Run ID",
+      "copyRunId": "Copy run ID"
+    },
+    "tags": {
+      "title": "Tags",
+      "empty": "No tags yet.",
+      "show": "Show runs tagged {{tag}}",
+      "remove": "Remove tag {{tag}}",
+      "removeHint": "Press Delete to remove the tag.",
+      "new": "New tag",
+      "add": "Add tag",
+      "error": "The tags could not be changed: {{message}}"
+    },
+    "annotations": {
+      "title": "Annotations",
+      "empty": "No annotations yet.",
+      "new": "New annotation",
+      "add": "Add annotation",
+      "edit": "Edit annotation",
+      "editLabel": "Annotation",
+      "edited": "· edited",
+      "delete": "Delete annotation",
+      "deleteTitle": "Delete this annotation?",
+      "deleteText": "The annotation is deleted for everyone. This cannot be undone.",
+      "error": "The annotation could not be saved: {{message}}"
+    },
+    "cases": {
+      "title": "Case executions",
+      "count_one": "{{count}} case execution",
+      "count_other": "{{count}} case executions",
+      "matching_one": "{{count}} of {{total}} matches",
+      "matching_other": "{{count}} of {{total}} match",
+      "filters": "Case execution filters",
+      "scenario": "Scenario",
+      "device": "Client device",
+      "search": "Search",
+      "searchHint": "Parameter, asset, …",
+      "showSuperseded": "Show superseded",
+      "clear": "Clear filters",
+      "parameters": "Parameters",
+      "parameter": "{{name}}={{value}}",
+      "parameterWithUnit": "{{name}}={{value}} {{unit}}",
+      "assets": "Assets",
+      "assetVersion": "{{name}} {{version}}",
+      "samples": "Samples",
+      "duration": "Duration",
+      "uploadedAs": "Uploaded as {{value}}",
+      "superseded": "Superseded",
+      "supersededHint": "Replaced by a correction; not used in analysis.",
+      "correction": "Correction",
+      "correctionHint": "Replaces an earlier upload of this case execution.",
+      "shown_one": "{{count}} of {{total}} shown",
+      "shown_other": "{{count}} of {{total}} shown",
+      "showMore": "Show more",
+      "empty": "No case executions uploaded yet.",
+      "noMatch": "No case executions match these filters.",
+      "error": "The case executions could not be loaded: {{message}}"
+    },
+    "attachments": {
+      "title": "Attachments",
+      "empty": "No attachments.",
+      "file": "File",
+      "attachedTo": "Attached to",
+      "type": "Type",
+      "size": "Size",
+      "uploaded": "Uploaded",
+      "download": "Download {{file}}",
+      "toRun": "Run",
+      "caseName": "{{scenario}} on {{device}}",
+      "caseUnknown": "Case execution",
+      "toSample": "Sample of {{name}}"
+    },
+    "environment": {
+      "title": "Shared environment",
+      "empty": "No details recorded."
+    },
+    "invalidate": {
+      "action": "Mark invalid",
+      "title": "Mark this run invalid?",
+      "text": "Invalid runs stay stored, but analysis leaves them out unless asked to include them. You can mark the run valid again later.",
+      "reason": "Reason",
+      "confirm": "Mark invalid"
+    },
+    "validate": {
+      "action": "Mark valid",
+      "reason": "Marked invalid: {{reason}}",
+      "noReason": "Marked invalid",
+      "text": "Analysis leaves this run out unless asked to include invalid runs.",
+      "error": "The run could not be marked valid: {{message}}"
+    },
+    "delete": {
+      "action": "Delete",
+      "title": "Delete this run permanently?",
+      "text": "The run is deleted with all its case executions, samples, series and attachments. This cannot be undone: a deleted run can only be restored from a backup.",
+      "prompt": "To confirm, type the run ID <code>{{runId}}</code>.",
+      "label": "Run ID",
+      "confirm": "Delete permanently"
+    }
+  },
+  "caseExecution": {
+    "title": "Case execution",
+    "description": "Samples, measurements, series and device details of one case execution.",
+    "back": "Back to the run"
   }
 }

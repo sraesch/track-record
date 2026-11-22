@@ -2,10 +2,11 @@ import type { ReactElement } from 'react'
 import { Navigate, type RouteObject } from 'react-router'
 import { AppLayout } from './layout/AppLayout'
 import { homePath, type NavItemId, navItems } from './navigation'
+import { CaseExecutionPage } from './pages/CaseExecutionPage'
 import { ErrorPage } from './pages/ErrorPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
-import { RunDetailPage } from './pages/RunDetailPage'
+import { RunDetailPage } from './runs/detail/RunDetailPage'
 import { RunListPage } from './runs/RunListPage'
 
 // The page of each view in the side menu; views without one show a
@@ -29,6 +30,10 @@ export const routes: RouteObject[] = [
         }),
       ),
       { path: '/runs/:runId', element: <RunDetailPage /> },
+      {
+        path: '/runs/:runId/cases/:caseExecutionId',
+        element: <CaseExecutionPage />,
+      },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

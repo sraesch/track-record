@@ -11,7 +11,7 @@ import TableRow from '@mui/material/TableRow'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink, useNavigate } from 'react-router'
+import { Link as RouterLink } from 'react-router'
 import type { RunSummary } from '../api/client'
 import {
   formatDateTime,
@@ -19,6 +19,8 @@ import {
   formatTimestamp,
   shortCommit,
 } from '../format'
+import { useRowLink } from '../pages/useRowLink'
+import { runPath } from './paths'
 import { InvalidChip, RunStatusChip } from './RunStatusChip'
 
 type Props = {
@@ -30,7 +32,7 @@ type Props = {
 /** Runs as a table; a row opens the run (FR-21: /runs/:runId). */
 export function RunTable({ runs, onTagClick }: Props) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const rowLink = useRowLink()
 
   return (
     <TableContainer component={Paper} variant="outlined">
@@ -48,28 +50,13 @@ export function RunTable({ runs, onTagClick }: Props) {
         </TableHead>
         <TableBody>
           {runs.map((run) => {
-            const href = `/runs/${run.id}`
+            const href = runPath(run.id)
             const started = formatDateTime(run.started_at)
             return (
               <TableRow
                 key={run.id}
                 hover
-                onClick={(event) => {
-                  // Let links and chips inside the row do their own thing.
-                  const target = event.target as HTMLElement
-                  if (target.closest('a, button, [role="button"]')) return
-                  // Modified clicks (new tab, …) are left to the run link.
-                  if (
-                    event.metaKey ||
-                    event.ctrlKey ||
-                    event.shiftKey ||
-                    event.altKey
-                  )
-                    return
-                  // Selecting text (e.g. to copy a commit) is not a click.
-                  if (window.getSelection()?.toString()) return
-                  navigate(href)
-                }}
+                onClick={rowLink(href)}
                 sx={{
                   cursor: 'pointer',
                   opacity: run.is_valid ? 1 : 0.6,

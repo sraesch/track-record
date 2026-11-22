@@ -24,9 +24,12 @@ frontend/
   src/navigation.ts     Side menu entries; routes are built from them
   src/theme.ts          MUI theme: light and dark color schemes
   src/layout/           App bar, side menu, color mode menu
-  src/pages/            Pages and the page header
+  src/pages/            Shared page parts: header, sections, dialogs, placeholders
   src/api/              API client; schema.d.ts is generated (do not edit)
   src/runs/             Run list: filters in the URL, table, queries
+  src/runs/detail/      Run detail: overview, tags, annotations, case
+                        executions (filters in the URL), attachments,
+                        invalidation and deletion
   src/format.ts         Dates, durations and commits for display
   src/i18n/             i18next setup, typed keys, locale files
     locales/en/         English translations (JSON, one file per namespace)

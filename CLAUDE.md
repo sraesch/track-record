@@ -16,8 +16,9 @@ ingestion, retrieval, tags/annotations, aliases, tokens, the UI-only
 operations, the derived metric DSL and analysis (aggregates, trends,
 comparisons, series views, export) and the MCP server. The frontend
 ([frontend/](frontend/README.md)) has the shell (app bar, side menu, routes
-for every view, color modes) and the run list; the other views are
-placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
+for every view, color modes), the run list and the run detail (tags,
+annotations, case executions, attachments, invalidation, deletion); the
+other views, including the case execution page, are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 
