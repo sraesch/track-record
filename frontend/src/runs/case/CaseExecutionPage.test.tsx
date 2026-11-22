@@ -1,9 +1,9 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { formatDateTime } from '../../format'
 import { mockApi, problem } from '../../test/api'
-import { renderApp } from '../../test/render'
+import { currentQuery, renderApp } from '../../test/render'
 import {
   caseExecutionDetail,
   caseExecutionPath,
@@ -17,6 +17,14 @@ import {
 const pagePath = (id = 'ce1', run = runId) => `/runs/${run}/cases/${id}`
 
 const section = (name: string) => screen.findByRole('region', { name })
+const noContent = () => new Response(null, { status: 204 })
+const testCaseTagsPath = '/ui/api/v1/test-cases/1/tags'
+
+/** A case execution whose test case has these tags. */
+function withTags(id: string, tags: string[]) {
+  const ce = caseExecutionDetail(id)
+  return { ...ce, test_case: { ...ce.test_case, tags } }
+}
 const tableRows = async (name: string) =>
   within(await screen.findByRole('table', { name }))
     .getAllByRole('row')
@@ -328,6 +336,187 @@ describe('Case execution', () => {
     expect(
       screen.getByRole('link', { name: 'Open the replaced upload' }),
     ).toHaveAttribute('href', pagePath('ce1'))
+  })
+
+  it('shows the annotations of the test case', async () => {
+    const api = mockApi({
+      [runPath]: () => runDetail(),
+      [caseExecutionPath('ce1')]: () => caseExecutionDetail('ce1'),
+      '/ui/api/v1/annotations': () => [
+        {
+          id: 'a7',
+          test_case_id: 1,
+          body: 'Model re-exported with fewer draw calls',
+          created_at: '2026-11-18T08:00:00Z',
+          updated_at: '2026-11-19T08:00:00Z',
+        },
+      ],
+    })
+    renderApp(pagePath())
+
+    const notes = within(await section('Test case annotations'))
+    expect(
+      await notes.findByText('Model re-exported with fewer draw calls'),
+    ).toBeInTheDocument()
+    expect(notes.getByText('· edited')).toBeInTheDocument()
+    expect(
+      api.requests('/ui/api/v1/annotations')[0]?.searchParams.get(
+        'test_case_id',
+      ),
+    ).toBe('1')
+  })
+
+  it('adds an annotation to the test case without reloading the run', async () => {
+    const user = userEvent.setup()
+    const bodies: unknown[] = []
+    let annotations: unknown[] = []
+    const api = mockApi({
+      [runPath]: () => runDetail(),
+      [caseExecutionPath('ce1')]: () => caseExecutionDetail('ce1'),
+      '/ui/api/v1/annotations': async (_, request) => {
+        if (request.method !== 'POST') return annotations
+        const body = (await request.json()) as { body: string }
+        bodies.push(body)
+        const created = {
+          id: 'a8',
+          test_case_id: 1,
+          body: body.body,
+          created_at: '2026-11-21T10:00:00Z',
+          updated_at: '2026-11-21T10:00:00Z',
+        }
+        annotations = [created]
+        return created
+      },
+    })
+    renderApp(pagePath())
+
+    const notes = within(await section('Test case annotations'))
+    expect(await notes.findByText('No annotations yet.')).toBeInTheDocument()
+    const runRequests = api.requests(runPath).length
+    await user.type(
+      notes.getByRole('textbox', { name: 'New annotation' }),
+      'Flaky on this device',
+    )
+    await user.click(notes.getByRole('button', { name: 'Add annotation' }))
+
+    expect(await notes.findByText('Flaky on this device')).toBeInTheDocument()
+    expect(bodies).toEqual([{ body: 'Flaky on this device', test_case_id: 1 }])
+    expect(api.requests(runPath)).toHaveLength(runRequests)
+  })
+
+  it('shows an error with a retry when the annotations fail to load', async () => {
+    const user = userEvent.setup()
+    let fail = true
+    mockApi({
+      [runPath]: () => runDetail(),
+      [caseExecutionPath('ce1')]: () => caseExecutionDetail('ce1'),
+      '/ui/api/v1/annotations': () =>
+        fail ? problem(500, 'internal', 'database down') : [],
+    })
+    renderApp(pagePath())
+
+    const notes = within(await section('Test case annotations'))
+    expect(
+      await notes.findByText(
+        'The annotations could not be loaded: database down',
+      ),
+    ).toBeInTheDocument()
+    fail = false
+    await user.click(notes.getByRole('button', { name: 'Retry' }))
+    expect(await notes.findByText('No annotations yet.')).toBeInTheDocument()
+  })
+
+  it('adds and removes test case tags without reloading the run', async () => {
+    const user = userEvent.setup()
+    const sent: string[] = []
+    let tags = ['flaky']
+    const tagHandler = (url: URL, request: Request) => {
+      const tag = decodeURIComponent(url.pathname.split('/').at(-1)!)
+      sent.push(`${request.method} ${tag}`)
+      tags =
+        request.method === 'PUT'
+          ? [...tags, tag]
+          : tags.filter((t) => t !== tag)
+      return noContent()
+    }
+    const api = mockApi({
+      [runPath]: () => runDetail(),
+      [caseExecutionPath('ce1')]: () => withTags('ce1', tags),
+      [`${testCaseTagsPath}/needs%20review`]: tagHandler,
+      [`${testCaseTagsPath}/flaky`]: tagHandler,
+    })
+    renderApp(pagePath())
+
+    const tagSection = within(await section('Test case tags'))
+    expect(
+      tagSection.getByText(
+        'Labels on this test case. Every execution of it, in every run, shows them.',
+      ),
+    ).toBeInTheDocument()
+    const runRequests = api.requests(runPath).length
+    await user.type(
+      tagSection.getByRole('textbox', { name: 'New tag' }),
+      ' needs review {Enter}',
+    )
+    expect(
+      await tagSection.findByRole('button', {
+        name: 'Find case executions tagged needs review in this run',
+      }),
+    ).toBeInTheDocument()
+    expect(tagSection.getByRole('textbox', { name: 'New tag' })).toHaveValue('')
+
+    await user.click(tagSection.getByTitle('Remove tag flaky'))
+    await waitFor(() =>
+      expect(
+        tagSection.queryByRole('button', {
+          name: 'Find case executions tagged flaky in this run',
+        }),
+      ).not.toBeInTheDocument(),
+    )
+    expect(sent).toEqual(['PUT needs review', 'DELETE flaky'])
+    expect(api.requests(runPath)).toHaveLength(runRequests)
+  })
+
+  it('shows an error when a test case tag cannot be added', async () => {
+    const user = userEvent.setup()
+    mockApi({
+      [runPath]: () => runDetail(),
+      [caseExecutionPath('ce1')]: () => caseExecutionDetail('ce1'),
+      [`${testCaseTagsPath}/flaky`]: () =>
+        problem(422, 'invalid_tag', 'tag too long'),
+    })
+    renderApp(pagePath())
+
+    const tagSection = within(await section('Test case tags'))
+    expect(tagSection.getByText('No tags yet.')).toBeInTheDocument()
+    await user.type(
+      tagSection.getByRole('textbox', { name: 'New tag' }),
+      'flaky{Enter}',
+    )
+    expect(
+      await tagSection.findByText('The tags could not be changed: tag too long'),
+    ).toBeInTheDocument()
+    // The draft stays, to be corrected.
+    expect(tagSection.getByRole('textbox', { name: 'New tag' })).toHaveValue(
+      'flaky',
+    )
+  })
+
+  it('finds the case executions with a tag in the run', async () => {
+    const user = userEvent.setup()
+    mockApi({
+      [runPath]: () => runDetail(),
+      [caseExecutionPath('ce1')]: () => withTags('ce1', ['flaky']),
+    })
+    const router = renderApp(pagePath())
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Find case executions tagged flaky in this run',
+      }),
+    )
+    expect(router.state.location.pathname).toBe(`/runs/${runId}`)
+    expect(currentQuery(router)).toBe('search=flaky')
   })
 
   it('warns when the run is invalid', async () => {

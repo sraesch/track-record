@@ -27,8 +27,11 @@ export function RunListPage() {
   const query = useMemo(() => runFiltersToQuery(filters), [filters])
   const runs = useRunList(query)
 
+  // Rendered at once, not in a transition: until the page shows the new
+  // filters, the filter bar would build the next change from the old ones
+  // (a tag typed and entered right after another would replace it).
   const setFilters = (next: RunFilters) =>
-    setSearchParams(runFiltersToParams(next))
+    setSearchParams(runFiltersToParams(next), { flushSync: true })
   const addTag = (tag: string) => {
     if (!filters.tags.includes(tag))
       setFilters({ ...filters, tags: [...filters.tags, tag] })

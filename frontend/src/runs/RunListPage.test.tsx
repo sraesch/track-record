@@ -152,6 +152,103 @@ describe('Run list', () => {
     expect(currentQuery(router)).toBe('')
   })
 
+  it('sends the more specific filters and shows them open', async () => {
+    const api = mockApi({
+      '/ui/api/v1/runs': () => ({ runs: [], next_cursor: null }),
+    })
+    renderApp(
+      '/runs?commit=168fed94a5013f65ea34157e7163f37114d6752d&sutTag=v1.5.0' +
+        '&build=release&env=3&scenario=load-model&asset=city&metric=fps' +
+        '&param=size%3D10&param=mode%3Dfast',
+    )
+    await screen.findByText('No runs match these filters.')
+
+    const sent = api.requests('/ui/api/v1/runs')[0]!.searchParams
+    expect(sent.get('sut_commit')).toBe(
+      '168fed94a5013f65ea34157e7163f37114d6752d',
+    )
+    expect(sent.get('sut_tag')).toBe('v1.5.0')
+    expect(sent.get('sut_build_config')).toBe('release')
+    expect(sent.get('shared_environment_id')).toBe('3')
+    expect(sent.get('scenario')).toBe('load-model')
+    expect(sent.get('asset')).toBe('city')
+    expect(sent.get('metric')).toBe('fps')
+    expect(sent.getAll('param')).toEqual(['size=10', 'mode=fast'])
+
+    // A link with these filters opens "More filters", so they can be seen.
+    expect(
+      screen.getByRole('button', { name: 'Fewer filters' }),
+    ).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('combobox', { name: 'Scenario' })).toHaveValue(
+      'load-model',
+    )
+    expect(screen.getByText('size=10')).toBeInTheDocument()
+    expect(screen.getByText('Shared environment 3')).toBeInTheDocument()
+  })
+
+  it('keeps the more specific filters closed until asked for', async () => {
+    const user = userEvent.setup()
+    const api = mockApi({
+      '/ui/api/v1/runs': () => ({ runs, next_cursor: null }),
+      '/ui/api/v1/scenarios': () => [
+        { id: 1, name: 'load-model', versions: [] },
+        { id: 2, name: 'stream-city', versions: [] },
+      ],
+    })
+    const router = renderApp('/runs')
+    await table()
+    expect(
+      screen.queryByRole('combobox', { name: 'Scenario' }),
+    ).not.toBeInTheDocument()
+    // Their options are not loaded while they are hidden.
+    expect(api.requests('/ui/api/v1/scenarios')).toHaveLength(0)
+
+    await user.click(screen.getByRole('button', { name: 'More filters' }))
+    await user.click(screen.getByRole('combobox', { name: 'Scenario' }))
+    await user.click(await screen.findByRole('option', { name: 'stream-city' }))
+    expect(currentQuery(router)).toBe('scenario=stream-city')
+
+    // Closed again, the button says how many of them are set.
+    await user.click(screen.getByRole('button', { name: 'Fewer filters' }))
+    expect(
+      screen.getByRole('button', { name: 'More filters (1 set)' }),
+    ).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('takes parameter filters as name=value', async () => {
+    const user = userEvent.setup()
+    mockApi({ '/ui/api/v1/runs': () => ({ runs, next_cursor: null }) })
+    const router = renderApp('/runs')
+    await table()
+    await user.click(screen.getByRole('button', { name: 'More filters' }))
+    const input = screen.getByRole('combobox', { name: 'Parameters' })
+
+    await user.type(input, ' size = 10 {Enter}')
+    expect(currentQuery(router)).toBe('param=size%3D10')
+
+    // Not name=value: the text stays to be fixed, nothing is filtered.
+    await user.type(input, 'fast{Enter}')
+    expect(currentQuery(router)).toBe('param=size%3D10')
+    expect(input).toHaveValue('fast')
+    expect(screen.getByText(/^Use name=value/)).toBeInTheDocument()
+
+    await user.clear(input)
+    await user.type(input, 'mode=fast{Enter}')
+    expect(currentQuery(router)).toBe('param=size%3D10&param=mode%3Dfast')
+    expect(screen.queryByText(/^Use name=value/)).not.toBeInTheDocument()
+  })
+
+  it('removes the shared environment filter', async () => {
+    const user = userEvent.setup()
+    mockApi({ '/ui/api/v1/runs': () => ({ runs, next_cursor: null }) })
+    const router = renderApp('/runs?env=3&validity=all')
+    await table()
+
+    const chip = screen.getByRole('button', { name: 'Shared environment 3' })
+    await user.click(within(chip).getByTestId('CancelIcon'))
+    expect(currentQuery(router)).toBe('validity=all')
+  })
+
   it('keeps the rows on screen while another filter loads', async () => {
     const user = userEvent.setup()
     mockApi({

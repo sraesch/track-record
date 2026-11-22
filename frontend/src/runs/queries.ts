@@ -28,6 +28,15 @@ export const runKeys = {
     ['runs', 'detail', runId, 'series', seriesId, maxPoints] as const,
 }
 
+/**
+ * True for the case executions of any run, listed or one by one: what shows
+ * the test cases (their tags) without the run itself or its series.
+ */
+export const isCaseExecutionKey = (queryKey: readonly unknown[]) =>
+  queryKey[0] === 'runs' &&
+  queryKey[1] === 'detail' &&
+  (queryKey[3] === 'case-executions' || queryKey[3] === 'case-execution')
+
 /** Runs matching a query, newest measured start first, page by page. */
 export function useRunList(query: RunListQuery) {
   return useInfiniteQuery({

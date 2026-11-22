@@ -133,6 +133,19 @@
       "from": "Started from",
       "to": "Started until",
       "any": "Any",
+      "more": "More filters",
+      "moreActive": "More filters ({{count}} set)",
+      "fewer": "Fewer filters",
+      "commit": "Commit",
+      "sutTag": "SUT tag",
+      "buildConfig": "Build configuration",
+      "scenario": "Scenario",
+      "asset": "Asset",
+      "metric": "Metric",
+      "params": "Parameters",
+      "paramsHint": "Type name=value and press Enter",
+      "paramsInvalid": "Use name=value, e.g. size=10 or mode=\"fast\"",
+      "environment": "Shared environment {{id}}",
       "clear": "Clear filters"
     },
     "shown_one": "{{count}} run shown",
@@ -173,26 +186,10 @@
     },
     "tags": {
       "title": "Tags",
-      "empty": "No tags yet.",
-      "show": "Show runs tagged {{tag}}",
-      "remove": "Remove tag {{tag}}",
-      "removeHint": "Press Delete to remove the tag.",
-      "new": "New tag",
-      "add": "Add tag",
-      "error": "The tags could not be changed: {{message}}"
+      "show": "Show runs tagged {{tag}}"
     },
     "annotations": {
-      "title": "Annotations",
-      "empty": "No annotations yet.",
-      "new": "New annotation",
-      "add": "Add annotation",
-      "edit": "Edit annotation",
-      "editLabel": "Annotation",
-      "edited": "· edited",
-      "delete": "Delete annotation",
-      "deleteTitle": "Delete this annotation?",
-      "deleteText": "The annotation is deleted for everyone. This cannot be undone.",
-      "error": "The annotation could not be saved: {{message}}"
+      "title": "Annotations"
     },
     "cases": {
       "title": "Case executions",
@@ -244,7 +241,8 @@
     },
     "environment": {
       "title": "Shared environment",
-      "empty": "No details recorded."
+      "empty": "No details recorded.",
+      "runs": "Runs with this environment"
     },
     "invalidate": {
       "action": "Mark invalid",
@@ -303,7 +301,6 @@
       "started": "Started",
       "ended": "Ended",
       "assets": "Assets",
-      "tags": "Test case tags",
       "created": "Uploaded",
       "id": "Case execution ID",
       "copyId": "Copy case execution ID"
@@ -311,6 +308,15 @@
     "parameters": {
       "title": "Parameters",
       "empty": "This test case has no parameters."
+    },
+    "tags": {
+      "title": "Test case tags",
+      "description": "Labels on this test case. Every execution of it, in every run, shows them.",
+      "show": "Find case executions tagged {{tag}} in this run"
+    },
+    "annotations": {
+      "title": "Test case annotations",
+      "description": "Notes on this test case. Every execution of it, in every run, shows them."
     },
     "device": {
       "title": "Client device details",
@@ -344,6 +350,27 @@
       "toCase": "Case execution",
       "toSample": "Repetition {{repetition}}"
     }
+  },
+  "tags": {
+    "empty": "No tags yet.",
+    "remove": "Remove tag {{tag}}",
+    "removeHint": "Press Delete to remove the tag.",
+    "new": "New tag",
+    "add": "Add tag",
+    "error": "The tags could not be changed: {{message}}"
+  },
+  "annotations": {
+    "empty": "No annotations yet.",
+    "new": "New annotation",
+    "add": "Add annotation",
+    "edit": "Edit annotation",
+    "editLabel": "Annotation",
+    "edited": "· edited",
+    "delete": "Delete annotation",
+    "deleteTitle": "Delete this annotation?",
+    "deleteText": "The annotation is deleted for everyone. This cannot be undone.",
+    "error": "The annotation could not be saved: {{message}}",
+    "loadError": "The annotations could not be loaded: {{message}}"
   },
   "charts": {
     "failed": "The chart could not be loaded. Reload the page to try again.",

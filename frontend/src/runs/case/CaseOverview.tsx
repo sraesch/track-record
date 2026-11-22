@@ -1,5 +1,4 @@
 import Box from '@mui/material/Box'
-import Chip from '@mui/material/Chip'
 import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
@@ -107,19 +106,6 @@ export function CaseOverview({ caseExecution: ce, run }: Props) {
     {
       label: t('caseExecution.overview.assets'),
       value: <AssetList assets={tc.assets} />,
-    },
-    {
-      label: t('caseExecution.overview.tags'),
-      value:
-        tc.tags.length === 0 ? (
-          t('common.none')
-        ) : (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-            {tc.tags.map((tag) => (
-              <Chip key={tag} size="small" variant="outlined" label={tag} />
-            ))}
-          </Box>
-        ),
     },
     {
       label: t('caseExecution.overview.created'),

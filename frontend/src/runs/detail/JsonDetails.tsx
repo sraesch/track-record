@@ -1,4 +1,5 @@
 import Typography from '@mui/material/Typography'
+import type { ReactNode } from 'react'
 import { formatJsonValue } from '../../format'
 import { Facts } from '../../pages/Facts'
 import { Section } from '../../pages/Section'
@@ -9,6 +10,8 @@ type Props = {
   /** Shown when there are no details. */
   emptyText: string
   details: object
+  /** Shown to the right of the title. */
+  actions?: ReactNode
 }
 
 /**
@@ -16,10 +19,10 @@ type Props = {
  * or the client device of a case execution. Nested details are shown with
  * dotted keys.
  */
-export function JsonDetails({ title, emptyText, details }: Props) {
+export function JsonDetails({ title, emptyText, details, actions }: Props) {
   const entries = flattenJson(jsonObject(details))
   return (
-    <Section title={title}>
+    <Section title={title} actions={actions}>
       {entries.length === 0 ? (
         <Typography variant="body2" color="text.secondary">
           {emptyText}
