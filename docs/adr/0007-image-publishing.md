@@ -72,5 +72,6 @@ GitHub.
 
 ## Left for later ADRs
 
-Helm chart and its publishing, the backend and frontend images, release
-notes.
+Helm chart and its publishing, release notes. The backend and frontend
+images are published the same way since
+[ADR 0014](0014-server-and-frontend-images.md).

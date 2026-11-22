@@ -6,7 +6,11 @@
 #   docker build --tag track-record-frontend frontend
 #
 # TR_UI_API_UPSTREAM is the backend UI port (default http://server:8081).
-FROM node:24-trixie-slim AS build
+#
+# Multi-platform (linux/amd64 and linux/arm64, ADR 0014): the built app is
+# the same for every platform, so the build stage runs on the build
+# machine's own platform; only the nginx stage differs per target.
+FROM --platform=$BUILDPLATFORM node:24-trixie-slim AS build
 WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
