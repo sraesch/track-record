@@ -6,15 +6,13 @@ import Button from '@mui/material/Button'
 import LinearProgress from '@mui/material/LinearProgress'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Link,
-  useLocation,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { isNotFound, type RunDetail } from '../../api/client'
 import { AttachmentPreview } from '../../attachments/AttachmentPreview'
+import {
+  attachmentParam,
+  useAttachmentPreview,
+} from '../../attachments/useAttachmentPreview'
 import { formatDateTime } from '../../format'
 import { EmptyState } from '../../pages/EmptyState'
 import { ErrorAlert } from '../../pages/ErrorAlert'
@@ -26,11 +24,11 @@ import {
   parseCaseFilters,
 } from './caseFilters'
 import { CaseExecutions } from './CaseExecutions'
-import { EnvironmentDetails } from './EnvironmentDetails'
+import { JsonDetails } from './JsonDetails'
 import { useValidateRun } from './mutations'
 import { RunActions } from './RunActions'
 import { RunAnnotations } from './RunAnnotations'
-import { RunAttachments } from './RunAttachments'
+import { AttachedTo, RunAttachments } from './RunAttachments'
 import { RunOverview } from './RunOverview'
 import { RunTags } from './RunTags'
 
@@ -102,9 +100,8 @@ export function RunDetailPage() {
 }
 
 function RunDetailView({ run }: { run: RunDetail }) {
+  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
-  const location = useLocation()
-  const navigate = useNavigate()
   const filters = useMemo(() => parseCaseFilters(searchParams), [searchParams])
   const caseExecutions = useCaseExecutions(
     run.id,
@@ -117,28 +114,13 @@ function RunDetailView({ run }: { run: RunDetail }) {
   )
 
   // The open attachment is in the URL too (FR-21), next to the filters.
-  const attachmentId = searchParams.get(attachmentParam)
-  const previewed = run.attachments.find((a) => a.id === attachmentId)
-
+  const preview = useAttachmentPreview(run.attachments)
   const setFilters = (next: CaseFilters, options?: { replace?: boolean }) => {
     const params = caseFiltersToParams(next)
-    if (attachmentId) params.set(attachmentParam, attachmentId)
-    setSearchParams(params, options)
-  }
-  const previewHref = (id: string) => {
-    const params = new URLSearchParams(searchParams)
-    params.set(attachmentParam, id)
-    return `?${params}`
-  }
-  const closePreview = () => {
-    // Opened from the list: going back closes it, as the back button does.
-    if ((location.state as { preview?: boolean } | null)?.preview) {
-      navigate(-1)
-      return
+    if (preview.attachmentId) {
+      params.set(attachmentParam, preview.attachmentId)
     }
-    const params = new URLSearchParams(searchParams)
-    params.delete(attachmentParam)
-    setSearchParams(params, { replace: true })
+    setSearchParams(params, options)
   }
 
   return (
@@ -159,14 +141,20 @@ function RunDetailView({ run }: { run: RunDetail }) {
         <Box sx={{ display: 'grid', gap: 2, minWidth: 0 }}>
           <RunTags run={run} />
           <RunAnnotations run={run} />
-          <EnvironmentDetails details={run.shared_environment} />
+          <JsonDetails
+            title={t('runDetail.environment.title')}
+            emptyText={t('runDetail.environment.empty')}
+            details={run.shared_environment}
+          />
         </Box>
         {/* Above the case executions, which can be a long list. */}
         <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
           <RunAttachments
             attachments={run.attachments}
-            caseExecutions={caseById}
-            previewHref={previewHref}
+            attachedTo={(attachment) => (
+              <AttachedTo attachment={attachment} caseExecutions={caseById} />
+            )}
+            previewHref={preview.previewHref}
           />
         </Box>
         <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
@@ -178,13 +166,13 @@ function RunDetailView({ run }: { run: RunDetail }) {
           />
         </Box>
       </Box>
-      <AttachmentPreview attachment={previewed} onClose={closePreview} />
+      <AttachmentPreview
+        attachment={preview.previewed}
+        onClose={preview.closePreview}
+      />
     </>
   )
 }
-
-/** URL query parameter of the attachment shown in the preview. */
-const attachmentParam = 'attachment'
 
 /** Why the run is invalid (FR-9), with the way back. */
 function InvalidNotice({ run }: { run: RunDetail }) {

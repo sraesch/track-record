@@ -18,8 +18,8 @@ comparisons, series views, export) and the MCP server. The frontend
 ([frontend/](frontend/README.md)) has the shell (app bar, side menu, routes
 for every view, color modes), the run list and the run detail (tags,
 annotations, case executions, attachments with previews, invalidation,
-deletion); the
-other views, including the case execution page, are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
+deletion) and the case execution page (measurements and series per
+sample, device details, attachments); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 

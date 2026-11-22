@@ -19,6 +19,8 @@ export const runKeys = {
   run: (runId: string) => ['runs', 'detail', runId] as const,
   caseExecutions: (runId: string, includeSuperseded: boolean) =>
     ['runs', 'detail', runId, 'case-executions', includeSuperseded] as const,
+  caseExecution: (runId: string, caseExecutionId: string) =>
+    ['runs', 'detail', runId, 'case-execution', caseExecutionId] as const,
 }
 
 /** Runs matching a query, newest measured start first, page by page. */
@@ -88,5 +90,27 @@ export function useCaseExecutions(
     // but never show the rows of another run.
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[2] === runId ? previous : undefined,
+  })
+}
+
+/**
+ * One case execution with its samples, measurements and series metadata.
+ * `live` refetches it while its run is running, as samples keep coming.
+ */
+export function useCaseExecution(
+  runId: string,
+  caseExecutionId: string,
+  live: boolean,
+) {
+  return useQuery({
+    queryKey: runKeys.caseExecution(runId, caseExecutionId),
+    queryFn: async ({ signal }) =>
+      unwrap(
+        await api.GET('/ui/api/v1/case-executions/{case_execution_id}', {
+          params: { path: { case_execution_id: caseExecutionId } },
+          signal,
+        }),
+      ),
+    refetchInterval: live ? liveRunInterval : false,
   })
 }

@@ -22,7 +22,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link as RouterLink } from 'react-router'
 import type { CaseExecutionSummary } from '../../api/client'
-import { formatDuration, formatJsonValue, formatNumber } from '../../format'
+import { formatDuration, formatNumber } from '../../format'
 import { ErrorAlert } from '../../pages/ErrorAlert'
 import { Section } from '../../pages/Section'
 import { useRowLink } from '../../pages/useRowLink'
@@ -31,8 +31,8 @@ import {
   filterCaseExecutions,
   hasActiveCaseFilters,
 } from './caseFilters'
-import { jsonObject } from './json'
 import { caseExecutionPath } from '../paths'
+import { Aliased, AssetList, Parameters } from '../TestCaseParts'
 
 /** Rows shown at first and added by "Show more". */
 export const casePageSize = 100
@@ -307,30 +307,10 @@ function CaseTable({
                   )}
                 </TableCell>
                 <TableCell>
-                  <Parameters caseExecution={ce} />
+                  <Parameters testCase={ce.test_case} />
                 </TableCell>
                 <TableCell>
-                  {ce.test_case.assets.length === 0
-                    ? t('common.none')
-                    : ce.test_case.assets.map((asset) => (
-                        <Tooltip
-                          describeChild
-                          key={asset.id}
-                          title={asset.content_hash ?? ''}
-                        >
-                          <Box
-                            component="span"
-                            sx={{ display: 'block', whiteSpace: 'nowrap' }}
-                          >
-                            {asset.version
-                              ? t('runDetail.cases.assetVersion', {
-                                  name: asset.name,
-                                  version: asset.version,
-                                })
-                              : asset.name}
-                          </Box>
-                        </Tooltip>
-                      ))}
+                  <AssetList assets={ce.test_case.assets} />
                 </TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>
                   <Aliased
@@ -350,64 +330,5 @@ function CaseTable({
         </TableBody>
       </Table>
     </TableContainer>
-  )
-}
-
-/** Parameters after aliases (FR-14), with their units (FR-13a). */
-function Parameters({ caseExecution }: { caseExecution: CaseExecutionSummary }) {
-  const { t } = useTranslation()
-  const tc = caseExecution.test_case
-  const resolved = jsonObject(tc.resolved_parameters)
-  const uploaded = jsonObject(tc.parameters)
-  const units = jsonObject(tc.parameter_units)
-  const names = Object.keys(resolved).sort()
-  if (names.length === 0) return t('common.none')
-
-  return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-      {names.map((name) => {
-        const unit = units[name]
-        const value = formatJsonValue(resolved[name])
-        const label =
-          typeof unit === 'string' && unit
-            ? t('runDetail.cases.parameterWithUnit', { name, value, unit })
-            : t('runDetail.cases.parameter', { name, value })
-        const chip = <Chip size="small" variant="outlined" label={label} />
-        // JSON comparison: an alias may also change the type (FR-14).
-        const aliased =
-          name in uploaded &&
-          JSON.stringify(uploaded[name]) !== JSON.stringify(resolved[name])
-        return aliased ? (
-          <Tooltip describeChild
-            key={name}
-            title={t('runDetail.cases.uploadedAs', {
-              value: formatJsonValue(uploaded[name]),
-            })}
-          >
-            {chip}
-          </Tooltip>
-        ) : (
-          <Box component="span" key={name}>
-            {chip}
-          </Box>
-        )
-      })}
-    </Box>
-  )
-}
-
-/** A name after aliases; the uploaded one in the tooltip if it differs. */
-function Aliased({ shown, uploaded }: { shown: string; uploaded: string }) {
-  const { t } = useTranslation()
-  if (shown === uploaded) return shown
-  return (
-    <Tooltip describeChild title={t('runDetail.cases.uploadedAs', { value: uploaded })}>
-      <Box
-        component="span"
-        sx={{ textDecoration: 'underline dotted', textUnderlineOffset: 3 }}
-      >
-        {shown}
-      </Box>
-    </Tooltip>
   )
 }

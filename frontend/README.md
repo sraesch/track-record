@@ -26,10 +26,14 @@ frontend/
   src/layout/           App bar, side menu, color mode menu
   src/pages/            Shared page parts: header, sections, dialogs, placeholders
   src/api/              API client; schema.d.ts is generated (do not edit)
-  src/runs/             Run list: filters in the URL, table, queries
+  src/runs/             Run list: filters in the URL, table, queries;
+                        test case parts shared by the run views
   src/runs/detail/      Run detail: overview, tags, annotations, case
                         executions (filters in the URL), attachments,
                         invalidation and deletion
+  src/runs/case/        Case execution: overview, parameters, device
+                        details, measurements and series per sample,
+                        attachments
   src/attachments/      Attachment previews (dialog and own page): images,
                         Markdown, JSON, text
   src/format.ts         Dates, durations and commits for display
