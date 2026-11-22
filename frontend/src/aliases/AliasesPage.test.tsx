@@ -182,18 +182,15 @@ describe('Aliases page', () => {
       'iphone',
     )
     await user.click(await screen.findByRole('option', { name: 'iphone-15' }))
-    await user.type(
-      within(dialog).getByRole('combobox', { name: 'To' }),
-      'iphone-15',
-    )
+    // Keystrokes in the autocompletes are slow under load: pick, then append.
+    const to = within(dialog).getByRole('combobox', { name: 'To' })
+    await user.type(to, 'iph')
+    await user.click(await screen.findByRole('option', { name: 'iphone-15' }))
     expect(within(dialog).getByText('From and To must differ')).toBeVisible()
     expect(save).toBeDisabled()
 
-    await user.clear(within(dialog).getByRole('combobox', { name: 'To' }))
-    await user.type(
-      within(dialog).getByRole('combobox', { name: 'To' }),
-      'iphone-15-lab',
-    )
+    await user.type(to, '-lab')
+    expect(to).toHaveValue('iphone-15-lab')
     await user.click(save)
 
     await waitFor(() =>

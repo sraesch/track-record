@@ -63,8 +63,19 @@ export function ConfirmDialog({
         transition: {
           // The first field gets the focus once the dialog is open, so it
           // can be typed into right away (the WAI-ARIA dialog pattern).
-          onEntered: (node: HTMLElement) =>
-            node.querySelector<HTMLElement>('input, textarea')?.focus(),
+          // Unless the user already moved the focus to a control while the
+          // dialog was fading in: taking it away would send their typing
+          // to another field.
+          onEntered: (node: HTMLElement) => {
+            const active = node.ownerDocument.activeElement
+            if (
+              active instanceof HTMLElement &&
+              node.contains(active) &&
+              active.tabIndex >= 0
+            )
+              return
+            node.querySelector<HTMLElement>('input, textarea')?.focus()
+          },
           onExited,
         },
       }}
