@@ -23,6 +23,7 @@ const defaults: Record<string, Handler> = {
   '/ui/api/v1/scenarios': () => [],
   '/ui/api/v1/assets': () => [],
   '/ui/api/v1/metrics': () => [],
+  '/ui/api/v1/units': () => [],
   '/ui/api/v1/annotations': () => [],
 }
 

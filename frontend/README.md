@@ -24,7 +24,8 @@ frontend/
   src/navigation.ts     Side menu entries; routes are built from them
   src/theme.ts          MUI theme: light and dark color schemes
   src/layout/           App bar, side menu, color mode menu
-  src/pages/            Shared page parts: header, sections, dialogs, placeholders
+  src/pages/            Shared page parts: header, sections, dialogs, search
+                        field, placeholders
   src/api/              API client; schema.d.ts is generated (do not edit)
   src/runs/             Run list: filters in the URL, table, queries;
                         test case parts shared by the run views
@@ -38,6 +39,9 @@ frontend/
   src/aliases/          Aliases (FR-14): list with filters in the URL,
                         add, change, remove and set again; typed
                         parameter values
+  src/metrics/          Metrics (FR-7, FR-13a): definitions with all
+                        versions, unit catalogue by quantity, custom
+                        units; tab and search in the URL
   src/tags/             Tag editor shared by runs and test cases
   src/annotations/      Annotation list and editor shared by runs and
                         test cases

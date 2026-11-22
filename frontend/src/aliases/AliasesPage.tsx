@@ -29,6 +29,7 @@ import { ConfirmDialog } from '../pages/ConfirmDialog'
 import { EmptyState } from '../pages/EmptyState'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { PageHeader } from '../pages/PageHeader'
+import { SearchField } from '../pages/SearchField'
 import { visuallyHidden } from '../pages/visuallyHidden'
 import { AliasDialog, type AliasDialogMode } from './AliasDialog'
 import {
@@ -142,6 +143,7 @@ export function AliasesPage() {
           ))}
         </TextField>
         <SearchField
+          label={t('aliases.filters.search')}
           value={filters.search ?? ''}
           onChange={(search) => setFilters({ ...filters, search }, true)}
         />
@@ -203,39 +205,6 @@ export function AliasesPage() {
         onClose={() => setRemoving(undefined)}
       />
     </>
-  )
-}
-
-/**
- * The text filter. It keeps what is typed (the URL drops surrounding
- * spaces) and follows the URL when it changes elsewhere (back button).
- */
-function SearchField({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (value: string) => void
-}) {
-  const { t } = useTranslation()
-  const [draft, setDraft] = useState(value)
-  const [shown, setShown] = useState(value)
-  if (value !== shown) {
-    setShown(value)
-    if (value !== draft.trim()) setDraft(value)
-  }
-  return (
-    <TextField
-      size="small"
-      type="search"
-      sx={{ minWidth: 200, flex: '0 1 280px' }}
-      label={t('aliases.filters.search')}
-      value={draft}
-      onChange={(event) => {
-        setDraft(event.target.value)
-        onChange(event.target.value)
-      }}
-    />
   )
 }
 
