@@ -17,6 +17,8 @@ import { drawerWidth } from '../theme'
 import { ColorModeMenu } from './ColorModeMenu'
 import { NavMenu } from './NavMenu'
 
+const appIconUrl = `${import.meta.env.BASE_URL}favicon.svg`
+
 /**
  * The frame of every page: app bar on top, side menu on the left, the page
  * in the middle. On wide screens the menu is docked and can be hidden; on
@@ -65,8 +67,22 @@ export function AppLayout() {
             to={homePath}
             aria-label={t('nav.home')}
             noWrap
-            sx={{ color: 'inherit', textDecoration: 'none', fontWeight: 600 }}
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 1.25,
+              color: 'inherit',
+              textDecoration: 'none',
+              fontWeight: 600,
+            }}
           >
+            {/* The same file as the favicon; the link's label names it. */}
+            <Box
+              component="img"
+              src={appIconUrl}
+              alt=""
+              sx={{ width: 28, height: 28, flexShrink: 0, display: 'block' }}
+            />
             {t('app.name')}
           </Typography>
           <Box sx={{ flexGrow: 1 }} />

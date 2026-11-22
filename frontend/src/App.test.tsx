@@ -9,12 +9,12 @@ const sideMenu = () =>
   screen.getByRole('navigation', { name: 'Main navigation' })
 
 describe('App shell', () => {
-  it('shows the app bar with the app name', () => {
+  it('shows the app bar with the app icon and name', () => {
     renderAt('/runs')
     const banner = screen.getByRole('banner')
-    expect(
-      within(banner).getByRole('link', { name: 'Track Record home' }),
-    ).toHaveAttribute('href', '/runs')
+    const home = within(banner).getByRole('link', { name: 'Track Record home' })
+    expect(home).toHaveAttribute('href', '/runs')
+    expect(home.querySelector('img')).toHaveAttribute('src', '/favicon.svg')
   })
 
   it('redirects / to the run list', async () => {
