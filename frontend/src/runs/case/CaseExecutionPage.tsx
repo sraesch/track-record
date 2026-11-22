@@ -212,7 +212,7 @@ function CaseExecutionView({
           </Box>
         )}
         <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
-          <SampleSeries samples={ce.samples} />
+          <SampleSeries runId={ce.run_id} samples={ce.samples} />
         </Box>
       </Box>
       <AttachmentPreview

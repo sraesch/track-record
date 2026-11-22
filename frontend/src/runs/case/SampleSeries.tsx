@@ -11,13 +11,21 @@ import type { SampleDetail } from '../../api/client'
 import { formatNumber } from '../../format'
 import { Section } from '../../pages/Section'
 import { byRepetition, useMetricLabel, warmupRowSx } from './samples'
+import { SeriesCharts } from './SeriesCharts'
 import { WarmupChip } from './WarmupChip'
 
 /**
- * The series of every sample (at most one per metric and sample): what is
- * measured over which x dimension, in which units, and how many points.
+ * The series of every sample (at most one per metric and sample): a chart
+ * per metric with a line per sample, then what is measured over which x
+ * dimension, in which units, and how many points.
  */
-export function SampleSeries({ samples }: { samples: readonly SampleDetail[] }) {
+export function SampleSeries({
+  runId,
+  samples,
+}: {
+  runId: string
+  samples: readonly SampleDetail[]
+}) {
   const { t } = useTranslation()
   const rows = useMemo(
     () =>
@@ -45,47 +53,50 @@ export function SampleSeries({ samples }: { samples: readonly SampleDetail[] }) 
           {t('caseExecution.series.empty')}
         </Typography>
       ) : (
-        <TableContainer>
-          <Table size="small" aria-label={t('caseExecution.series.title')}>
-            <TableHead sx={{ '& th': { whiteSpace: 'nowrap' } }}>
-              <TableRow>
-                <TableCell>{t('caseExecution.repetition')}</TableCell>
-                <TableCell>{t('caseExecution.series.metric')}</TableCell>
-                <TableCell>{t('caseExecution.series.unit')}</TableCell>
-                <TableCell>{t('caseExecution.series.x')}</TableCell>
-                <TableCell align="right">
-                  {t('caseExecution.series.points')}
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.map(({ sample, series }) => (
-                <TableRow
-                  key={series.id}
-                  sx={sample.is_warmup ? warmupRowSx : undefined}
-                >
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                    {sample.repetition}
-                    {sample.is_warmup && <WarmupChip />}
-                  </TableCell>
-                  <TableCell>{label(series)}</TableCell>
-                  <TableCell>{series.unit || t('common.none')}</TableCell>
-                  <TableCell>
-                    {series.x_unit
-                      ? t('caseExecution.series.xWithUnit', {
-                          dimension: series.x_dimension,
-                          unit: series.x_unit,
-                        })
-                      : series.x_dimension}
-                  </TableCell>
+        <>
+          <SeriesCharts runId={runId} samples={samples} />
+          <TableContainer>
+            <Table size="small" aria-label={t('caseExecution.series.title')}>
+              <TableHead sx={{ '& th': { whiteSpace: 'nowrap' } }}>
+                <TableRow>
+                  <TableCell>{t('caseExecution.repetition')}</TableCell>
+                  <TableCell>{t('caseExecution.series.metric')}</TableCell>
+                  <TableCell>{t('caseExecution.series.unit')}</TableCell>
+                  <TableCell>{t('caseExecution.series.x')}</TableCell>
                   <TableCell align="right">
-                    {formatNumber(series.point_count)}
+                    {t('caseExecution.series.points')}
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {rows.map(({ sample, series }) => (
+                  <TableRow
+                    key={series.id}
+                    sx={sample.is_warmup ? warmupRowSx : undefined}
+                  >
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      {sample.repetition}
+                      {sample.is_warmup && <WarmupChip />}
+                    </TableCell>
+                    <TableCell>{label(series)}</TableCell>
+                    <TableCell>{series.unit || t('common.none')}</TableCell>
+                    <TableCell>
+                      {series.x_unit
+                        ? t('caseExecution.series.xWithUnit', {
+                            dimension: series.x_dimension,
+                            unit: series.x_unit,
+                          })
+                        : series.x_dimension}
+                    </TableCell>
+                    <TableCell align="right">
+                      {formatNumber(series.point_count)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
       )}
     </Section>
   )

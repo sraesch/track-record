@@ -179,6 +179,68 @@ describe('Case execution', () => {
     expect(within(await section('Series')).getByText('3 series')).toBeInTheDocument()
   })
 
+  it('plots the series of every sample, a line per sample', async () => {
+    const points = (id: string) => () => ({
+      id,
+      x: [0, 0.5, 1, 1.5],
+      y: [60, 58, 59, 61],
+    })
+    const api = mockApi({
+      [runPath]: () => runDetail(),
+      [caseExecutionPath('ce1')]: () => caseExecutionDetail('ce1'),
+      '/ui/api/v1/series/fps-s0/points': points('fps-s0'),
+      '/ui/api/v1/series/fps-s1/points': points('fps-s1'),
+      '/ui/api/v1/series/fps-s2/points': points('fps-s2'),
+    })
+    renderApp(pagePath())
+
+    const series = within(await section('Series'))
+    const chart = within(await series.findByTestId('chart'))
+    expect(
+      series.getByText('fps over time (s): 3 lines, one per sample'),
+    ).toBeInTheDocument()
+    expect(chart.getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'Repetition 0 (warmup): 4 points',
+      'Repetition 1: 4 points',
+      'Repetition 2: 4 points',
+    ])
+    // Downsampled on the server for display (FR-19).
+    expect(
+      api.requests('/ui/api/v1/series/fps-s1/points')[0]?.searchParams.get(
+        'max_points',
+      ),
+    ).toBe('1000')
+  })
+
+  it('shows an error with a retry when series points fail to load', async () => {
+    const user = userEvent.setup()
+    let fail = true
+    const points = (id: string) => () =>
+      fail && id === 'fps-s1'
+        ? problem(500, 'internal', 'database down')
+        : { id, x: [0, 1], y: [60, 61] }
+    mockApi({
+      [runPath]: () => runDetail(),
+      [caseExecutionPath('ce1')]: () => caseExecutionDetail('ce1'),
+      '/ui/api/v1/series/fps-s0/points': points('fps-s0'),
+      '/ui/api/v1/series/fps-s1/points': points('fps-s1'),
+      '/ui/api/v1/series/fps-s2/points': points('fps-s2'),
+    })
+    renderApp(pagePath())
+
+    const series = within(await section('Series'))
+    expect(
+      await series.findByText(
+        'The series could not be loaded: database down',
+      ),
+    ).toBeInTheDocument()
+    fail = false
+    await user.click(series.getByRole('button', { name: 'Retry' }))
+    expect(
+      within(await series.findByTestId('chart')).getAllByRole('listitem'),
+    ).toHaveLength(3)
+  })
+
   it('says when there are no measurements, series or parameters', async () => {
     const ce = caseExecutionDetail('ce1', {
       samples: [sample(0, { measurements: [], series: [] })],

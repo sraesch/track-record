@@ -32,8 +32,10 @@ frontend/
                         executions (filters in the URL), attachments,
                         invalidation and deletion
   src/runs/case/        Case execution: overview, parameters, device
-                        details, measurements and series per sample,
-                        attachments
+                        details, measurements per sample, a chart per
+                        series metric, attachments
+  src/charts/           Charts (ECharts, ADR 0015): lazily loaded <Chart>,
+                        colors from the MUI color scheme
   src/attachments/      Attachment previews (dialog and own page): images,
                         Markdown, JSON, text
   src/format.ts         Dates, durations and commits for display
@@ -43,6 +45,7 @@ frontend/
   src/test/viewport.ts  setViewportWidth(): screen width for useMediaQuery
   src/test/api.ts       mockApi(): fake UI API for tests (stubs fetch)
   src/test/render.tsx   renderApp(path): the whole app on a memory router
+  src/test/fakeChart.tsx  Stands in for the canvas chart (jsdom has none)
   tools/openapi/        Generator for src/api/schema.d.ts (own package, TypeScript 5)
   vite.config.ts        Vite and Vitest config, dev proxy to the backend
   test.sh               lint, type check, tests and build (what CI runs)

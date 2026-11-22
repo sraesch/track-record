@@ -333,12 +333,21 @@
       "x": "x",
       "xWithUnit": "{{dimension}} ({{unit}})",
       "points": "Points",
-      "empty": "No series uploaded."
+      "empty": "No series uploaded.",
+      "line": "Repetition {{repetition}}",
+      "lineWarmup": "Repetition {{repetition}} (warmup)",
+      "chartLabel_one": "{{metric}} over {{x}}: {{count}} line, one per sample",
+      "chartLabel_other": "{{metric}} over {{x}}: {{count}} lines, one per sample",
+      "pointsError": "The series could not be loaded: {{message}}"
     },
     "attachments": {
       "toCase": "Case execution",
       "toSample": "Repetition {{repetition}}"
     }
+  },
+  "charts": {
+    "failed": "The chart could not be loaded. Reload the page to try again.",
+    "reload": "Reload"
   },
   "attachments": {
     "info": "{{type}} · {{size}}",
