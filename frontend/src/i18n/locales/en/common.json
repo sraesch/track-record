@@ -236,6 +236,7 @@
       "actions": "Actions",
       "download": "Download {{file}}",
       "open": "Open {{file}}",
+      "openInNewTab": "Open {{file}} in a new tab",
       "toRun": "Run",
       "caseName": "{{scenario}} on {{device}}",
       "caseUnknown": "Case execution",
@@ -276,6 +277,7 @@
   "attachments": {
     "info": "{{type}} · {{size}}",
     "download": "Download",
+    "openInNewTab": "Open in new tab",
     "close": "Close",
     "noPreview": "This file cannot be shown here. Download it to open it.",
     "tooLarge": "This file is too large to show here ({{size}}; up to {{limit}} are shown). Download it to open it.",
@@ -286,5 +288,11 @@
     "invalidJson": "This is not valid JSON; it is shown as uploaded.",
     "empty": "The file is empty.",
     "markdownImage": "Image: {{alt}}"
+  },
+  "attachmentPage": {
+    "titleLoading": "Attachment",
+    "back": "Back to the run",
+    "notFound": "There is no attachment {{attachmentId}}. It may have been deleted with its run.",
+    "error": "The attachment could not be loaded: {{message}}"
   }
 }

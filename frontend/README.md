@@ -30,7 +30,8 @@ frontend/
   src/runs/detail/      Run detail: overview, tags, annotations, case
                         executions (filters in the URL), attachments,
                         invalidation and deletion
-  src/attachments/      Attachment previews: images, Markdown, JSON, text
+  src/attachments/      Attachment previews (dialog and own page): images,
+                        Markdown, JSON, text
   src/format.ts         Dates, durations and commits for display
   src/i18n/             i18next setup, typed keys, locale files
     locales/en/         English translations (JSON, one file per namespace)

@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { Navigate, type RouteObject } from 'react-router'
 import { AppLayout } from './layout/AppLayout'
 import { homePath, type NavItemId, navItems } from './navigation'
+import { AttachmentPage } from './attachments/AttachmentPage'
 import { CaseExecutionPage } from './pages/CaseExecutionPage'
 import { ErrorPage } from './pages/ErrorPage'
 import { NotFoundPage } from './pages/NotFoundPage'
@@ -33,6 +34,10 @@ export const routes: RouteObject[] = [
       {
         path: '/runs/:runId/cases/:caseExecutionId',
         element: <CaseExecutionPage />,
+      },
+      {
+        path: '/runs/:runId/attachments/:attachmentId',
+        element: <AttachmentPage />,
       },
       { path: '*', element: <NotFoundPage /> },
     ],

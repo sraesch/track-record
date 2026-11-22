@@ -83,8 +83,13 @@ describe('Run attachments', () => {
     renderApp(`/runs/${runId}`)
     const list = within(await table())
 
+    // The link leads to the file's own page; a plain click opens the
+    // dialog instead (next test).
     const screenshot = await openLink('screenshot.png')
-    expect(screenshot).toHaveAttribute('href', `/runs/${runId}?attachment=img`)
+    expect(screenshot).toHaveAttribute(
+      'href',
+      `/runs/${runId}/attachments/img`,
+    )
     expect(screenshot.querySelector('img')).toHaveAttribute(
       'src',
       contentPath('img'),
@@ -94,10 +99,20 @@ describe('Run attachments', () => {
     expect(await openLink('summary.md')).not.toBeNull()
     expect(await openLink('harness.log')).not.toBeNull()
 
+    const newTab = list.getByRole('link', {
+      name: 'Open summary.md in a new tab',
+    })
+    expect(newTab).toHaveAttribute('href', `/runs/${runId}/attachments/md`)
+    expect(newTab).toHaveAttribute('target', '_blank')
+    expect(newTab).toHaveAttribute('rel', 'noopener')
+
     // Only downloads: unknown types and HTML (never rendered).
     for (const file of ['trace.bin', 'report.html']) {
       expect(
         list.queryByRole('link', { name: `Open ${file}` }),
+      ).not.toBeInTheDocument()
+      expect(
+        list.queryByRole('link', { name: `Open ${file} in a new tab` }),
       ).not.toBeInTheDocument()
       expect(list.getByText(file)).toBeInTheDocument()
     }
@@ -125,6 +140,9 @@ describe('Run attachments', () => {
     expect(
       within(dialog).getByRole('link', { name: 'Download' }),
     ).toHaveAttribute('href', contentPath('img'))
+    const newTab = within(dialog).getByRole('link', { name: 'Open in new tab' })
+    expect(newTab).toHaveAttribute('href', `/runs/${runId}/attachments/img`)
+    expect(newTab).toHaveAttribute('target', '_blank')
 
     await user.click(within(dialog).getByRole('button', { name: 'Close' }))
     await waitFor(() =>
@@ -255,6 +273,22 @@ describe('Run attachments', () => {
     // Opening from the list keeps them too.
     await user.click(await openLink('screenshot.png'))
     expect(currentQuery(router)).toBe('device=pixel-8-lab-1&attachment=img')
+  })
+
+  it('leaves a modified click on a file to the browser (new tab)', async () => {
+    const user = userEvent.setup()
+    setup()
+    const router = renderApp(`/runs/${runId}`)
+    const link = await openLink('summary.md')
+
+    // Opening the link in a new tab must not also open the dialog here.
+    link.addEventListener('click', (event) => event.preventDefault())
+    await user.keyboard('{Control>}')
+    await user.click(link)
+    await user.keyboard('{/Control}')
+    expect(router.state.location.pathname).toBe(`/runs/${runId}`)
+    expect(currentQuery(router)).toBe('')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('ignores an attachment in the URL that the run does not have', async () => {

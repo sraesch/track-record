@@ -92,7 +92,8 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   the API with `mockApi()` (`src/test/api.ts`) and render with `renderApp()`.
 - After changing a UI endpoint: regenerate the backend OpenAPI documents,
   then `npm run generate:api` in `frontend/`.
-- Attachments are previewed by the app ([ADR 0013](docs/adr/0013-attachment-previews.md)):
+- Attachments are previewed by the app ([ADR 0013](docs/adr/0013-attachment-previews.md)),
+  in a dialog or on their own page (`/runs/:runId/attachments/:id`):
   images in `<img>`, Markdown without its HTML, JSON and text as React
   text. Never render uploaded HTML, and keep the download for every file.
 - The image (`frontend/Dockerfile`) is nginx serving the build and proxying

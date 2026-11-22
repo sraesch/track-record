@@ -39,9 +39,15 @@ The backend serves an attachment's content only as a download
 - **Thumbnails:** image attachments get a small preview in the attachment
   list, loaded lazily. It is the full image scaled down; images over 5 MB
   get an icon instead. The backend makes no thumbnails.
-- **URL:** the open preview is part of the page's URL
-  (`/runs/:runId?attachment=<id>`, FR-21), next to the page's filters. The
-  back button closes a preview opened from the list.
+- **Dialog or own page:** a click on a file opens it in a dialog over the
+  run's page; the open dialog is part of that page's URL
+  (`/runs/:runId?attachment=<id>`, FR-21), next to its filters, and the
+  back button closes it. Every file can also be opened in a new tab on its
+  own page, `/runs/:runId/attachments/:attachmentId` (a deep link to the
+  file, FR-21): with a button in the list and in the dialog, and by opening
+  the file's link in a new tab (middle click, Ctrl/Cmd+click, context
+  menu), since the link leads there. On its own page an image is shown at
+  its size, not fitted to the window.
 - **Bundle:** the Markdown renderer (~50 kB gzipped) is loaded only when a
   Markdown file is opened, as its own chunk (`vite.config.ts`).
 - **Failures stay in the dialog:** a preview that cannot render, e.g.
