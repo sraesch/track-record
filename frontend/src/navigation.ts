@@ -66,3 +66,6 @@ export const navItems: readonly NavItem[] = navSections.flatMap(
 
 /** Where `/` leads. */
 export const homePath = '/runs'
+
+/** The About page, opened from the app bar rather than the side menu. */
+export const aboutPath = '/about'

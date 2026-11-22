@@ -1,9 +1,10 @@
 import type { ReactElement } from 'react'
 import { Navigate, type RouteObject } from 'react-router'
+import { AboutPage } from './about/AboutPage'
 import { AliasesPage } from './aliases/AliasesPage'
 import { MetricsPage } from './metrics/MetricsPage'
 import { AppLayout } from './layout/AppLayout'
-import { homePath, type NavItemId, navItems } from './navigation'
+import { aboutPath, homePath, type NavItemId, navItems } from './navigation'
 import { AttachmentPage } from './attachments/AttachmentPage'
 import { CaseExecutionPage } from './runs/case/CaseExecutionPage'
 import { DerivedMetricsPage } from './derived/DerivedMetricsPage'
@@ -49,6 +50,7 @@ export const routes: RouteObject[] = [
         path: '/runs/:runId/attachments/:attachmentId',
         element: <AttachmentPage />,
       },
+      { path: aboutPath, element: <AboutPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

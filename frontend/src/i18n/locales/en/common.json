@@ -24,6 +24,13 @@
       "tokens": "API tokens"
     }
   },
+  "about": {
+    "label": "About",
+    "title": "About Track Record",
+    "description": "Track Record keeps your benchmark results and helps you analyze them. Here is what changed in each version.",
+    "loadFailed": "The changes could not be loaded. Reload the page to try again.",
+    "reload": "Reload"
+  },
   "colorMode": {
     "label": "Color mode",
     "system": "System",

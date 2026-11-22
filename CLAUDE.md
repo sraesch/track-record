@@ -27,7 +27,8 @@ and parameter aliases), the metrics page (one definition per metric with edit,
 rename and delete, unit catalogue, custom units), the derived metrics page (list,
 uses and users, editor that creates or changes a metric with live validation
 and a preview on a case execution) and the API tokens page (list, create
-with the secret shown once, revoke); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
+with the secret shown once, revoke) and the About page (the app changelog,
+`frontend/APP_CHANGELOG.md`, as Markdown); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 

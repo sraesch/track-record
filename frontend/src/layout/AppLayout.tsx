@@ -1,3 +1,4 @@
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
 import MenuOpenIcon from '@mui/icons-material/MenuOpen'
 import AppBar from '@mui/material/AppBar'
@@ -12,7 +13,7 @@ import useMediaQuery from '@mui/material/useMediaQuery'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet } from 'react-router'
-import { homePath } from '../navigation'
+import { aboutPath, homePath } from '../navigation'
 import { drawerWidth } from '../theme'
 import { ColorModeMenu } from './ColorModeMenu'
 import { NavMenu } from './NavMenu'
@@ -86,6 +87,12 @@ export function AppLayout() {
             {t('app.name')}
           </Typography>
           <Box sx={{ flexGrow: 1 }} />
+          {/* The tooltip also labels the link. */}
+          <Tooltip title={t('about.label')}>
+            <IconButton color="inherit" component={Link} to={aboutPath}>
+              <InfoOutlinedIcon />
+            </IconButton>
+          </Tooltip>
           <ColorModeMenu />
         </Toolbar>
       </AppBar>
