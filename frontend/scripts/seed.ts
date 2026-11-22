@@ -490,6 +490,24 @@ async function uploadRun(plan: RunPlan): Promise<string> {
   return runId
 }
 
+/** An image attachment: a chart of a load, as a harness might render it. */
+function loadProgressSvg(): string {
+  const points = Array.from({ length: 41 }, (_, i) => {
+    const t = i / 40
+    const loaded = 1 - Math.exp(-4 * t) * (1 + 0.3 * Math.sin(9 * t))
+    return `${(20 + 360 * t).toFixed(1)},${(200 - 170 * Math.min(1, loaded)).toFixed(1)}`
+  })
+  return [
+    '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="240" viewBox="0 0 400 240">',
+    '<rect width="400" height="240" fill="#ffffff"/>',
+    '<path d="M20 30H380M20 115H380M20 200H380" stroke="#e0e0e0"/>',
+    `<polyline points="${points.join(' ')}" fill="none" stroke="#1f5fa8" stroke-width="3"/>`,
+    '<text x="20" y="225" font-family="sans-serif" font-size="13" fill="#555">loaded over time, city-block.glb on pixel-8-lab-1</text>',
+    '</svg>',
+    '',
+  ].join('\n')
+}
+
 async function attach(runId: string, name: string, contentType: string, text: string) {
   const id = uuid(`${runId}:attachment:${name}`)
   const bytes = new TextEncoder().encode(text)
@@ -730,6 +748,7 @@ async function seed() {
     'text/markdown',
     '# Nightly summary\n\nAll 24 case executions passed. City block on the Pixel at 20 Mbit/s did not finish loading in some samples.\n',
   )
+  await attach(latestRun, 'load-progress.svg', 'image/svg+xml', loadProgressSvg())
   console.log('  attachments')
 
   // UI-only operations: invalidation, aliases, derived metrics.

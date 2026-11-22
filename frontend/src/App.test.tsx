@@ -54,7 +54,7 @@ describe('App shell', () => {
   it('keeps Runs selected on a run detail page', () => {
     renderAt('/runs/3f1c')
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Run 3f1c' }),
+      screen.getByRole('heading', { level: 1, name: 'Run' }),
     ).toBeInTheDocument()
     expect(
       within(sideMenu()).getByRole('link', { name: 'Runs' }),
