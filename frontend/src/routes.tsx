@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { Navigate, type RouteObject } from 'react-router'
 import { AliasesPage } from './aliases/AliasesPage'
+import { MetricsPage } from './metrics/MetricsPage'
 import { AppLayout } from './layout/AppLayout'
 import { homePath, type NavItemId, navItems } from './navigation'
 import { AttachmentPage } from './attachments/AttachmentPage'
@@ -15,6 +16,7 @@ import { RunListPage } from './runs/RunListPage'
 // placeholder until they are built.
 const pages: Partial<Record<NavItemId, ReactElement>> = {
   runs: <RunListPage />,
+  metrics: <MetricsPage />,
   aliases: <AliasesPage />,
 }
 

@@ -466,5 +466,71 @@
       "text": "Results show {{source}} again instead of {{target}}. The alias keeps its history and can be set again.",
       "confirm": "Remove"
     }
+  },
+  "metrics": {
+    "tableLabel": "Metric definitions",
+    "tabs": {
+      "label": "Metric views",
+      "metrics": "Metrics",
+      "units": "Unit catalogue"
+    },
+    "searchLabel": "Search",
+    "searchMetrics": "Search metrics",
+    "searchUnits": "Search units",
+    "columns": {
+      "name": "Name",
+      "unit": "Unit",
+      "valueType": "Value type",
+      "direction": "Direction",
+      "description": "Description",
+      "version": "Version",
+      "defined": "Defined",
+      "actions": "Actions"
+    },
+    "valueType": {
+      "float": "Decimal",
+      "integer": "Integer",
+      "boolean": "Boolean"
+    },
+    "direction": {
+      "higher_is_better": "Higher is better",
+      "lower_is_better": "Lower is better"
+    },
+    "unit": {
+      "dimensionless": "dimensionless",
+      "known": "{{name}} ({{quantity}})",
+      "custom": "Custom",
+      "customHint": "Not in the unit catalogue: values in this unit are not converted."
+    },
+    "version": "v{{version}}",
+    "versionOf_one": "v{{version}}",
+    "versionOf_other": "v{{version}} of {{count}}",
+    "versionsLabel": "Versions of {{name}}",
+    "definedAt": "Defined {{time}}",
+    "changed": "Changed",
+    "runs": "Runs with this metric",
+    "runsNamed": "Runs with metric {{name}}",
+    "count_one": "{{count}} metric",
+    "count_other": "{{count}} metrics",
+    "empty": "No metrics yet. They are defined when the harness uploads its first results.",
+    "noMatch": "No metrics match the search.",
+    "error": "The metrics could not be loaded: {{message}}",
+    "units": {
+      "columns": {
+        "symbol": "Symbol",
+        "name": "Name",
+        "inBase": "In base unit",
+        "usedBy": "Used by"
+      },
+      "base": "Base unit",
+      "baseUnit": "Base unit: {{unit}}",
+      "customTitle": "Custom units",
+      "customText": "Metrics use these units, but they are not in the catalogue. Their values are shown as uploaded and not converted.",
+      "showMetric": "Show metric {{name}}",
+      "count_one": "{{count}} unit",
+      "count_other": "{{count}} units",
+      "noMatch": "No units match the search.",
+      "error": "The unit catalogue could not be loaded: {{message}}"
+    }
   }
 }
