@@ -62,7 +62,11 @@ describe('Case execution', () => {
       }),
     ).toHaveAttribute('href', `/runs/${runId}`)
     expect(overview.getByText('Completed')).toBeInTheDocument()
-    expect(overview.getByText('orbit')).toBeInTheDocument()
+    // The scenario opens its version with this test case selected.
+    expect(overview.getByRole('link', { name: 'orbit' })).toHaveAttribute(
+      'href',
+      '/suites?tab=scenarios&name=orbit&version=2&case=1',
+    )
     expect(overview.getByText('v2')).toBeInTheDocument()
     expect(overview.getByText('(1 warmup)')).toBeInTheDocument()
     expect(overview.getByText('(1 min 30 s)')).toBeInTheDocument()

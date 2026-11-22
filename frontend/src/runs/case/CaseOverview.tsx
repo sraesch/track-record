@@ -10,6 +10,7 @@ import { type Fact, Facts } from '../../pages/Facts'
 import { Section } from '../../pages/Section'
 import { codeSx, inlineRow } from '../../pages/styles'
 import { Time } from '../../pages/Time'
+import { testCaseHref } from '../../suites/paths'
 import { runPath } from '../paths'
 import { InvalidChip, RunStatusChip } from '../RunStatusChip'
 import { Aliased, AssetList } from '../TestCaseParts'
@@ -66,7 +67,9 @@ export function CaseOverview({ caseExecution: ce, run }: Props) {
       label: t('caseExecution.overview.scenario'),
       value: (
         <>
-          {tc.scenario}{' '}
+          <Link component={RouterLink} to={testCaseHref(tc)} underline="hover">
+            {tc.scenario}
+          </Link>{' '}
           <Typography component="span" variant="body2" color="text.secondary">
             {t('runs.version', { version: tc.scenario_version })}
           </Typography>

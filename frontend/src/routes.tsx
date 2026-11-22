@@ -12,11 +12,13 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
 import { RunDetailPage } from './runs/detail/RunDetailPage'
 import { RunListPage } from './runs/RunListPage'
+import { SuitesPage } from './suites/SuitesPage'
 
 // The page of each view in the side menu; views without one show a
 // placeholder until they are built.
 const pages: Partial<Record<NavItemId, ReactElement>> = {
   runs: <RunListPage />,
+  suites: <SuitesPage />,
   metrics: <MetricsPage />,
   aliases: <AliasesPage />,
   derivedMetrics: <DerivedMetricsPage />,

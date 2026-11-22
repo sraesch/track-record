@@ -1,8 +1,10 @@
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
+import Link from '@mui/material/Link'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
+import { Link as RouterLink } from 'react-router'
 import type { RunDetail } from '../../api/client'
 import { formatDuration, formatNumber, shortCommit } from '../../format'
 import { CopyButton } from '../../pages/CopyButton'
@@ -10,6 +12,7 @@ import { type Fact, Facts } from '../../pages/Facts'
 import { Section } from '../../pages/Section'
 import { Time } from '../../pages/Time'
 import { codeSx, inlineRow } from '../../pages/styles'
+import { suiteVersionHref } from '../../suites/paths'
 import { InvalidChip, RunStatusChip } from '../RunStatusChip'
 
 /** What a run is: status, times, suite and SUT version. */
@@ -55,7 +58,13 @@ export function RunOverview({ run }: { run: RunDetail }) {
       label: t('runDetail.overview.suite'),
       value: (
         <>
-          {run.suite.name}{' '}
+          <Link
+            component={RouterLink}
+            to={suiteVersionHref(run.suite.name, run.suite.version)}
+            underline="hover"
+          >
+            {run.suite.name}
+          </Link>{' '}
           <Typography component="span" variant="body2" color="text.secondary">
             {t('runs.version', { version: run.suite.version })}
           </Typography>

@@ -39,6 +39,11 @@ frontend/
   src/aliases/          Aliases (FR-14): list with filters in the URL,
                         add, change, remove and set again; typed
                         parameter values
+  src/suites/           Suites & scenarios (FR-7): list and selected
+                        definition with its versions and what each
+                        changed; the test cases of a scenario version
+                        with their tags and annotations; tab, search and
+                        selection in the URL
   src/metrics/          Metrics (FR-7, FR-13a): one definition per metric
                         (no versions, ADR 0018) with edit, rename and
                         delete; unit catalogue by quantity, custom units;
