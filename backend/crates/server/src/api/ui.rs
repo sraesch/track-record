@@ -11,7 +11,9 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::error::{ApiJson, ApiPath, ApiResult, Problem};
 use crate::service::catalog::{self, Alias, SetAlias};
-use crate::service::derived::{self, SaveDerivedMetric, SavedDerivedMetric};
+use crate::service::derived::{
+    self, RenameDerivedMetric, RenamedDerivedMetric, SaveDerivedMetric, SavedDerivedMetric,
+};
 use crate::service::lifecycle::{self, DeleteRun, InvalidateRun};
 use crate::service::tokens::{self, ApiToken, CreateToken, CreatedToken};
 
@@ -127,4 +129,35 @@ pub async fn save_derived_metric(
         StatusCode::OK
     };
     Ok((status, Json(saved)))
+}
+
+/// Rename a derived metric. The expressions of the derived metrics that use
+/// it are changed to the new name (`rewritten`). Analysis views and other
+/// expressions that use the old name stop working.
+#[utoipa::path(post, path = "/derived-metrics/{name}/rename", tag = "ui",
+    params(("name" = String, Path)),
+    request_body = RenameDerivedMetric,
+    responses((status = 200, body = RenamedDerivedMetric), (status = 404, body = Problem),
+              (status = 409, description = "The new name is taken", body = Problem),
+              (status = 422, description = "Invalid name", body = Problem)))]
+pub async fn rename_derived_metric(
+    State(state): State<AppState>,
+    ApiPath(name): ApiPath<String>,
+    ApiJson(req): ApiJson<RenameDerivedMetric>,
+) -> ApiResult<Json<RenamedDerivedMetric>> {
+    Ok(Json(derived::rename(&state.pool, &name, &req).await?))
+}
+
+/// Delete a derived metric. Not possible while other derived metrics use
+/// it. Cannot be undone; uploaded results are not affected.
+#[utoipa::path(delete, path = "/derived-metrics/{name}", tag = "ui",
+    params(("name" = String, Path)),
+    responses((status = 204), (status = 404, body = Problem),
+              (status = 409, description = "Other derived metrics use it", body = Problem)))]
+pub async fn delete_derived_metric(
+    State(state): State<AppState>,
+    ApiPath(name): ApiPath<String>,
+) -> ApiResult<StatusCode> {
+    derived::delete(&state.pool, &name).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

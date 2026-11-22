@@ -315,6 +315,100 @@ describe('Derived metrics', () => {
     expect(currentQuery(router)).toBe('name=throughput')
   })
 
+  it('renames a derived metric and the expressions that use it', async () => {
+    const renamed: unknown[] = []
+    let metrics = derivedMetrics()
+    mockApi({
+      [listPath]: () => metrics,
+      [`${listPath}/throughput/rename`]: async (_, request) => {
+        const body = (await request.json()) as { name: string }
+        renamed.push({ method: request.method, body })
+        metrics = metrics.map((m) =>
+          m.name === 'throughput'
+            ? { ...m, name: body.name }
+            : { ...m, expression: 'derived.rate / power', uses: [body.name] },
+        )
+        const metric = metrics.find((m) => m.name === body.name)!
+        return { ...metric, rewritten: ['efficiency'] }
+      },
+    })
+    const router = renderApp('/derived-metrics?q=a&name=throughput')
+
+    const user = userEvent.setup()
+    const detail = within(await panel('throughput'))
+    await user.click(detail.getByRole('button', { name: 'Rename' }))
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Rename throughput' }),
+    )
+    const field = dialog.getByRole('textbox', { name: 'New name' })
+    expect(field).toHaveValue('throughput')
+    expect(dialog.getByRole('button', { name: 'Rename' })).toBeDisabled()
+    expect(dialog.getByText('efficiency')).toBeInTheDocument()
+    expect(dialog.getByText('derived.throughput')).toBeInTheDocument()
+
+    await user.clear(field)
+    await enterText(user, field, 'efficiency')
+    expect(
+      dialog.getByText('Another derived metric has this name.'),
+    ).toBeInTheDocument()
+    await user.clear(field)
+    await enterText(user, field, 'rate')
+    await user.click(dialog.getByRole('button', { name: 'Rename' }))
+
+    await waitFor(() => expect(renamed).toHaveLength(1))
+    expect(renamed[0]).toEqual({ method: 'POST', body: { name: 'rate' } })
+    expect(
+      await screen.findByText(
+        'Renamed from throughput. The expression of efficiency now uses the new name.',
+      ),
+    ).toBeInTheDocument()
+    expect(currentQuery(router)).toBe('q=a&name=rate')
+  })
+
+  it('deletes a derived metric that nothing uses', async () => {
+    const deleted: string[] = []
+    let metrics = derivedMetrics()
+    mockApi({
+      [listPath]: () => metrics,
+      [`${listPath}/efficiency`]: (_, request) => {
+        deleted.push(request.method)
+        metrics = metrics.filter((m) => m.name !== 'efficiency')
+        return new Response(null, { status: 204 })
+      },
+    })
+    const router = renderApp('/derived-metrics?name=throughput')
+
+    // throughput is used by efficiency: it cannot be deleted.
+    const user = userEvent.setup()
+    await user.click(
+      within(await panel('throughput')).getByRole('button', { name: 'Delete' }),
+    )
+    let dialog = within(
+      await screen.findByRole('dialog', { name: 'Delete throughput?' }),
+    )
+    expect(dialog.getByText(/cannot be deleted/)).toBeInTheDocument()
+    expect(dialog.getByRole('button', { name: 'Delete' })).toBeDisabled()
+    await user.click(dialog.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+
+    const list = within(screen.getByRole('navigation', { name: 'Derived metrics' }))
+    await user.click(list.getByRole('link', { name: /^efficiency/ }))
+    await user.click(
+      within(await panel('efficiency')).getByRole('button', { name: 'Delete' }),
+    )
+    dialog = within(
+      await screen.findByRole('dialog', { name: 'Delete efficiency?' }),
+    )
+    await user.click(dialog.getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() => expect(deleted).toEqual(['DELETE']))
+    expect(await screen.findByText('efficiency is deleted.')).toBeInTheDocument()
+    expect(currentQuery(router)).toBe('')
+    await waitFor(() =>
+      expect(list.queryByRole('link', { name: /^efficiency/ })).toBeNull(),
+    )
+  })
+
   it('tries the expression on a case execution', async () => {
     const response: EvaluateResponse = {
       expression: 'bytes_transferred / load_time',

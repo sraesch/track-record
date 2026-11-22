@@ -337,6 +337,31 @@ export interface paths {
          */
         put: operations["save_derived_metric"];
         post?: never;
+        /**
+         * Delete a derived metric. Not possible while other derived metrics use
+         *     it. Cannot be undone; uploaded results are not affected.
+         */
+        delete: operations["delete_derived_metric"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ui/api/v1/derived-metrics/{name}/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a derived metric. The expressions of the derived metrics that use
+         *     it are changed to the new name (`rewritten`). Analysis views and other
+         *     expressions that use the old name stop working.
+         */
+        post: operations["rename_derived_metric"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1226,6 +1251,14 @@ export interface components {
             status: number;
             /** @description Short summary of the problem type. */
             title: string;
+        };
+        RenameDerivedMetric: {
+            /** @description The new name. */
+            name: string;
+        };
+        RenamedDerivedMetric: components["schemas"]["DerivedMetric"] & {
+            /** @description Derived metrics whose expressions were changed to the new name. */
+            rewritten: string[];
         };
         RunDetail: components["schemas"]["RunSummary"] & {
             annotations: components["schemas"]["Annotation"][];
@@ -2349,6 +2382,93 @@ export interface operations {
                 };
             };
             /** @description Invalid expression, a cycle, or a change that breaks a derived metric built on this one */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    delete_derived_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Other derived metrics use it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rename_derived_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameDerivedMetric"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenamedDerivedMetric"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The new name is taken */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Invalid name */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -8,6 +8,7 @@ import {
 import {
   api,
   type EvaluateRequest,
+  expectOk,
   type EvaluateResponse,
   type SaveDerivedMetric,
   unwrap,
@@ -127,6 +128,40 @@ export function useSaveDerivedMetric() {
         await api.PUT('/ui/api/v1/derived-metrics/{name}', {
           params: { path: { name } },
           body,
+        }),
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: derivedKeys.all }),
+  })
+}
+
+/**
+ * Renames a derived metric. The server changes the expressions of the
+ * derived metrics that use it to the new name.
+ */
+export function useRenameDerivedMetric() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ name, newName }: { name: string; newName: string }) =>
+      unwrap(
+        await api.POST('/ui/api/v1/derived-metrics/{name}/rename', {
+          params: { path: { name } },
+          body: { name: newName },
+        }),
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: derivedKeys.all }),
+  })
+}
+
+/** Deletes a derived metric that no other derived metric uses. */
+export function useDeleteDerivedMetric() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (name: string) =>
+      expectOk(
+        await api.DELETE('/ui/api/v1/derived-metrics/{name}', {
+          params: { path: { name } },
         }),
       ),
     onSuccess: () =>

@@ -123,6 +123,10 @@ Derived metrics are DSL expressions over the metrics of one sample
   ([ADR 0017](../docs/adr/0017-derived-metrics-without-versions.md)): a
   change applies to every analysis and to the derived metrics built on the
   changed one, and is rejected with 422 if it would make one of them invalid.
+- `POST /ui/api/v1/derived-metrics/{name}/rename` renames a derived metric
+  and rewrites the expressions of the derived metrics that use it
+  (`rewritten`); `DELETE /ui/api/v1/derived-metrics/{name}` deletes one,
+  409 `derived_metric_in_use` while others use it. UI port only.
 - `POST /derived-metrics/evaluate` evaluates an expression or a saved derived
   metric on the samples of one case execution.
 

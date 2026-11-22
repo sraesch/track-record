@@ -986,6 +986,119 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "ui"
+        ],
+        "summary": "Delete a derived metric. Not possible while other derived metrics use\nit. Cannot be undone; uploaded results are not affected.",
+        "operationId": "delete_derived_metric",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Other derived metrics use it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ui/api/v1/derived-metrics/{name}/rename": {
+      "post": {
+        "tags": [
+          "ui"
+        ],
+        "summary": "Rename a derived metric. The expressions of the derived metrics that use\nit are changed to the new name (`rewritten`). Analysis views and other\nexpressions that use the old name stop working.",
+        "operationId": "rename_derived_metric",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameDerivedMetric"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenamedDerivedMetric"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The new name is taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/ui/api/v1/environments/{environment_id}": {
@@ -3737,6 +3850,41 @@
             "description": "Short summary of the problem type."
           }
         }
+      },
+      "RenameDerivedMetric": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The new name."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RenamedDerivedMetric": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DerivedMetric"
+          },
+          {
+            "type": "object",
+            "required": [
+              "rewritten"
+            ],
+            "properties": {
+              "rewritten": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Derived metrics whose expressions were changed to the new name."
+              }
+            }
+          }
+        ]
       },
       "RunDetail": {
         "allOf": [

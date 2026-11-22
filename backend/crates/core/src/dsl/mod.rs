@@ -47,6 +47,38 @@ impl Span {
     }
 }
 
+/// How an expression refers to the derived metric `name`: `derived.<name>`,
+/// with the name in backticks unless it is a plain identifier.
+pub fn derived_reference(name: &str) -> String {
+    let plain = name.chars().next().is_some_and(lexer::is_ident_start)
+        && name.chars().all(lexer::is_ident_char);
+    if plain {
+        format!("derived.{name}")
+    } else {
+        format!("derived.`{name}`")
+    }
+}
+
+/// `source` with every reference to the derived metric `old` replaced by
+/// one to `new`, for renaming a derived metric. The rest of the text is
+/// kept as it is. `None` if the expression does not refer to `old`.
+pub fn rename_derived(source: &str, old: &str, new: &str) -> Result<Option<String>, Diagnostic> {
+    let spans = parse(source)?.derived_spans(old);
+    if spans.is_empty() {
+        return Ok(None);
+    }
+    let reference = derived_reference(new);
+    let mut out = String::with_capacity(source.len());
+    let mut at = 0;
+    for span in spans {
+        out.push_str(&source[at..span.start]);
+        out.push_str(&reference);
+        at = span.end;
+    }
+    out.push_str(&source[at..]);
+    Ok(Some(out))
+}
+
 /// An error in an expression, with the part of the source it refers to.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Diagnostic {
@@ -70,5 +102,48 @@ impl fmt::Display for Diagnostic {
             "{} (at {}..{})",
             self.message, self.span.start, self.span.end
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn references_are_quoted_when_needed() {
+        assert_eq!(derived_reference("time_to_90"), "derived.time_to_90");
+        assert_eq!(derived_reference("_x1"), "derived._x1");
+        assert_eq!(derived_reference("90th"), "derived.`90th`");
+        assert_eq!(
+            derived_reference("load time (cold)"),
+            "derived.`load time (cold)`"
+        );
+    }
+
+    #[test]
+    fn renaming_rewrites_only_references_to_the_metric() {
+        let renamed = |src: &str, new: &str| rename_derived(src, "a", new).unwrap();
+        assert_eq!(
+            renamed("derived.a * 2 + derived.ab - a + series.a", "b"),
+            Some("derived.b * 2 + derived.ab - a + series.a".into())
+        );
+        // Every reference, quoted or spaced, in calls and named arguments;
+        // the rest of the text stays as it was.
+        assert_eq!(
+            renamed(
+                "mean(series.fps, from=derived.`a`)  /  max(derived . a, 1)",
+                "load time"
+            ),
+            Some(
+                "mean(series.fps, from=derived.`load time`)  /  max(derived.`load time`, 1)".into()
+            )
+        );
+        assert_eq!(renamed("derived.b + 1", "c"), None);
+        assert!(rename_derived("derived.a +", "a", "b").is_err());
+        let out = renamed("derived.a / derived.a", "x y").unwrap();
+        assert_eq!(
+            parse(&out).unwrap().references().derived,
+            ["x y".to_owned()].into()
+        );
     }
 }

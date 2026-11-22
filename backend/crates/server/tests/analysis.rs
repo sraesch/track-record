@@ -197,6 +197,113 @@ async fn aggregates_exclude_warmup_and_invalid_runs() {
 }
 
 #[tokio::test]
+async fn derived_metrics_rename_and_delete() {
+    let app = app!();
+    let write = app.as_scope(TokenScope::Write).await;
+    let read = app.as_scope(TokenScope::Read).await;
+    let ui = app.ui_client();
+    let (_, ce) = seed_run(&write, &app, "pixel-8", "2026-11-01T10:00:00Z").await;
+    for (name, body) in [
+        (
+            "double",
+            json!({"expression": "load_time * 2", "unit": "s"}),
+        ),
+        (
+            "plus",
+            json!({"expression": "derived.double + derived.double", "unit": "s"}),
+        ),
+        ("other", json!({"expression": "load_time", "unit": "s"})),
+    ] {
+        let (status, out) = ui
+            .put(&app.u(&format!("/derived-metrics/{name}")), &body)
+            .await;
+        assert_eq!(status, StatusCode::CREATED, "{out}");
+    }
+    let plus = || {
+        let read = read.clone();
+        let url = app.m("/derived-metrics/evaluate");
+        async move {
+            read.post(&url, &json!({"case_execution_id": ce, "name": "plus"}))
+                .await
+                .1
+        }
+    };
+    let before = plus().await["samples"][0]["value"].clone();
+
+    // Renaming rewrites the expressions that use the metric.
+    let rename = |name: &str, new: &str| {
+        let ui = ui.clone();
+        let url = app.u(&format!("/derived-metrics/{name}/rename"));
+        let body = json!({"name": new});
+        async move { ui.post(&url, &body).await }
+    };
+    let (status, out) = rename("double", "twice (s)").await;
+    assert_eq!(status, StatusCode::OK, "{out}");
+    assert_eq!(
+        (out["name"].as_str(), out["rewritten"].clone()),
+        (Some("twice (s)"), json!(["plus"]))
+    );
+    let (_, one) = read.get(&app.m("/derived-metrics/plus")).await;
+    assert_eq!(
+        one["expression"],
+        "derived.`twice (s)` + derived.`twice (s)`"
+    );
+    assert_eq!(one["uses"], json!(["twice (s)"]));
+    assert_eq!(plus().await["samples"][0]["value"], before);
+    assert_eq!(
+        read.get(&app.m("/derived-metrics/double")).await.0,
+        StatusCode::NOT_FOUND
+    );
+    // The same name is a no-op; a taken, invalid or missing one is not.
+    assert_eq!(rename("other", "other").await.0, StatusCode::OK);
+    let (status, out) = rename("other", "plus").await;
+    assert_eq!(
+        (status, out["code"].as_str()),
+        (StatusCode::CONFLICT, Some("duplicate"))
+    );
+    assert_eq!(
+        rename("other", " x").await.0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    assert_eq!(rename("none", "x").await.0, StatusCode::NOT_FOUND);
+
+    // A metric that others use cannot be deleted.
+    let delete = |name: &str| {
+        let ui = ui.clone();
+        let url = app.u(&format!("/derived-metrics/{name}"));
+        async move { ui.delete(&url).await }
+    };
+    let (status, out) = delete("twice (s)").await;
+    assert_eq!(
+        (status, out["code"].as_str()),
+        (StatusCode::CONFLICT, Some("derived_metric_in_use")),
+        "{out}"
+    );
+    assert!(out["detail"].as_str().unwrap().contains("plus"), "{out}");
+    assert_eq!(delete("plus").await.0, StatusCode::NO_CONTENT);
+    assert_eq!(delete("twice (s)").await.0, StatusCode::NO_CONTENT);
+    assert_eq!(delete("twice (s)").await.0, StatusCode::NOT_FOUND);
+    let (_, list) = read.get(&app.m("/derived-metrics")).await;
+    assert_eq!(list.as_array().unwrap().len(), 1, "{list}");
+
+    // Neither is reachable with a token.
+    for request in [
+        write.client.delete(app.m("/derived-metrics/other")),
+        write
+            .client
+            .post(app.m("/derived-metrics/other/rename"))
+            .json(&json!({"name": "x"})),
+    ] {
+        let response = write.raw(request).await;
+        assert!(!response.status().is_success(), "{}", response.status());
+    }
+    assert_eq!(
+        read.get(&app.m("/derived-metrics/other")).await.0,
+        StatusCode::OK
+    );
+}
+
+#[tokio::test]
 async fn derived_metrics_validate_save_and_evaluate() {
     let app = app!();
     let write = app.as_scope(TokenScope::Write).await;

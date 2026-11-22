@@ -121,7 +121,8 @@ fn ui_only_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(ui::list_tokens, ui::create_token))
         .routes(routes!(ui::revoke_token))
         .routes(routes!(ui::set_alias))
-        .routes(routes!(ui::save_derived_metric))
+        .routes(routes!(ui::save_derived_metric, ui::delete_derived_metric))
+        .routes(routes!(ui::rename_derived_metric))
 }
 
 #[derive(serde::Serialize, ToSchema)]

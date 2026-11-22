@@ -1,7 +1,7 @@
 -- Definitions: content deduplication, version numbering and immutability of
 -- the versioned ones (FR-7); derived metrics, which are changed in place.
 BEGIN;
-SELECT plan(40);
+SELECT plan(48);
 
 -- Scenarios: deduplicated by content -----------------------------------------
 
@@ -110,15 +110,38 @@ SELECT throws_ok(
     format($$ INSERT INTO derived_metric_dependency VALUES (%s, %s) $$, :d1, :d1),
     '23514', NULL, 'the table itself rejects a metric that uses itself');
 
+-- Renaming and deleting (ADR 0017) ---------------------------------------------
+
+SELECT is(rename_derived_metric('throughput', 'rate'), :d1::bigint,
+    'renaming returns the id');
+SELECT results_eq(
+    $$ SELECT u.name FROM derived_metric_dependency d
+       JOIN derived_metric m ON m.id = d.derived_metric_id
+       JOIN derived_metric u ON u.id = d.uses_derived_metric_id
+       WHERE m.name = 'quality_auc' ORDER BY u.name $$,
+    $$ VALUES ('rate'), ('smooth') $$,
+    'a renamed metric stays used by the metrics built on it');
+SELECT is(rename_derived_metric('nothing', 'other'), NULL,
+    'renaming a missing metric returns NULL');
 SELECT throws_ok(
-    $$ UPDATE derived_metric SET name = 'rate' WHERE name = 'throughput' $$,
-    'TR001', NULL, 'a derived metric cannot be renamed');
+    $$ SELECT rename_derived_metric('rate', 'smooth') $$,
+    '23505', NULL, 'a derived metric cannot take a name that is in use');
 SELECT throws_ok(
-    $$ DELETE FROM derived_metric WHERE name = 'quality' $$,
-    'TR002', NULL, 'derived metrics cannot be deleted');
+    $$ SELECT rename_derived_metric('rate', ' ') $$,
+    '23514', NULL, 'a derived metric cannot get an empty name');
+
 SELECT throws_ok(
-    $$ TRUNCATE derived_metric, derived_metric_dependency $$,
-    'TR001', NULL, 'derived metrics cannot be truncated');
+    $$ SELECT delete_derived_metric('rate') $$,
+    'TR008', 'derived metric rate is used by quality_auc; change or delete those first',
+    'a derived metric that others use cannot be deleted');
+SELECT ok(delete_derived_metric('quality_auc'), 'an unused derived metric can be deleted');
+SELECT is_empty(
+    $$ SELECT 1 FROM derived_metric WHERE name = 'quality_auc' $$,
+    'the deleted metric is gone');
+SELECT is((SELECT count(*)::int FROM derived_metric_dependency), 0,
+    'what the deleted metric used is no longer recorded');
+SELECT ok(delete_derived_metric('rate'), 'once nothing uses it, a metric can be deleted');
+SELECT ok(NOT delete_derived_metric('rate'), 'deleting a missing metric returns false');
 
 -- Aliases: values are JSON scalars -------------------------------------------
 

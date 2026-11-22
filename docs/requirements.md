@@ -114,7 +114,9 @@ This system stores, manages and supports the analysis of benchmark results.
   evaluated at query time, so they also apply to historical runs. A derived
   metric has one definition, which can be changed; there are no versions. A
   change applies to every analysis from then on, historical runs included.
-  The name cannot be changed. Supported:
+  A derived metric can be renamed; the expressions of the derived metrics
+  that use it are changed to the new name. It can be deleted when no other
+  derived metric uses it. Supported:
   - **Scalar arithmetic** over metrics of the same sample (e.g. throughput =
     bytes / time), including log10 and clamping to a range.
   - **Series reductions** (series → scalar): min, max, mean, area under curve,

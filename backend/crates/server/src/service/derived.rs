@@ -26,7 +26,7 @@ use track_record_core::dsl::program::{
     Definition, Evaluator, Library, Root, SampleData, UnitSource, compile,
 };
 use track_record_core::dsl::{
-    Diagnostic, Expr, ExprKind, Kind, References, Signature, Span, parse,
+    Diagnostic, Expr, ExprKind, Kind, References, Signature, Span, parse, rename_derived,
 };
 use track_record_core::series::Series;
 use track_record_core::units::UnitCatalogue;
@@ -670,6 +670,100 @@ pub async fn get(pool: &PgPool, name: &str) -> ApiResult<DerivedMetric> {
         .await?
         .pop()
         .ok_or_else(|| ApiError::not_found(format!("derived metric {name} not found")))
+}
+
+// Renaming and deleting ---------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RenameDerivedMetric {
+    /// The new name.
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct RenamedDerivedMetric {
+    /// Derived metrics whose expressions were changed to the new name.
+    pub rewritten: Vec<String>,
+    #[serde(flatten)]
+    pub metric: DerivedMetric,
+}
+
+/// Renames a derived metric (ADR 0017). The expressions of the derived
+/// metrics that use it are changed to the new name in the same
+/// transaction, so they keep working. Ad-hoc expressions elsewhere (e.g. in
+/// an analysis view's URL) that use the old name do not.
+pub async fn rename(
+    pool: &PgPool,
+    name: &str,
+    req: &RenameDerivedMetric,
+) -> ApiResult<RenamedDerivedMetric> {
+    check_name(&req.name)?;
+    if req.name == name {
+        return Ok(RenamedDerivedMetric {
+            rewritten: vec![],
+            metric: get(pool, name).await?,
+        });
+    }
+    let mut tx = pool.begin().await?;
+    // Takes the lock that saves take too, so what uses the metric cannot
+    // change until the commit.
+    let id: Option<i64> = sqlx::query_scalar("SELECT rename_derived_metric($1, $2)")
+        .bind(name)
+        .bind(&req.name)
+        .fetch_one(&mut *tx)
+        .await?;
+    let Some(id) = id else {
+        return Err(ApiError::not_found(format!(
+            "derived metric {name} not found"
+        )));
+    };
+    let users: Vec<(i64, String, String)> = sqlx::query_as(
+        "SELECT m.id, m.name, m.expression FROM derived_metric_dependency d \
+         JOIN derived_metric m ON m.id = d.derived_metric_id \
+         WHERE d.uses_derived_metric_id = $1 ORDER BY m.name",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await?;
+    let mut rewritten = Vec::new();
+    for (user, user_name, expression) in users {
+        let changed = rename_derived(&expression, name, &req.name).map_err(|d| {
+            ApiError::invalid(format!(
+                "derived metric {user_name} uses {name} but its expression does not parse \
+                 ({}); change it before renaming",
+                d.message
+            ))
+        })?;
+        if let Some(changed) = changed {
+            sqlx::query("UPDATE derived_metric SET expression = $2 WHERE id = $1")
+                .bind(user)
+                .bind(&changed)
+                .execute(&mut *tx)
+                .await?;
+            rewritten.push(user_name);
+        }
+    }
+    tx.commit().await?;
+    Ok(RenamedDerivedMetric {
+        rewritten,
+        metric: get(pool, &req.name).await?,
+    })
+}
+
+/// Deletes a derived metric (ADR 0017). A metric that other derived metrics
+/// use cannot be deleted (409, `derived_metric_in_use`).
+pub async fn delete(pool: &PgPool, name: &str) -> ApiResult<()> {
+    let deleted: bool = sqlx::query_scalar("SELECT delete_derived_metric($1)")
+        .bind(name)
+        .fetch_one(pool)
+        .await?;
+    if !deleted {
+        return Err(ApiError::not_found(format!(
+            "derived metric {name} not found"
+        )));
+    }
+    Ok(())
 }
 
 // Evaluation on one case execution -------------------------------------------------

@@ -15,27 +15,39 @@ import { CopyButton } from '../pages/CopyButton'
 import { Facts } from '../pages/Facts'
 import { Section } from '../pages/Section'
 import { Time } from '../pages/Time'
-import { type DerivedView, derivedUsers } from './derivedModel'
+import { DerivedMetricActions } from './DerivedMetricActions'
+import {
+  type DerivedView,
+  derivedUsers,
+  type SetDerivedView,
+} from './derivedModel'
 import { derivedHref, derivedMetricHref } from './paths'
 
-/** Set by the editor when it navigates here after saving. */
-export type SavedState = { saved?: { name: string; created: boolean } }
+/** Set by the editor and the actions when they navigate after a change. */
+export type SavedState = {
+  saved?: { name: string; created: boolean }
+  renamed?: { from: string; name: string; rewritten: string[] }
+  /** Name of a derived metric that was deleted. */
+  deleted?: string
+}
 
 type Props = {
   metric: DerivedMetric
   metrics: readonly DerivedMetric[]
   view: DerivedView
+  setView: SetDerivedView
 }
 
 /**
  * One derived metric (FR-17): its definition, the derived metrics it uses
  * and those that use it. It has no versions (ADR 0017): "Edit" changes the
- * definition, for every analysis and for the metrics built on it.
+ * definition, for every analysis and for the metrics built on it. It can
+ * also be renamed, and deleted when no other derived metric uses it.
  */
-export function DerivedMetricDetail({ metric, metrics, view }: Props) {
+export function DerivedMetricDetail({ metric, metrics, view, setView }: Props) {
   const { t } = useTranslation()
   const location = useLocation()
-  const saved = (location.state as SavedState | null)?.saved
+  const { saved, renamed } = (location.state as SavedState | null) ?? {}
   const units = useUnits()
   const catalogue = useMemo(
     () => units.data && new Map(units.data.map((u) => [u.symbol, u])),
@@ -58,15 +70,23 @@ export function DerivedMetricDetail({ metric, metrics, view }: Props) {
     <Section
       title={metric.name}
       actions={
-        <Button
-          component={RouterLink}
-          to={editHref}
-          size="small"
-          variant="outlined"
-          startIcon={<EditIcon />}
-        >
-          {t('derived.detail.edit')}
-        </Button>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          <DerivedMetricActions
+            metric={metric}
+            metrics={metrics}
+            view={view}
+            setView={setView}
+          />
+          <Button
+            component={RouterLink}
+            to={editHref}
+            size="small"
+            variant="outlined"
+            startIcon={<EditIcon />}
+          >
+            {t('derived.detail.edit')}
+          </Button>
+        </Box>
       }
     >
       <Box sx={{ display: 'grid', gap: 2 }}>
@@ -75,6 +95,16 @@ export function DerivedMetricDetail({ metric, metrics, view }: Props) {
             {saved.created
               ? t('derived.detail.created')
               : t('derived.detail.changed')}
+          </Alert>
+        )}
+        {renamed?.name === metric.name && (
+          <Alert severity="success">
+            {t('derived.detail.renamed', { from: renamed.from })}
+            {renamed.rewritten.length > 0 &&
+              ` ${t('derived.detail.rewritten', {
+                count: renamed.rewritten.length,
+                names: renamed.rewritten.join(', '),
+              })}`}
           </Alert>
         )}
         <Box>

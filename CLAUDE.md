@@ -59,7 +59,8 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   tools (`src/mcp/`) share.
 - Two ports: the machine port (`/api`, `/mcp`, API tokens) and the UI port
   (`/ui/api`, no tokens). UI-only operations (invalidate, delete, tokens,
-  aliases) are routed only on the UI port.
+  aliases, saving, renaming and deleting derived metrics) are routed only on
+  the UI port.
 - Results are written with `PUT` on client UUIDs: 201 on create, 200 for an
   identical retry, 409 for different content. One transaction per request.
 - After changing an endpoint, regenerate `backend/openapi/*.json`; a test
@@ -146,7 +147,8 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   Hard delete only through `delete_run()`.
 - Create definitions and dimensions through the `ensure_*` functions, not raw
   inserts. Derived metrics are created and changed only through
-  `save_derived_metric()`, which keeps them free of cycles.
+  `save_derived_metric()`, which keeps them free of cycles, and renamed and
+  deleted only through `rename_derived_metric()` / `delete_derived_metric()`.
 
 ## Tech stack
 
@@ -206,8 +208,8 @@ only in code.
 - Suites, scenarios, metric definitions and aliases are **versioned**.
   Results reference the exact definition versions used (FR-7).
 - Derived metrics are **not versioned**: one definition, which can be changed
-  (FR-17, ADR 0017). The name is the identity and never changes; derived
-  metrics are not deleted.
+  (FR-17, ADR 0017). Renaming one rewrites the expressions of the derived
+  metrics that use it; one that others use cannot be deleted.
 - A changed scenario definition is a **new scenario version and a different
   case**. Never mix old and new versions in one trend.
 - Client device identity is its **stable name**. Device detail changes (OS,

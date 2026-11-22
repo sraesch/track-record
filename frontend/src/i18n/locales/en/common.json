@@ -608,6 +608,9 @@
       "edit": "Edit",
       "created": "The derived metric is created.",
       "changed": "The change is saved. It applies to every analysis, including past runs.",
+      "renamed": "Renamed from {{from}}.",
+      "rewritten_one": "The expression of {{names}} now uses the new name.",
+      "rewritten_other": "The expressions of {{names}} now use the new name.",
       "expression": "Expression",
       "copyExpression": "Copy expression",
       "unit": "Unit",
@@ -667,6 +670,27 @@
       "noSamples": "This case execution has no samples.",
       "result": "Result",
       "value": "Value"
+    },
+    "rename": {
+      "action": "Rename",
+      "title": "Rename {{name}}",
+      "newName": "New name",
+      "help": "Expressions refer to it as derived.<name>.",
+      "same": "This is the current name.",
+      "taken": "Another derived metric has this name.",
+      "users_one": "The expression of this derived metric is changed to the new name:",
+      "users_other": "The expressions of these derived metrics are changed to the new name:",
+      "views": "Analysis views, links and other expressions that still use the old name stop working:",
+      "confirm": "Rename"
+    },
+    "delete": {
+      "action": "Delete",
+      "title": "Delete {{name}}?",
+      "text": "The definition is removed for good. Uploaded results are not affected. Analysis views and links that use it stop working.",
+      "inUse_one": "It cannot be deleted while another derived metric uses it. Change or delete this one first:",
+      "inUse_other": "It cannot be deleted while other derived metrics use it. Change or delete these first:",
+      "confirm": "Delete",
+      "done": "{{name}} is deleted."
     }
   }
 }

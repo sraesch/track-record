@@ -1,5 +1,6 @@
 import AddIcon from '@mui/icons-material/Add'
 import FunctionsIcon from '@mui/icons-material/Functions'
+import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import LinearProgress from '@mui/material/LinearProgress'
@@ -12,13 +13,13 @@ import Typography from '@mui/material/Typography'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink, useSearchParams } from 'react-router'
+import { Link as RouterLink, useLocation, useSearchParams } from 'react-router'
 import type { DerivedMetric } from '../api/client'
 import { EmptyState } from '../pages/EmptyState'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { PageHeader } from '../pages/PageHeader'
 import { SearchField } from '../pages/SearchField'
-import { DerivedMetricDetail } from './DerivedMetricDetail'
+import { DerivedMetricDetail, type SavedState } from './DerivedMetricDetail'
 import { DerivedMetricEditor } from './DerivedMetricEditor'
 import {
   type DerivedView,
@@ -51,6 +52,8 @@ export function DerivedMetricsPage() {
     [rows, view.search],
   )
   const selected = rows.find((row) => row.name === view.name)
+  const location = useLocation()
+  const deleted = (location.state as SavedState | null)?.deleted
 
   // Stacked on narrow screens: bring the panel into view when the
   // selection or the editor changes, not when the page opens.
@@ -118,13 +121,23 @@ export function DerivedMetricsPage() {
               metric={selected}
               metrics={rows}
               view={view}
+              setView={setView}
             />
           ) : view.name ? (
             <EmptyState>{t('derived.notFound', { name: view.name })}</EmptyState>
           ) : (
-            <EmptyState icon={<FunctionsIcon />} dashed>
-              {rows.length === 0 ? t('derived.empty') : t('derived.selectHint')}
-            </EmptyState>
+            <Box sx={{ display: 'grid', gap: 2 }}>
+              {deleted && (
+                <Alert severity="success">
+                  {t('derived.delete.done', { name: deleted })}
+                </Alert>
+              )}
+              <EmptyState icon={<FunctionsIcon />} dashed>
+                {rows.length === 0
+                  ? t('derived.empty')
+                  : t('derived.selectHint')}
+              </EmptyState>
+            </Box>
           )}
         </Box>
       </Box>

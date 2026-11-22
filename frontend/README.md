@@ -43,8 +43,9 @@ frontend/
                         versions, unit catalogue by quantity, custom
                         units; tab and search in the URL
   src/derived/          Derived metrics (FR-17): list and selected metric
-                        with uses and users; editor that creates a metric
-                        or changes one in place (no versions, ADR 0017),
+                        with uses and users, rename and delete; editor
+                        that creates a metric or changes one in place (no
+                        versions, ADR 0017),
                         with live validation and a preview on a case
                         execution; their values on the case execution page
   src/dsl/              The DSL editor (CodeMirror, ADR 0016, lazily

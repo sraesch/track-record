@@ -100,6 +100,7 @@ pub fn map_sqlstate(code: &str) -> Option<(StatusCode, &'static str)> {
         "TR005" => (StatusCode::UNPROCESSABLE_ENTITY, "series_incomplete"),
         "TR006" => (StatusCode::UNPROCESSABLE_ENTITY, "series_x_decreasing"),
         "TR007" => (StatusCode::UNPROCESSABLE_ENTITY, "derived_metric_cycle"),
+        "TR008" => (StatusCode::CONFLICT, "derived_metric_in_use"),
         "23505" => (StatusCode::CONFLICT, "duplicate"),
         "23503" => (StatusCode::UNPROCESSABLE_ENTITY, "reference_not_found"),
         "23514" | "23502" => (StatusCode::UNPROCESSABLE_ENTITY, "check_violation"),
@@ -217,6 +218,10 @@ mod tests {
         assert_eq!(
             map_sqlstate("TR007"),
             Some((StatusCode::UNPROCESSABLE_ENTITY, "derived_metric_cycle"))
+        );
+        assert_eq!(
+            map_sqlstate("TR008"),
+            Some((StatusCode::CONFLICT, "derived_metric_in_use"))
         );
         assert_eq!(
             map_sqlstate("23505"),

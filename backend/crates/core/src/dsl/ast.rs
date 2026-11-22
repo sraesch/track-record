@@ -78,6 +78,38 @@ pub struct References {
 }
 
 impl Expr {
+    /// Where the expression refers to the derived metric `name`
+    /// (`derived.<name>`), in source order.
+    pub fn derived_spans(&self, name: &str) -> Vec<Span> {
+        let mut out = Vec::new();
+        self.collect_derived(name, &mut out);
+        out.sort_by_key(|s| s.start);
+        out
+    }
+
+    fn collect_derived(&self, name: &str, out: &mut Vec<Span>) {
+        match &self.kind {
+            ExprKind::Derived(n) if n == name => out.push(self.span),
+            ExprKind::Number { .. }
+            | ExprKind::Metric(_)
+            | ExprKind::Series(_)
+            | ExprKind::Derived(_) => {}
+            ExprKind::Neg(e) => e.collect_derived(name, out),
+            ExprKind::Binary { lhs, rhs, .. } => {
+                lhs.collect_derived(name, out);
+                rhs.collect_derived(name, out);
+            }
+            ExprKind::Call { args, named, .. } => {
+                for a in args {
+                    a.collect_derived(name, out);
+                }
+                for n in named {
+                    n.value.collect_derived(name, out);
+                }
+            }
+        }
+    }
+
     pub fn references(&self) -> References {
         let mut refs = References::default();
         self.collect(&mut refs);
