@@ -15,6 +15,10 @@ configure({ asyncUtilTimeout: 3000 })
 // jsdom has no canvas to draw charts on; tests see a list of their lines.
 vi.mock('../charts/EChart', () => import('./fakeChart'))
 
+// jsdom does not lay out text, which CodeMirror needs; tests type into a
+// text area instead.
+vi.mock('../dsl/DslEditor', () => import('./fakeDslEditor'))
+
 // jsdom has no matchMedia; MUI's useMediaQuery needs it. Tests run on a wide
 // screen unless they call setViewportWidth().
 beforeEach(() => {

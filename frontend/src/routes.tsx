@@ -6,6 +6,7 @@ import { AppLayout } from './layout/AppLayout'
 import { homePath, type NavItemId, navItems } from './navigation'
 import { AttachmentPage } from './attachments/AttachmentPage'
 import { CaseExecutionPage } from './runs/case/CaseExecutionPage'
+import { DerivedMetricsPage } from './derived/DerivedMetricsPage'
 import { ErrorPage } from './pages/ErrorPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
@@ -18,6 +19,7 @@ const pages: Partial<Record<NavItemId, ReactElement>> = {
   runs: <RunListPage />,
   metrics: <MetricsPage />,
   aliases: <AliasesPage />,
+  derivedMetrics: <DerivedMetricsPage />,
 }
 
 // All routes of the app. Every view has its own URL, and view state (filters,

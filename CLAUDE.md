@@ -19,7 +19,12 @@ comparisons, series views, export) and the MCP server. The frontend
 for every view, color modes), the run list and the run detail (tags,
 annotations, case executions, attachments with previews, invalidation,
 deletion) and the case execution page (measurements per sample, a chart
-per series metric with a line per sample, device details, test case tags and annotations, attachments) the aliases page (add, change, remove and set again device and parameter aliases) and the metrics page (metric definitions with all versions, unit catalogue, custom units); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
+per series metric with a line per sample, device details, test case tags and annotations, derived metric values,
+attachments), the aliases page (add, change, remove and set again device
+and parameter aliases), the metrics page (metric definitions with all
+versions, unit catalogue, custom units) and the derived metrics page (list,
+versions, uses and users, editor with live validation and a preview on a
+case execution); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 
@@ -110,6 +115,13 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   Series points come downsampled from the server (`max_points`) through
   TanStack Query (`useSeriesPoints`). Tests replace the canvas chart with
   `src/test/fakeChart.tsx`, which lists the lines.
+- DSL expressions are edited with CodeMirror 6
+  ([ADR 0016](docs/adr/0016-expression-editor.md)) through
+  `<ExpressionField>` (`src/dsl/`, lazily loaded `editor` chunk).
+  Highlighting and completion use the tokenizer in `src/dsl/syntax.ts`;
+  keep its function list in step with `track-record-core::dsl`. The server
+  validates while typing; its byte offsets go through `toProblems()`.
+  Tests replace the editor with a text area (`src/test/fakeDslEditor.tsx`).
 - The image (`frontend/Dockerfile`) is nginx serving the build and proxying
   `/ui/api` to `TR_UI_API_UPSTREAM`. `deploy/local/` runs the whole stack on
   Docker Desktop Kubernetes for trying the UI; it is not the Helm chart.
@@ -170,7 +182,8 @@ Frontend tooling is decided in ADR 0010: npm, oxlint, Vitest with jsdom and
 Testing Library. Component library (MUI) and routing (React Router) in
 ADR 0011; API types, client and TanStack Query in ADR 0012; Markdown
 rendering (react-markdown) for attachment previews in ADR 0013; charting
-library (Apache ECharts) in ADR 0015.
+library (Apache ECharts) in ADR 0015; expression editor (CodeMirror 6) in
+ADR 0016.
 
 Still open: cache strategy, Helm chart, release notes.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not

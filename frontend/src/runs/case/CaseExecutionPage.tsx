@@ -15,6 +15,7 @@ import {
 } from '../../api/client'
 import { AttachmentPreview } from '../../attachments/AttachmentPreview'
 import { useAttachmentPreview } from '../../attachments/useAttachmentPreview'
+import { CaseDerivedMetrics } from '../../derived/CaseDerivedMetrics'
 import { EmptyState } from '../../pages/EmptyState'
 import { ErrorAlert } from '../../pages/ErrorAlert'
 import { PageHeader } from '../../pages/PageHeader'
@@ -198,6 +199,12 @@ function CaseExecutionView({
         </Box>
         <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
           <SampleMeasurements samples={ce.samples} />
+        </Box>
+        <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
+          <CaseDerivedMetrics
+            caseExecution={ce}
+            live={run?.status === 'running'}
+          />
         </Box>
         {run && (
           <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>

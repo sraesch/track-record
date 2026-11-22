@@ -73,6 +73,8 @@ export function useRun(runId: string) {
       ),
     refetchInterval: (query) =>
       query.state.data?.status === 'running' ? liveRunInterval : false,
+    // No run chosen yet (the derived metric preview).
+    enabled: runId !== '',
   })
 }
 
@@ -100,6 +102,7 @@ export function useCaseExecutions(
         }),
       ),
     refetchInterval: live ? liveRunInterval : false,
+    enabled: runId !== '',
     // Keep the rows while the other set (with or without superseded) loads,
     // but never show the rows of another run.
     placeholderData: (previous, previousQuery) =>

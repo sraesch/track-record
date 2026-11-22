@@ -25,6 +25,7 @@ const defaults: Record<string, Handler> = {
   '/ui/api/v1/metrics': () => [],
   '/ui/api/v1/units': () => [],
   '/ui/api/v1/annotations': () => [],
+  '/ui/api/v1/derived-metrics': () => [],
 }
 
 export function mockApi(handlers: Record<string, Handler> = {}): MockApi {
