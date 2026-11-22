@@ -30,6 +30,7 @@ frontend/
   src/runs/detail/      Run detail: overview, tags, annotations, case
                         executions (filters in the URL), attachments,
                         invalidation and deletion
+  src/attachments/      Attachment previews: images, Markdown, JSON, text
   src/format.ts         Dates, durations and commits for display
   src/i18n/             i18next setup, typed keys, locale files
     locales/en/         English translations (JSON, one file per namespace)
@@ -109,7 +110,7 @@ It covers the cases the UI has to show, over 30 days from day 0
 | Incomplete loads (Pixel, city block, 20 Mbit/s): `load_time` missing, `derived.time_to_full` has no value | some samples |
 | Aliases: device `pixel8-lab1` → `pixel-8-lab-1` (days 0–6), parameter `meshopt-v1` → `meshopt` (days 0–4) | |
 | Derived metrics `throughput` (2 versions), `time_to_90`, `time_to_full`, `steady_fps` (uses `derived.time_to_90`), `load_stall` | |
-| Tags, run/test case/point-in-time annotations, attachments | |
+| Tags, run/test case/point-in-time annotations, attachments (log, Markdown, JSON, an SVG chart) | |
 
 The script creates a temporary `write` token and revokes it at the end. It
 refuses to seed a database twice; start from an empty one

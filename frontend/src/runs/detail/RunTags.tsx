@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import type { RunDetail } from '../../api/client'
 import { Section } from '../../pages/Section'
+import { visuallyHidden } from '../../pages/visuallyHidden'
 import { useAddRunTag, useRemoveRunTag } from './mutations'
 
 /**
@@ -114,12 +115,3 @@ export function RunTags({ run }: { run: RunDetail }) {
     </Section>
   )
 }
-
-const visuallyHidden = {
-  position: 'absolute',
-  width: '1px',
-  height: '1px',
-  overflow: 'hidden',
-  clip: 'rect(0 0 0 0)',
-  whiteSpace: 'nowrap',
-} as const

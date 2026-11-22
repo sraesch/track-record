@@ -233,7 +233,9 @@
       "type": "Type",
       "size": "Size",
       "uploaded": "Uploaded",
+      "actions": "Actions",
       "download": "Download {{file}}",
+      "open": "Open {{file}}",
       "toRun": "Run",
       "caseName": "{{scenario}} on {{device}}",
       "caseUnknown": "Case execution",
@@ -270,5 +272,19 @@
     "title": "Case execution",
     "description": "Samples, measurements, series and device details of one case execution.",
     "back": "Back to the run"
+  },
+  "attachments": {
+    "info": "{{type}} · {{size}}",
+    "download": "Download",
+    "close": "Close",
+    "noPreview": "This file cannot be shown here. Download it to open it.",
+    "tooLarge": "This file is too large to show here ({{size}}; up to {{limit}} are shown). Download it to open it.",
+    "loadError": "The file could not be loaded: {{message}}",
+    "imageError": "The image could not be shown. Download it to open it.",
+    "previewError": "The preview could not be shown: {{message}}. Reload the page to try again, or download the file.",
+    "reload": "Reload",
+    "invalidJson": "This is not valid JSON; it is shown as uploaded.",
+    "empty": "The file is empty.",
+    "markdownImage": "Image: {{alt}}"
   }
 }

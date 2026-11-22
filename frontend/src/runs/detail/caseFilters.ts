@@ -10,7 +10,8 @@ import { jsonObject } from './json'
 // Scenario and device match exactly (the device after aliases); `search`
 // matches any part of a case: scenario, parameters, assets and devices.
 // Superseded case executions (replaced by a correction, FR-6) are hidden
-// unless `superseded=true`.
+// unless `superseded=true`. The page also keeps `attachment=<id>` (the open
+// attachment preview) in the same query.
 
 export type CaseFilters = {
   scenario?: string

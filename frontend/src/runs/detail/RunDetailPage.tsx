@@ -6,8 +6,15 @@ import Button from '@mui/material/Button'
 import LinearProgress from '@mui/material/LinearProgress'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useParams, useSearchParams } from 'react-router'
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router'
 import { isNotFound, type RunDetail } from '../../api/client'
+import { AttachmentPreview } from '../../attachments/AttachmentPreview'
 import { formatDateTime } from '../../format'
 import { EmptyState } from '../../pages/EmptyState'
 import { ErrorAlert } from '../../pages/ErrorAlert'
@@ -30,7 +37,7 @@ import { RunTags } from './RunTags'
 /**
  * One run (FR-21: /runs/:runId): what it is, its tags, annotations, case
  * executions, attachments and shared environment, and the actions on it.
- * The case execution filters are in the URL query.
+ * The case execution filters and the open attachment are in the URL query.
  */
 export function RunDetailPage() {
   const { t } = useTranslation()
@@ -96,6 +103,8 @@ export function RunDetailPage() {
 
 function RunDetailView({ run }: { run: RunDetail }) {
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
+  const navigate = useNavigate()
   const filters = useMemo(() => parseCaseFilters(searchParams), [searchParams])
   const caseExecutions = useCaseExecutions(
     run.id,
@@ -106,8 +115,31 @@ function RunDetailView({ run }: { run: RunDetail }) {
     () => new Map((caseExecutions.data ?? []).map((ce) => [ce.id, ce])),
     [caseExecutions.data],
   )
-  const setFilters = (next: CaseFilters, options?: { replace?: boolean }) =>
-    setSearchParams(caseFiltersToParams(next), options)
+
+  // The open attachment is in the URL too (FR-21), next to the filters.
+  const attachmentId = searchParams.get(attachmentParam)
+  const previewed = run.attachments.find((a) => a.id === attachmentId)
+
+  const setFilters = (next: CaseFilters, options?: { replace?: boolean }) => {
+    const params = caseFiltersToParams(next)
+    if (attachmentId) params.set(attachmentParam, attachmentId)
+    setSearchParams(params, options)
+  }
+  const previewHref = (id: string) => {
+    const params = new URLSearchParams(searchParams)
+    params.set(attachmentParam, id)
+    return `?${params}`
+  }
+  const closePreview = () => {
+    // Opened from the list: going back closes it, as the back button does.
+    if ((location.state as { preview?: boolean } | null)?.preview) {
+      navigate(-1)
+      return
+    }
+    const params = new URLSearchParams(searchParams)
+    params.delete(attachmentParam)
+    setSearchParams(params, { replace: true })
+  }
 
   return (
     <>
@@ -127,6 +159,15 @@ function RunDetailView({ run }: { run: RunDetail }) {
         <Box sx={{ display: 'grid', gap: 2, minWidth: 0 }}>
           <RunTags run={run} />
           <RunAnnotations run={run} />
+          <EnvironmentDetails details={run.shared_environment} />
+        </Box>
+        {/* Above the case executions, which can be a long list. */}
+        <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
+          <RunAttachments
+            attachments={run.attachments}
+            caseExecutions={caseById}
+            previewHref={previewHref}
+          />
         </Box>
         <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
           <CaseExecutions
@@ -136,12 +177,14 @@ function RunDetailView({ run }: { run: RunDetail }) {
             onChange={setFilters}
           />
         </Box>
-        <RunAttachments attachments={run.attachments} caseExecutions={caseById} />
-        <EnvironmentDetails details={run.shared_environment} />
       </Box>
+      <AttachmentPreview attachment={previewed} onClose={closePreview} />
     </>
   )
 }
+
+/** URL query parameter of the attachment shown in the preview. */
+const attachmentParam = 'attachment'
 
 /** Why the run is invalid (FR-9), with the way back. */
 function InvalidNotice({ run }: { run: RunDetail }) {

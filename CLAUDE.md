@@ -17,7 +17,8 @@ operations, the derived metric DSL and analysis (aggregates, trends,
 comparisons, series views, export) and the MCP server. The frontend
 ([frontend/](frontend/README.md)) has the shell (app bar, side menu, routes
 for every view, color modes), the run list and the run detail (tags,
-annotations, case executions, attachments, invalidation, deletion); the
+annotations, case executions, attachments with previews, invalidation,
+deletion); the
 other views, including the case execution page, are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
@@ -91,6 +92,9 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   the API with `mockApi()` (`src/test/api.ts`) and render with `renderApp()`.
 - After changing a UI endpoint: regenerate the backend OpenAPI documents,
   then `npm run generate:api` in `frontend/`.
+- Attachments are previewed by the app ([ADR 0013](docs/adr/0013-attachment-previews.md)):
+  images in `<img>`, Markdown without its HTML, JSON and text as React
+  text. Never render uploaded HTML, and keep the download for every file.
 - The image (`frontend/Dockerfile`) is nginx serving the build and proxying
   `/ui/api` to `TR_UI_API_UPSTREAM`. `deploy/local/` runs the whole stack on
   Docker Desktop Kubernetes for trying the UI; it is not the Helm chart.
@@ -146,7 +150,8 @@ utoipa (OpenAPI from code), rmcp for MCP; workspace in `backend/`.
 
 Frontend tooling is decided in ADR 0010: npm, oxlint, Vitest with jsdom and
 Testing Library. Component library (MUI) and routing (React Router) in
-ADR 0011; API types, client and TanStack Query in ADR 0012.
+ADR 0011; API types, client and TanStack Query in ADR 0012; Markdown
+rendering (react-markdown) for attachment previews in ADR 0013.
 
 Still open: cache strategy, charting library, Helm chart, release notes, publishing the server image.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
