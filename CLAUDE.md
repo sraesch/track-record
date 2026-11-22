@@ -19,7 +19,12 @@ comparisons, series views, export) and the MCP server. The frontend
 for every view, color modes), the run list and the run detail (tags,
 annotations, case executions, attachments with previews, invalidation,
 deletion) and the case execution page (measurements per sample, a chart
-per series metric with a line per sample, device details, test case tags and annotations, attachments) the aliases page (add, change, remove and set again device and parameter aliases) and the metrics page (metric definitions with all versions, unit catalogue, custom units); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
+per series metric with a line per sample, device details, test case tags and annotations, derived metric values,
+attachments), the aliases page (add, change, remove and set again device
+and parameter aliases), the metrics page (one definition per metric with edit,
+rename and delete, unit catalogue, custom units) and the derived metrics page (list,
+uses and users, editor that creates or changes a metric with live validation
+and a preview on a case execution); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 
@@ -54,7 +59,8 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   tools (`src/mcp/`) share.
 - Two ports: the machine port (`/api`, `/mcp`, API tokens) and the UI port
   (`/ui/api`, no tokens). UI-only operations (invalidate, delete, tokens,
-  aliases) are routed only on the UI port.
+  aliases, changing, renaming and deleting metrics, saving, renaming and
+  deleting derived metrics) are routed only on the UI port.
 - Results are written with `PUT` on client UUIDs: 201 on create, 200 for an
   identical retry, 409 for different content. One transaction per request.
 - After changing an endpoint, regenerate `backend/openapi/*.json`; a test
@@ -71,6 +77,19 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   (parse, unit check, evaluation) lives in `track-record-core::dsl` without
   I/O; `service::derived` loads definitions and sample inputs. The metric of
   every analysis view is a DSL expression.
+- Derived metrics have no versions
+  ([ADR 0017](docs/adr/0017-derived-metrics-without-versions.md)): `PUT`
+  creates one or changes its definition, and `derived.<name>` is resolved by
+  name when it is evaluated. Saving also checks the derived metrics built on
+  the saved one (`broken_users` in `service::derived`).
+- Uploaded metrics have no versions either
+  ([ADR 0018](docs/adr/0018-metrics-without-versions.md), `service::metrics`).
+  Uploads create metrics and never change them: `ensure_metric()` ignores
+  the direction and description sent for an existing metric and rejects
+  another unit or value type (409, `metric_definition_conflict`). The web UI
+  changes, renames and deletes them. Which derived metrics use a metric is
+  read from their expressions (`metric_users` in `service::derived`); a
+  rename rewrites them with `dsl::rename_metric`.
 
 ## Frontend
 
@@ -110,6 +129,13 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   Series points come downsampled from the server (`max_points`) through
   TanStack Query (`useSeriesPoints`). Tests replace the canvas chart with
   `src/test/fakeChart.tsx`, which lists the lines.
+- DSL expressions are edited with CodeMirror 6
+  ([ADR 0016](docs/adr/0016-expression-editor.md)) through
+  `<ExpressionField>` (`src/dsl/`, lazily loaded `editor` chunk).
+  Highlighting and completion use the tokenizer in `src/dsl/syntax.ts`;
+  keep its function list in step with `track-record-core::dsl`. The server
+  validates while typing; its byte offsets go through `toProblems()`.
+  Tests replace the editor with a text area (`src/test/fakeDslEditor.tsx`).
 - The image (`frontend/Dockerfile`) is nginx serving the build and proxying
   `/ui/api` to `TR_UI_API_UPSTREAM`. `deploy/local/` runs the whole stack on
   Docker Desktop Kubernetes for trying the UI; it is not the Helm chart.
@@ -128,7 +154,11 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
 - Results are protected by triggers (`TR001`/`TR002`); never work around them.
   Hard delete only through `delete_run()`.
 - Create definitions and dimensions through the `ensure_*` functions, not raw
-  inserts.
+  inserts. Metrics are created through `ensure_metric()` (uploads) and
+  changed, renamed and deleted only through `save_metric()`,
+  `rename_metric()` and `delete_metric()` (web UI). Derived metrics are created and changed only through
+  `save_derived_metric()`, which keeps them free of cycles, and renamed and
+  deleted only through `rename_derived_metric()` / `delete_derived_metric()`.
 
 ## Tech stack
 
@@ -170,7 +200,8 @@ Frontend tooling is decided in ADR 0010: npm, oxlint, Vitest with jsdom and
 Testing Library. Component library (MUI) and routing (React Router) in
 ADR 0011; API types, client and TanStack Query in ADR 0012; Markdown
 rendering (react-markdown) for attachment previews in ADR 0013; charting
-library (Apache ECharts) in ADR 0015.
+library (Apache ECharts) in ADR 0015; expression editor (CodeMirror 6) in
+ADR 0016.
 
 Still open: cache strategy, Helm chart, release notes.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
@@ -184,8 +215,18 @@ only in code.
 - Nothing is deleted automatically: no TTLs, retention jobs or compaction that
   drops raw samples, series or attachments (FR-8). The only deletion path is the
   explicit hard delete of a run in the web UI (FR-10).
-- Suites, scenarios, metric definitions, derived metrics and aliases are
-  **versioned**. Results reference the exact definition versions used (FR-7).
+- Suites, scenarios and aliases are **versioned**. Results reference the
+  exact definition versions used (FR-7).
+- Metrics are **not versioned** (FR-7, ADR 0018): one definition, which the
+  web UI can change. Results reference the metric, so a change applies to
+  all of them. **Never rewrite stored values** when a unit changes: they are
+  read in the new unit. Uploads never change a metric; one that sends
+  another unit or value type is rejected. A metric with results, or one that
+  derived metrics use, cannot be deleted. Renaming one rewrites the
+  expressions of the derived metrics that use it.
+- Derived metrics are **not versioned**: one definition, which can be changed
+  (FR-17, ADR 0017). Renaming one rewrites the expressions of the derived
+  metrics that use it; one that others use cannot be deleted.
 - A changed scenario definition is a **new scenario version and a different
   case**. Never mix old and new versions in one trend.
 - Client device identity is its **stable name**. Device detail changes (OS,
@@ -197,7 +238,7 @@ only in code.
   them is a derived metric (FR-17), never an uploaded measurement.
 - One series per metric per sample. x never decreases but may repeat.
 - Every metric, series x-dimension and, where it applies, numeric parameter has
-  a unit. Units come from the predefined catalogue; others are allowed but are
+  a unit. A metric has one unit for all its results. Units come from the predefined catalogue; others are allowed but are
   not converted (FR-13a).
 
 **Ingestion**
@@ -243,8 +284,9 @@ only in code.
 - A derived metric can have **no value** (e.g. threshold never reached); an
   uploaded measurement always has one. No value is not missing data: show it,
   count it in aggregates, and don't compute differences against it (FR-12a).
-- Derived metrics may use other derived metrics, without cycles. Each version
-  pins the exact versions it uses (FR-17).
+- Derived metrics may use other derived metrics, without cycles. A change to
+  a derived metric takes effect in the metrics built on it; a change that
+  would make one of them invalid is rejected on save (FR-17).
 - Every run, case execution and analysis view has a URL that reproduces it,
   filters included. Keep view state in the URL (FR-21).
 - The derived metric DSL is the **same** in UI, API and MCP, and must stay
@@ -261,7 +303,8 @@ only in code.
   Scopes: `read`, `annotate` (read + tags/annotations), `write` (ingestion,
   including the tags a run is created with).
 - **Invalidation and deletion must not be reachable with any token**, only from
-  the web UI. Hard delete requires typing the run ID to confirm.
+  the web UI. The same holds for changing, renaming and deleting metrics and
+  derived metrics. Hard delete requires typing the run ID to confirm.
 - MCP is read + tags/annotations only: no uploads, invalidation or deletion.
 
 ## Out of scope

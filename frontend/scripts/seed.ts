@@ -767,7 +767,7 @@ async function seed() {
   })
   const derived: Array<[string, Json]> = [
     ['throughput', { expression: 'bytes_transferred / load_time', unit: 'MB/s', description: 'Average download rate while loading.' }],
-    // A second version of the same metric.
+    // Changed afterwards: a derived metric has one definition, no versions.
     ['throughput', { expression: 'bytes_transferred / load_time', unit: 'Mbit/s', description: 'Average download rate while loading, comparable to the link bandwidth.' }],
     ['time_to_90', { expression: 'time_to(series.loaded, 90)', unit: 's', description: 'Until 90 % of the model is at full detail.' }],
     ['time_to_full', { expression: 'time_to(series.loaded, 99.9)', unit: 's', description: 'Until the whole model is at full detail. No value when loading does not finish.' }],
@@ -810,7 +810,7 @@ Created ${runs} runs:
   - smoke (CI) runs on feature branches, an experiment run (manual, tag
     'experiment') and a run left open (aborted after the stale timeout)
   - aliases: device pixel8-lab1 -> pixel-8-lab-1, pipeline meshopt-v1 -> meshopt
-  - derived metrics: throughput (2 versions), time_to_90, time_to_full,
+  - derived metrics: throughput, time_to_90, time_to_full,
     steady_fps (uses derived.time_to_90), load_stall`)
 }
 

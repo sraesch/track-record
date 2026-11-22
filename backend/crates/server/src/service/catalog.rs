@@ -1,7 +1,8 @@
-//! Definitions and dimensions: suites, scenarios, metrics, units, client
-//! devices, environments, SUT versions, assets, test cases and aliases.
+//! Definitions and dimensions: suites, scenarios, units, client devices,
+//! environments, SUT versions, assets, test cases and aliases.
 //! All are versioned or deduplicated and created only through the schema's
-//! `ensure_*` / `set_alias` functions.
+//! `ensure_*` / `set_alias` functions. Metrics, which have one definition
+//! that can be changed, are in `service::metrics`.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -9,7 +10,6 @@ use serde_json::Value;
 use sqlx::PgPool;
 use utoipa::{IntoParams, ToSchema};
 
-use crate::db::{MetricDirection, MetricValueType};
 use crate::error::{ApiError, ApiResult};
 use crate::service::query::{Aliases, DEVICE_DIMENSION};
 use crate::service::runs::{SutVersion, TestCaseSummary, test_case_assets};
@@ -63,64 +63,6 @@ pub async fn suites(pool: &PgPool) -> ApiResult<Vec<VersionedDefinition>> {
 
 pub async fn scenarios(pool: &PgPool) -> ApiResult<Vec<VersionedDefinition>> {
     versioned(pool, "scenario").await
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct MetricVersion {
-    pub id: i64,
-    pub version: i32,
-    pub unit: String,
-    pub value_type: MetricValueType,
-    pub direction: MetricDirection,
-    pub description: String,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct Metric {
-    pub id: i64,
-    pub name: String,
-    pub versions: Vec<MetricVersion>,
-}
-
-pub async fn metrics(pool: &PgPool) -> ApiResult<Vec<Metric>> {
-    let rows: Vec<(
-        i64,
-        String,
-        i64,
-        i32,
-        String,
-        MetricValueType,
-        MetricDirection,
-        String,
-        DateTime<Utc>,
-    )> = sqlx::query_as(
-        "SELECT m.id, m.name, v.id, v.version, v.unit, v.value_type, v.direction, \
-                    v.description, v.created_at \
-             FROM metric m JOIN metric_version v ON v.metric_id = m.id ORDER BY m.name, v.version",
-    )
-    .fetch_all(pool)
-    .await?;
-    let mut out: Vec<Metric> = Vec::new();
-    for (id, name, vid, version, unit, value_type, direction, description, created_at) in rows {
-        if out.last().is_none_or(|m| m.id != id) {
-            out.push(Metric {
-                id,
-                name,
-                versions: vec![],
-            });
-        }
-        out.last_mut().unwrap().versions.push(MetricVersion {
-            id: vid,
-            version,
-            unit,
-            value_type,
-            direction,
-            description,
-            created_at,
-        });
-    }
-    Ok(out)
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema, sqlx::FromRow)]

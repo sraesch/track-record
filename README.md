@@ -19,9 +19,9 @@ trends over time and versions, series overlays and derived metrics.
   schema-validated. Only raw, measured values are uploaded; everything computed
   from them is a derived metric.
 - **Immutable, versioned data**: results never change after upload (corrections
-  create revisions). Suites, scenarios, metrics, derived metrics and aliases are
-  versioned, and results reference the exact versions used. Raw data is kept
-  indefinitely.
+  create revisions). Suites, scenarios and aliases are versioned, and results
+  reference the exact versions used. A metric has one definition, which can
+  be changed in the web UI. Raw data is kept indefinitely.
 - **Analysis**: filtering on any dimension, sample aggregation (mean, median,
   percentiles, stddev, confidence intervals), unit conversion and normalization,
   parameters as axes, side-by-side comparison of runs, devices or parameter
@@ -31,7 +31,8 @@ trends over time and versions, series overlays and derived metrics.
   so they also apply to historical runs:
   `bytes / time`, `max(series.fps)`, `time_to(series.loaded, 0.9)`,
   `moving_avg(series.fps, 1.0)`. They can build on each other, and a result can
-  be "no value" (e.g. a threshold that is never reached).
+  be "no value" (e.g. a threshold that is never reached). A derived metric can
+  be changed; the change applies to all runs.
 - **Units** for metrics, series and numeric parameters, from a predefined
   catalogue with conversions.
 - **Shareable links**: every run and every analysis view has a URL that

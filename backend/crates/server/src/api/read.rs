@@ -13,8 +13,9 @@ use crate::AppState;
 use crate::error::{ApiError, ApiPath, ApiQuery, ApiResult, Problem};
 use crate::service::annotations::{self, Annotation, AnnotationQuery};
 use crate::service::catalog::{
-    self, Alias, Asset, ClientDevice, Environment, Metric, TestCaseQuery, Unit, VersionedDefinition,
+    self, Alias, Asset, ClientDevice, Environment, TestCaseQuery, Unit, VersionedDefinition,
 };
+use crate::service::metrics::{self, Metric};
 use crate::service::runs::{
     self, AttachmentMeta, CaseExecutionDetail, CaseExecutionListQuery, CaseExecutionSummary,
     RunDetail, RunFilter, RunList, SeriesMeta, SeriesPoints, SeriesPointsQuery, SutVersion,
@@ -190,11 +191,12 @@ pub async fn list_scenarios(
     Ok(Json(catalog::scenarios(&state.pool).await?))
 }
 
-/// Metrics with all versions.
+/// Uploaded metrics. A metric has one definition, which can be changed in
+/// the web UI; there are no versions (FR-7).
 #[utoipa::path(get, path = "/metrics", tag = "definitions",
     responses((status = 200, body = Vec<Metric>)))]
 pub async fn list_metrics(State(state): State<AppState>) -> ApiResult<Json<Vec<Metric>>> {
-    Ok(Json(catalog::metrics(&state.pool).await?))
+    Ok(Json(metrics::list(&state.pool).await?))
 }
 
 /// The predefined unit catalogue (FR-13a).

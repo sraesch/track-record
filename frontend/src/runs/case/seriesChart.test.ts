@@ -37,36 +37,35 @@ const lines = (lines: ChartLine[]) =>
   [option(lines).series ?? []].flat() as ChartSeriesOption[]
 
 describe('groupSeries', () => {
-  it('makes a chart per metric version with a line per sample', () => {
-    const memory = (repetition: number, version: number) => ({
+  it('makes a chart per metric and x dimension with a line per sample', () => {
+    const memory = (repetition: number, xDimension = 'time') => ({
       id: `mem-${repetition}`,
       sample_id: `s${repetition}`,
       metric: 'memory',
-      metric_version: version,
-      metric_version_id: 10 + version,
+      metric_id: 11,
       unit: 'MiB',
-      x_dimension: 'time',
+      x_dimension: xDimension,
       x_unit: 's',
       point_count: 10,
     })
     const samples = [
-      sample(2, { series: [...sample(2).series, memory(2, 2)] }),
-      sample(0, { series: [...sample(0).series, memory(0, 1)] }),
-      sample(1),
+      sample(2, { series: [...sample(2).series, memory(2)] }),
+      sample(0, { series: [...sample(0).series, memory(0)] }),
+      sample(1, { series: [...sample(1).series, memory(1, 'uptime')] }),
     ]
 
     const groups = groupSeries(samples)
     expect(
       groups.map((group) => [
-        group.metric.metric,
-        group.metric.metric_version,
+        group.metric,
+        group.xDimension,
         group.lines.map((l) => [l.sample.repetition, l.colorIndex]),
       ]),
     ).toEqual([
-      ['fps', 1, [[0, 0], [1, 1], [2, 2]]],
+      ['fps', 'time', [[0, 0], [1, 1], [2, 2]]],
       // A sample keeps its color in every chart.
-      ['memory', 1, [[0, 0]]],
-      ['memory', 2, [[2, 2]]],
+      ['memory', 'time', [[0, 0], [2, 2]]],
+      ['memory', 'uptime', [[1, 1]]],
     ])
     expect(groups[0]).toMatchObject({ unit: 'fps', xDimension: 'time', xUnit: 's' })
   })

@@ -269,7 +269,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Derived metrics with all versions (FR-17). */
+        /** Derived metrics (FR-17). */
         get: operations["list_derived_metrics"];
         put?: never;
         post?: never;
@@ -327,15 +327,41 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A derived metric with all versions. */
+        /** A derived metric. */
         get: operations["get_derived_metric"];
         /**
-         * Save a derived metric (FR-17). The expression is validated first
-         *     (FR-17a); the derived metric versions it uses are pinned. Content equal
-         *     to the latest version returns that version with 200.
+         * Create a derived metric or change its definition (FR-17). A derived
+         *     metric has no versions: the change applies to every analysis, historical
+         *     runs included, and to the derived metrics built on it. The expression is
+         *     validated first (FR-17a), together with those metrics.
          */
         put: operations["save_derived_metric"];
         post?: never;
+        /**
+         * Delete a derived metric. Not possible while other derived metrics use
+         *     it. Cannot be undone; uploaded results are not affected.
+         */
+        delete: operations["delete_derived_metric"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ui/api/v1/derived-metrics/{name}/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a derived metric. The expressions of the derived metrics that use
+         *     it are changed to the new name (`rewritten`). Analysis views and other
+         *     expressions that use the old name stop working.
+         */
+        post: operations["rename_derived_metric"];
         delete?: never;
         options?: never;
         head?: never;
@@ -366,10 +392,63 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Metrics with all versions. */
+        /**
+         * Uploaded metrics. A metric has one definition, which can be changed in
+         *     the web UI; there are no versions (FR-7).
+         */
         get: operations["list_metrics"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ui/api/v1/metrics/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change the definition of an uploaded metric (FR-7). A metric has no
+         *     versions: the change applies to every result of the metric, historical
+         *     ones included. Stored values are not converted; with another unit they
+         *     are read in that unit. Uploads have to send the new unit and value type
+         *     from then on.
+         */
+        put: operations["save_metric"];
+        post?: never;
+        /**
+         * Delete an uploaded metric. Only possible for a metric without results
+         *     that no derived metric uses. Cannot be undone.
+         */
+        delete: operations["delete_metric"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ui/api/v1/metrics/{name}/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename an uploaded metric. Its results stay with it, and the expressions
+         *     of the derived metrics that use it are changed to the new name
+         *     (`rewritten`). Analysis views and other expressions that use the old
+         *     name stop working, and an upload under the old name creates a new
+         *     metric.
+         */
+        post: operations["rename_metric"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1003,14 +1082,8 @@ export interface components {
             /** @description Must repeat the run id to confirm the deletion. */
             confirm_run_id: string;
         };
+        /** @description A derived metric (FR-17). It has one definition, which can be changed. */
         DerivedMetric: {
-            /** Format: int64 */
-            id: number;
-            name: string;
-            /** @description Oldest first. */
-            versions: components["schemas"]["DerivedMetricVersion"][];
-        };
-        DerivedMetricVersion: {
             /** Format: date-time */
             created_at: string;
             description: string;
@@ -1019,10 +1092,13 @@ export interface components {
             id: number;
             name: string;
             unit: string;
-            /** @description Exact versions of the derived metrics it uses (FR-17). */
-            uses: components["schemas"]["UsedVersion"][];
-            /** Format: int32 */
-            version: number;
+            /**
+             * Format: date-time
+             * @description When the definition was last changed.
+             */
+            updated_at: string;
+            /** @description Names of the derived metrics the expression uses directly. */
+            uses: string[];
         };
         DeviceRef: {
             /** Format: int64 */
@@ -1076,11 +1152,6 @@ export interface components {
             name?: string | null;
             /** @description Output unit; default: the declared unit, or the expression's unit. */
             unit?: string | null;
-            /**
-             * Format: int32
-             * @description Version of `name`; the latest by default.
-             */
-            version?: number | null;
         };
         EvaluateResponse: {
             expression: string;
@@ -1146,19 +1217,40 @@ export interface components {
         };
         MeasurementOut: {
             metric: string;
-            /** Format: int32 */
-            metric_version: number;
             /** Format: int64 */
-            metric_version_id: number;
+            metric_id: number;
+            /** @description The unit the metric has now; the value was not converted. */
             unit: string;
             /** Format: double */
             value: number;
         };
+        /**
+         * @description An uploaded metric. It has one definition, which can be changed in the
+         *     web UI.
+         */
         Metric: {
+            /** Format: date-time */
+            created_at: string;
+            description: string;
+            direction: components["schemas"]["MetricDirection"];
+            /**
+             * @description True if measurements or series of the metric are stored. Such a
+             *     metric cannot be deleted.
+             */
+            has_results: boolean;
             /** Format: int64 */
             id: number;
             name: string;
-            versions: components["schemas"]["MetricVersion"][];
+            /** @description Unit symbol; `""` for dimensionless (FR-13a). */
+            unit: string;
+            /**
+             * Format: date-time
+             * @description When the definition was last changed.
+             */
+            updated_at: string;
+            /** @description Names of the derived metrics whose expressions refer to the metric. */
+            used_by: string[];
+            value_type: components["schemas"]["MetricValueType"];
         };
         /** @enum {string} */
         MetricDirection: "higher_is_better" | "lower_is_better";
@@ -1172,18 +1264,6 @@ export interface components {
         };
         /** @enum {string} */
         MetricValueType: "float" | "integer" | "boolean";
-        MetricVersion: {
-            /** Format: date-time */
-            created_at: string;
-            description: string;
-            direction: components["schemas"]["MetricDirection"];
-            /** Format: int64 */
-            id: number;
-            unit: string;
-            value_type: components["schemas"]["MetricValueType"];
-            /** Format: int32 */
-            version: number;
-        };
         OverlayResponse: {
             excluded: components["schemas"]["Excluded"];
             /** @description The common grid, if one was requested. */
@@ -1233,6 +1313,22 @@ export interface components {
             status: number;
             /** @description Short summary of the problem type. */
             title: string;
+        };
+        RenameDerivedMetric: {
+            /** @description The new name. */
+            name: string;
+        };
+        RenameMetric: {
+            /** @description The new name. */
+            name: string;
+        };
+        RenamedDerivedMetric: components["schemas"]["DerivedMetric"] & {
+            /** @description Derived metrics whose expressions were changed to the new name. */
+            rewritten: string[];
+        };
+        RenamedMetric: components["schemas"]["Metric"] & {
+            /** @description Derived metrics whose expressions were changed to the new name. */
+            rewritten: string[];
         };
         RunDetail: components["schemas"]["RunSummary"] & {
             annotations: components["schemas"]["Annotation"][];
@@ -1386,8 +1482,18 @@ export interface components {
             /** @description Unit of the result; the expression's unit must convert to it. */
             unit: string;
         };
-        SavedDerivedMetric: components["schemas"]["DerivedMetricVersion"] & {
-            /** @description False if the content equals the latest version, which is returned. */
+        SaveMetric: {
+            description?: string;
+            direction: components["schemas"]["MetricDirection"];
+            /** @description Unit symbol; `""` for dimensionless. Stored values are not converted. */
+            unit: string;
+            value_type: components["schemas"]["MetricValueType"];
+        };
+        SavedDerivedMetric: components["schemas"]["DerivedMetric"] & {
+            /**
+             * @description True if the derived metric is new, false if it existed and now has
+             *     this definition.
+             */
             created: boolean;
         };
         SeriesAggregateResponse: {
@@ -1412,15 +1518,13 @@ export interface components {
             /** Format: uuid */
             id: string;
             metric: string;
-            /** Format: int32 */
-            metric_version: number;
             /** Format: int64 */
-            metric_version_id: number;
+            metric_id: number;
             /** Format: int32 */
             point_count: number;
             /** Format: uuid */
             sample_id: string;
-            /** @description Unit of y (the metric's unit). */
+            /** @description Unit of y (the unit the metric has now). */
             unit: string;
             x_dimension: string;
             x_unit: string;
@@ -1605,19 +1709,13 @@ export interface components {
         UpdateAnnotation: {
             body: string;
         };
-        /** @description A derived metric version an expression uses. */
-        UsedVersion: {
-            name: string;
-            /** Format: int32 */
-            version: number;
-            /** Format: int64 */
-            version_id: number;
-        };
         ValidateExpression: {
             expression: string;
             /**
-             * @description Name the expression will be saved under; a reference to it, direct
-             *     or through other derived metrics, is a cycle.
+             * @description Name the expression will be saved under. A reference to it, direct
+             *     or through other derived metrics, is a cycle. If the derived metric
+             *     exists, the metrics built on it are checked too: the expression is
+             *     invalid if it would break one of them.
              */
             name?: string | null;
             /** @description Unit the result must convert to. */
@@ -1632,8 +1730,8 @@ export interface components {
             kind?: string | null;
             /** @description Unit of the result (the declared unit if one was given), if valid. */
             unit?: string | null;
-            /** @description Derived metric versions referenced directly (latest versions). */
-            uses: components["schemas"]["UsedVersion"][];
+            /** @description Names of the derived metrics the expression refers to directly. */
+            uses: string[];
             valid: boolean;
             x_dimension?: string | null;
             /** @description For a series: unit and dimension of x. */
@@ -2340,6 +2438,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Changed, or saved again unchanged */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2348,6 +2447,7 @@ export interface operations {
                     "application/json": components["schemas"]["SavedDerivedMetric"];
                 };
             };
+            /** @description Created */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2356,7 +2456,94 @@ export interface operations {
                     "application/json": components["schemas"]["SavedDerivedMetric"];
                 };
             };
-            /** @description Invalid expression or a cycle */
+            /** @description Invalid expression, a cycle, or a change that breaks a derived metric built on this one */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    delete_derived_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Other derived metrics use it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rename_derived_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameDerivedMetric"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenamedDerivedMetric"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The new name is taken */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Invalid name */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2411,6 +2598,136 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Metric"][];
+                };
+            };
+        };
+    };
+    save_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveMetric"];
+            };
+        };
+        responses: {
+            /** @description Changed, or saved again unchanged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Metric"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Invalid unit, or a unit that breaks a derived metric that uses this metric */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    delete_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The metric has results, or derived metrics use it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rename_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameMetric"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenamedMetric"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The new name is taken */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Invalid name */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
                 };
             };
         };

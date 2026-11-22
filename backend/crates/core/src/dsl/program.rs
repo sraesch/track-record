@@ -1,10 +1,10 @@
 //! Composition of derived metrics (FR-17) and their evaluation per sample.
 //!
-//! A [`Library`] holds derived metric versions. Each version pins the exact
-//! versions of the derived metrics it uses (`uses`), so evaluating it never
-//! depends on later versions. A [`Root`] is what is evaluated: a saved
-//! version, or an ad-hoc expression whose `derived.<name>` references point
-//! at the versions given in its own `uses` (usually the latest ones).
+//! A [`Library`] holds derived metrics by name. A derived metric has one
+//! definition (ADR 0017): `derived.<name>` in an expression means that
+//! definition, so changing a derived metric also changes the metrics built
+//! on it. A [`Root`] is what is evaluated: a saved derived metric or an
+//! ad-hoc expression.
 //!
 //! An [`Evaluator`] checks the root and everything it uses against the
 //! units of each sample's inputs (cached per combination of units) and
@@ -21,16 +21,13 @@ use super::{Diagnostic, MAX_COMPOSITION_DEPTH, parse};
 use crate::series::Series;
 use crate::units::UnitCatalogue;
 
-/// A saved derived metric version.
+/// A saved derived metric.
 #[derive(Debug, Clone)]
 pub struct Definition {
-    pub version_id: i64,
     pub name: String,
-    pub version: i32,
     pub expression: String,
+    /// The declared unit; every value is converted to it.
     pub unit: String,
-    /// Derived metric name -> the version id it is pinned to.
-    pub uses: HashMap<String, i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -39,33 +36,65 @@ struct Entry {
     expr: Result<Expr, Diagnostic>,
 }
 
-/// Derived metric versions by id.
+/// Derived metrics by name.
 #[derive(Debug, Clone, Default)]
 pub struct Library {
-    entries: HashMap<i64, Entry>,
+    entries: HashMap<String, Entry>,
 }
 
 impl Library {
     pub fn new(defs: impl IntoIterator<Item = Definition>) -> Self {
-        Self {
-            entries: defs
-                .into_iter()
-                .map(|def| {
-                    let expr = parse(&def.expression);
-                    (def.version_id, Entry { def, expr })
-                })
-                .collect(),
+        let mut library = Self::default();
+        for def in defs {
+            library.insert(def);
         }
+        library
     }
 
-    pub fn get(&self, version_id: i64) -> Option<&Definition> {
-        self.entries.get(&version_id).map(|e| &e.def)
+    /// Adds a derived metric, replacing the one of the same name.
+    pub fn insert(&mut self, def: Definition) {
+        let expr = parse(&def.expression);
+        self.entries.insert(def.name.clone(), Entry { def, expr });
     }
 
-    fn entry(&self, version_id: i64) -> Result<&Entry, String> {
+    /// Adds the derived metrics of `other`, replacing those of the same name.
+    pub fn merge(&mut self, other: &Library) {
         self.entries
-            .get(&version_id)
-            .ok_or_else(|| format!("derived metric version {version_id} is not loaded"))
+            .extend(other.entries.iter().map(|(k, v)| (k.clone(), v.clone())));
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Definition> {
+        self.entries.get(name).map(|e| &e.def)
+    }
+
+    fn entry(&self, name: &str) -> Result<&Entry, String> {
+        self.entries
+            .get(name)
+            .ok_or_else(|| format!("unknown derived metric {name}"))
+    }
+
+    /// The derived metrics the given ones use, directly or through others,
+    /// by name. Names that are not in the library are included, and so are
+    /// the given names if something they use leads back to them.
+    pub fn uses_closure(&self, names: impl IntoIterator<Item = String>) -> BTreeSet<String> {
+        let mut seen = BTreeSet::new();
+        let mut stack: Vec<String> = Vec::new();
+        for name in names {
+            stack.extend(self.direct_uses(&name));
+        }
+        while let Some(name) = stack.pop() {
+            if seen.insert(name.clone()) {
+                stack.extend(self.direct_uses(&name));
+            }
+        }
+        seen
+    }
+
+    fn direct_uses(&self, name: &str) -> BTreeSet<String> {
+        match self.entries.get(name) {
+            Some(Entry { expr: Ok(expr), .. }) => expr.references().derived,
+            _ => BTreeSet::new(),
+        }
     }
 }
 
@@ -73,48 +102,46 @@ impl Library {
 #[derive(Debug, Clone)]
 pub struct Root {
     pub expr: Expr,
-    /// Derived metric name -> version id.
-    pub uses: HashMap<String, i64>,
     /// Output unit; `None` keeps the unit the expression has.
     pub unit: Option<String>,
 }
 
 impl Root {
-    /// A saved version, in its declared unit.
-    pub fn definition(library: &Library, version_id: i64) -> Result<Root, String> {
-        let entry = library.entry(version_id)?;
-        let expr = entry.expr.clone().map_err(|d| {
-            format!(
-                "derived metric {} version {} does not parse: {}",
-                entry.def.name, entry.def.version, d.message
-            )
-        })?;
+    /// A saved derived metric, in its declared unit.
+    pub fn definition(library: &Library, name: &str) -> Result<Root, String> {
+        let entry = library.entry(name)?;
+        let expr = entry
+            .expr
+            .clone()
+            .map_err(|d| format!("derived metric {name} does not parse: {}", d.message))?;
         Ok(Root {
             expr,
-            uses: entry.def.uses.clone(),
             unit: Some(entry.def.unit.clone()),
         })
     }
 
     /// The raw inputs the root needs, including through the derived metrics
-    /// it uses, and the derived metric versions involved.
-    pub fn closure(&self, library: &Library) -> Result<(References, BTreeSet<i64>), String> {
+    /// it uses, and the names of those derived metrics.
+    pub fn closure(&self, library: &Library) -> Result<(References, BTreeSet<String>), String> {
         let mut raw = References::default();
-        let mut versions = BTreeSet::new();
-        visit(&self.expr, &self.uses, library, &mut raw, &mut versions, 0)?;
-        Ok((raw, versions))
+        let mut used = BTreeSet::new();
+        let mut path = Vec::new();
+        visit(&self.expr, library, &mut raw, &mut used, &mut path)?;
+        Ok((raw, used))
     }
 }
 
+/// `path` is the chain of derived metrics being visited: a name that comes
+/// up again in it is a cycle. The database rules cycles out on save; this
+/// keeps evaluation safe if one exists anyway.
 fn visit(
     expr: &Expr,
-    uses: &HashMap<String, i64>,
     library: &Library,
     raw: &mut References,
-    versions: &mut BTreeSet<i64>,
-    depth: usize,
+    used: &mut BTreeSet<String>,
+    path: &mut Vec<String>,
 ) -> Result<(), String> {
-    if depth > MAX_COMPOSITION_DEPTH {
+    if path.len() > MAX_COMPOSITION_DEPTH {
         return Err(format!(
             "derived metrics are nested deeper than {MAX_COMPOSITION_DEPTH} levels"
         ));
@@ -123,17 +150,19 @@ fn visit(
     raw.metrics.extend(refs.metrics);
     raw.series.extend(refs.series);
     for name in refs.derived {
-        let id = *uses
-            .get(&name)
-            .ok_or_else(|| format!("unknown derived metric {name}"))?;
-        if !versions.insert(id) {
+        if path.contains(&name) {
+            return Err(format!("derived metric {name} uses itself"));
+        }
+        if !used.insert(name.clone()) {
             continue;
         }
-        let entry = library.entry(id)?;
+        let entry = library.entry(&name)?;
         let Ok(inner) = &entry.expr else {
             return Err(format!("derived metric {name} does not parse"));
         };
-        visit(inner, &entry.def.uses, library, raw, versions, depth + 1)?;
+        path.push(name);
+        visit(inner, library, raw, used, path)?;
+        path.pop();
     }
     Ok(())
 }
@@ -166,8 +195,7 @@ impl UnitSource for SampleData {
 #[derive(Debug, Clone)]
 pub struct Compiled {
     pub root: Checked,
-    root_uses: HashMap<String, i64>,
-    deps: HashMap<i64, (Checked, HashMap<String, i64>)>,
+    deps: HashMap<String, Checked>,
 }
 
 impl Compiled {
@@ -180,13 +208,13 @@ struct CompileState<'a> {
     library: &'a Library,
     catalogue: &'a UnitCatalogue,
     source: &'a dyn UnitSource,
-    deps: HashMap<i64, Result<(Checked, HashMap<String, i64>), String>>,
+    deps: HashMap<String, Result<Checked, String>>,
+    /// The derived metrics being checked, outermost first.
+    path: Vec<String>,
 }
 
 struct CompileEnv<'s, 'a> {
     state: &'s mut CompileState<'a>,
-    uses: &'s HashMap<String, i64>,
-    depth: usize,
 }
 
 impl Env for CompileEnv<'_, '_> {
@@ -199,41 +227,38 @@ impl Env for CompileEnv<'_, '_> {
     }
 
     fn derived(&mut self, name: &str) -> Result<Signature, String> {
-        let id = *self
-            .uses
-            .get(name)
-            .ok_or_else(|| format!("unknown derived metric {name}"))?;
-        compile_dep(self.state, id, self.depth + 1).map(|c| c.signature)
+        compile_dep(self.state, name).map(|c| c.signature)
     }
 }
 
-fn compile_dep(state: &mut CompileState<'_>, id: i64, depth: usize) -> Result<Checked, String> {
-    if let Some(done) = state.deps.get(&id) {
-        return done.clone().map(|(c, _)| c);
+fn compile_dep(state: &mut CompileState<'_>, name: &str) -> Result<Checked, String> {
+    if let Some(done) = state.deps.get(name) {
+        return done.clone();
     }
-    if depth > MAX_COMPOSITION_DEPTH {
+    if state.path.iter().any(|n| n == name) {
+        return Err(format!("derived.{name} uses itself"));
+    }
+    if state.path.len() >= MAX_COMPOSITION_DEPTH {
         return Err(format!(
             "derived metrics are nested deeper than {MAX_COMPOSITION_DEPTH} levels"
         ));
     }
-    let entry = state.library.entry(id)?.clone();
-    let label = format!("derived.{} (version {})", entry.def.name, entry.def.version);
+    let entry = state.library.entry(name)?.clone();
     let result = match &entry.expr {
-        Err(d) => Err(format!("{label} does not parse: {}", d.message)),
+        Err(d) => Err(format!("derived.{name} does not parse: {}", d.message)),
         Ok(expr) => {
             let catalogue = state.catalogue;
-            let mut env = CompileEnv {
-                state: &mut *state,
-                uses: &entry.def.uses,
-                depth,
+            state.path.push(name.to_owned());
+            let checked = {
+                let mut env = CompileEnv { state: &mut *state };
+                check(expr, &mut env, catalogue, Some(&entry.def.unit))
             };
-            check(expr, &mut env, catalogue, Some(&entry.def.unit))
-                .map_err(|d| format!("{label} does not apply: {}", d[0].message))
+            state.path.pop();
+            checked.map_err(|d| format!("derived.{name} does not apply: {}", d[0].message))
         }
     };
-    let result = result.map(|c| (c, entry.def.uses.clone()));
-    state.deps.insert(id, result.clone());
-    result.map(|(c, _)| c)
+    state.deps.insert(name.to_owned(), result.clone());
+    result
 }
 
 /// Checks a root against the units of `source`. Errors in derived metrics
@@ -249,23 +274,19 @@ pub fn compile(
         catalogue,
         source,
         deps: HashMap::new(),
+        path: Vec::new(),
     };
     let checked = {
-        let mut env = CompileEnv {
-            state: &mut state,
-            uses: &root.uses,
-            depth: 0,
-        };
+        let mut env = CompileEnv { state: &mut state };
         check(&root.expr, &mut env, catalogue, root.unit.as_deref())?
     };
     let deps = state
         .deps
         .into_iter()
-        .filter_map(|(id, r)| r.ok().map(|c| (id, c)))
+        .filter_map(|(name, r)| r.ok().map(|c| (name, c)))
         .collect();
     Ok(Compiled {
         root: checked,
-        root_uses: root.uses.clone(),
         deps,
     })
 }
@@ -273,8 +294,7 @@ pub fn compile(
 struct SampleInputs<'a> {
     compiled: &'a Compiled,
     sample: &'a SampleData,
-    uses: &'a HashMap<String, i64>,
-    memo: &'a mut HashMap<i64, Result<Value, EvalError>>,
+    memo: &'a mut HashMap<String, Result<Value, EvalError>>,
 }
 
 impl Inputs for SampleInputs<'_> {
@@ -295,24 +315,19 @@ impl Inputs for SampleInputs<'_> {
     }
 
     fn derived(&mut self, name: &str) -> Result<Value, EvalError> {
-        let id = *self
-            .uses
-            .get(name)
-            .ok_or_else(|| EvalError::Data(format!("unknown derived metric {name}")))?;
-        if let Some(v) = self.memo.get(&id) {
+        if let Some(v) = self.memo.get(name) {
             return v.clone();
         }
-        let (checked, uses) = self.compiled.deps.get(&id).ok_or_else(|| {
+        let checked = self.compiled.deps.get(name).ok_or_else(|| {
             EvalError::Data(format!("derived.{name} does not apply to this sample"))
         })?;
         let mut inner = SampleInputs {
             compiled: self.compiled,
             sample: self.sample,
-            uses,
             memo: &mut *self.memo,
         };
         let value = eval(&checked.node, &mut inner).map(|v| v.scale(checked.output_factor));
-        self.memo.insert(id, value.clone());
+        self.memo.insert(name.to_owned(), value.clone());
         value
     }
 }
@@ -324,7 +339,6 @@ pub fn evaluate(compiled: &Compiled, sample: &SampleData) -> Result<Value, EvalE
     let mut inputs = SampleInputs {
         compiled,
         sample,
-        uses: &compiled.root_uses,
         memo: &mut memo,
     };
     let value = eval(&compiled.root.node, &mut inputs)?.scale(compiled.root.output_factor);
@@ -416,37 +430,21 @@ mod tests {
     use super::*;
     use crate::units::tests::catalogue;
 
-    fn def(id: i64, name: &str, expression: &str, unit: &str, uses: &[(&str, i64)]) -> Definition {
+    fn def(name: &str, expression: &str, unit: &str) -> Definition {
         Definition {
-            version_id: id,
             name: name.into(),
-            version: 1,
             expression: expression.into(),
             unit: unit.into(),
-            uses: uses.iter().map(|(n, i)| ((*n).into(), *i)).collect(),
         }
     }
 
     fn library() -> Library {
         Library::new([
-            def(1, "throughput", "bytes / time", "MB/s", &[]),
-            def(
-                2,
-                "bits",
-                "derived.throughput",
-                "Mbit/s",
-                &[("throughput", 1)],
-            ),
-            def(3, "throughput", "bytes / time / 2", "MB/s", &[]),
-            def(4, "first_frame", "time_to(series.fps, 1)", "ms", &[]),
-            def(5, "smooth", "moving_avg(series.fps, 1)", "fps", &[]),
-            def(
-                6,
-                "smooth_max",
-                "max(derived.smooth)",
-                "fps",
-                &[("smooth", 5)],
-            ),
+            def("throughput", "bytes / time", "MB/s"),
+            def("bits", "derived.throughput", "Mbit/s"),
+            def("first_frame", "time_to(series.fps, 1)", "ms"),
+            def("smooth", "moving_avg(series.fps, 1)", "fps"),
+            def("smooth_max", "max(derived.smooth)", "fps"),
         ])
     }
 
@@ -469,39 +467,42 @@ mod tests {
         s
     }
 
-    fn root(src: &str, uses: &[(&str, i64)], unit: Option<&str>) -> Root {
+    fn root(src: &str, unit: Option<&str>) -> Root {
         Root {
             expr: parse(src).unwrap(),
-            uses: uses.iter().map(|(n, i)| ((*n).into(), *i)).collect(),
             unit: unit.map(Into::into),
         }
     }
 
     #[test]
-    fn pinned_versions_are_used() {
-        let lib = library();
+    fn a_changed_definition_changes_the_metrics_built_on_it() {
+        let mut lib = library();
         let cat = catalogue();
-        let mut e = Evaluator::new(&lib, &cat, Root::definition(&lib, 2).unwrap()).unwrap();
-        // 8 MB / 2 s = 4 MB/s, converted to 32 Mbit/s; version 3 of
-        // throughput is ignored.
-        let out = e.evaluate(&sample("s", 2.0)).unwrap();
+        let bits = |lib: &Library| {
+            let mut e = Evaluator::new(lib, &cat, Root::definition(lib, "bits").unwrap()).unwrap();
+            e.evaluate(&sample("s", 2.0)).unwrap()
+        };
+        // 8 MB / 2 s = 4 MB/s, converted to 32 Mbit/s.
+        let out = bits(&lib);
         assert_eq!(out.value, Value::Scalar(Some(32.0)));
         assert_eq!(out.signature.unit, "Mbit/s");
-        let (raw, versions) = Root::definition(&lib, 2).unwrap().closure(&lib).unwrap();
-        assert_eq!(versions.into_iter().collect::<Vec<_>>(), vec![1]);
+        let (raw, used) = Root::definition(&lib, "bits")
+            .unwrap()
+            .closure(&lib)
+            .unwrap();
+        assert_eq!(used.into_iter().collect::<Vec<_>>(), vec!["throughput"]);
         assert!(raw.metrics.contains("bytes") && raw.metrics.contains("time"));
+
+        // There are no versions: bits follows the new throughput.
+        lib.insert(def("throughput", "bytes / time / 2", "MB/s"));
+        assert_eq!(bits(&lib).value, Value::Scalar(Some(16.0)));
     }
 
     #[test]
     fn inputs_in_other_units_convert() {
         let lib = library();
         let cat = catalogue();
-        let mut e = Evaluator::new(
-            &lib,
-            &cat,
-            root("derived.throughput", &[("throughput", 1)], None),
-        )
-        .unwrap();
+        let mut e = Evaluator::new(&lib, &cat, root("derived.throughput", None)).unwrap();
         assert_eq!(
             e.evaluate(&sample("s", 2.0)).unwrap().value,
             Value::Scalar(Some(4.0))
@@ -511,7 +512,7 @@ mod tests {
             Value::Scalar(Some(4.0))
         );
         // An ad-hoc expression in a requested unit.
-        let mut e = Evaluator::new(&lib, &cat, root("bytes / time", &[], Some("kB/s"))).unwrap();
+        let mut e = Evaluator::new(&lib, &cat, root("bytes / time", Some("kB/s"))).unwrap();
         assert_eq!(
             e.evaluate(&sample("ms", 2000.0)).unwrap().value,
             Value::Scalar(Some(4000.0))
@@ -527,7 +528,8 @@ mod tests {
     fn missing_inputs_and_no_value() {
         let lib = library();
         let cat = catalogue();
-        let mut e = Evaluator::new(&lib, &cat, Root::definition(&lib, 4).unwrap()).unwrap();
+        let mut e =
+            Evaluator::new(&lib, &cat, Root::definition(&lib, "first_frame").unwrap()).unwrap();
         let v = e
             .evaluate(&sample("s", 1.0))
             .unwrap()
@@ -538,8 +540,7 @@ mod tests {
         let mut s = sample("s", 1.0);
         s.series.clear();
         assert_eq!(e.evaluate(&s), Err(EvalError::Missing("series.fps".into())));
-        let mut e =
-            Evaluator::new(&lib, &cat, root("time_to(series.fps, 100)", &[], None)).unwrap();
+        let mut e = Evaluator::new(&lib, &cat, root("time_to(series.fps, 100)", None)).unwrap();
         assert_eq!(
             e.evaluate(&sample("s", 1.0)).unwrap().value,
             Value::Scalar(None)
@@ -550,13 +551,13 @@ mod tests {
     fn series_composition() {
         let lib = library();
         let cat = catalogue();
-        let mut e = Evaluator::new(&lib, &cat, Root::definition(&lib, 6).unwrap()).unwrap();
+        let mut e =
+            Evaluator::new(&lib, &cat, Root::definition(&lib, "smooth_max").unwrap()).unwrap();
         assert_eq!(
             e.evaluate(&sample("s", 1.0)).unwrap().value,
             Value::Scalar(Some(30.0))
         );
-        let mut e =
-            Evaluator::new(&lib, &cat, root("derived.smooth", &[("smooth", 5)], None)).unwrap();
+        let mut e = Evaluator::new(&lib, &cat, root("derived.smooth", None)).unwrap();
         let out = e.evaluate(&sample("s", 1.0)).unwrap();
         assert_eq!(out.signature.kind, super::super::Kind::Series);
         assert_eq!(out.signature.x_unit, "s");
@@ -565,16 +566,47 @@ mod tests {
     #[test]
     fn unknown_references() {
         let lib = library();
-        assert!(root("derived.nope", &[], None).closure(&lib).is_err());
-        assert!(root("derived.x", &[("x", 99)], None).closure(&lib).is_err());
+        assert!(root("derived.nope", None).closure(&lib).is_err());
+        assert!(Root::definition(&lib, "nope").is_err());
         let cat = catalogue();
         let d = compile(
             &lib,
             &cat,
-            &root("derived.throughput + 1[s]", &[("throughput", 1)], None),
+            &root("derived.throughput + 1[s]", None),
             &sample("s", 1.0),
         )
         .unwrap_err();
         assert!(d[0].message.contains("compatible"));
+    }
+
+    #[test]
+    fn what_a_metric_uses() {
+        let mut lib = library();
+        lib.insert(def("top", "derived.bits + derived.gone", "Mbit/s"));
+        let used = |name: &str| -> Vec<String> {
+            lib.uses_closure([name.to_owned()]).into_iter().collect()
+        };
+        assert_eq!(used("top"), vec!["bits", "gone", "throughput"]);
+        assert_eq!(used("throughput"), Vec::<String>::new());
+        assert_eq!(used("unknown"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn cycles_are_errors_not_loops() {
+        // The database rejects cycles on save; evaluation must still end.
+        let lib = Library::new([
+            def("a", "derived.b + 1", ""),
+            def("b", "derived.a * 2", ""),
+            def("me", "derived.me", ""),
+        ]);
+        let cat = catalogue();
+        for name in ["a", "me"] {
+            let root = Root::definition(&lib, name).unwrap();
+            let err = root.closure(&lib).unwrap_err();
+            assert!(err.contains("uses itself"), "{err}");
+            let d = compile(&lib, &cat, &root, &sample("s", 1.0)).unwrap_err();
+            assert!(d[0].message.contains("uses itself"), "{d:?}");
+        }
+        assert!(lib.uses_closure(["a".to_owned()]).contains("a"));
     }
 }

@@ -1,7 +1,7 @@
 import type { SampleDetail } from '../../api/client'
 import type { ChartColors } from '../../charts/colors'
 import type { ChartOption, ChartSeriesOption } from '../../charts/echarts'
-import { byRepetition, type MetricRef } from './samples'
+import { byRepetition } from './samples'
 
 /**
  * Points per series that a chart asks for. The server keeps the minimum and
@@ -125,10 +125,11 @@ export function seriesChartOption({
 
 type SeriesMeta = SampleDetail['series'][number]
 
-/** The series of one metric version over one x dimension: one chart. */
+/** The series of one metric over one x dimension: one chart. */
 export type SeriesGroup = {
   key: string
-  metric: MetricRef
+  /** Name of the metric. */
+  metric: string
   unit: string
   xDimension: string
   xUnit: string
@@ -136,7 +137,7 @@ export type SeriesGroup = {
 }
 
 /**
- * Groups the series of a case execution into charts: one per metric version
+ * Groups the series of a case execution into charts: one per metric
  * (and x dimension), with one line per sample in repetition order. A sample
  * keeps its color in every chart.
  */
@@ -144,17 +145,14 @@ export function groupSeries(samples: readonly SampleDetail[]): SeriesGroup[] {
   const groups = new Map<string, SeriesGroup>()
   byRepetition(samples).forEach((sample, colorIndex) => {
     for (const series of sample.series) {
-      const key = [
-        series.metric_version_id,
-        series.unit,
-        series.x_dimension,
-        series.x_unit,
-      ].join('\u0000')
+      const key = [series.metric_id, series.x_dimension, series.x_unit].join(
+        '\u0000',
+      )
       let group = groups.get(key)
       if (!group) {
         group = {
           key,
-          metric: series,
+          metric: series.metric,
           unit: series.unit,
           xDimension: series.x_dimension,
           xUnit: series.x_unit,
@@ -167,7 +165,8 @@ export function groupSeries(samples: readonly SampleDetail[]): SeriesGroup[] {
   })
   return [...groups.values()].sort(
     (a, b) =>
-      a.metric.metric.localeCompare(b.metric.metric) ||
-      a.metric.metric_version - b.metric.metric_version,
+      a.metric.localeCompare(b.metric) ||
+      a.xDimension.localeCompare(b.xDimension) ||
+      a.xUnit.localeCompare(b.xUnit),
   )
 }

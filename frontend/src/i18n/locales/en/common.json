@@ -47,10 +47,10 @@
       "description": "Suites, scenarios and test cases with all their versions."
     },
     "metrics": {
-      "description": "Metric definitions with their units and direction, and the unit catalogue."
+      "description": "The uploaded metrics with their unit and direction, and the unit catalogue. A metric has one definition, which can be changed here."
     },
     "derivedMetrics": {
-      "description": "Define derived metrics in the DSL. They are computed at query time, also for historical runs."
+      "description": "Define derived metrics in the DSL and change them when needed. They are computed at query time, also for historical runs."
     },
     "aliases": {
       "description": "Rename or merge device names, parameter values and other dimension values. Aliases apply everywhere."
@@ -288,7 +288,6 @@
     "repetition": "Repetition",
     "warmup": "Warmup",
     "warmupHint": "Left out of aggregation by default.",
-    "metricVersion": "{{metric}} v{{version}}",
     "overview": {
       "title": "Overview",
       "run": "Run",
@@ -349,6 +348,19 @@
     "attachments": {
       "toCase": "Case execution",
       "toSample": "Repetition {{repetition}}"
+    },
+    "derived": {
+      "title": "Derived metrics",
+      "manage": "Manage derived metrics",
+      "none": "No derived metrics are defined yet.",
+      "define": "Define one",
+      "noneApply": "No derived metric applies to this case execution.",
+      "evaluating_one": "Evaluating {{count}} derived metric",
+      "evaluating_other": "Evaluating {{count}} derived metrics",
+      "notApplicable_one": "Not applicable here (inputs missing):",
+      "notApplicable_other": "Not applicable here (inputs missing):",
+      "failed_one": "Could not be evaluated:",
+      "failed_other": "Could not be evaluated:"
     }
   },
   "tags": {
@@ -483,8 +495,7 @@
       "valueType": "Value type",
       "direction": "Direction",
       "description": "Description",
-      "version": "Version",
-      "defined": "Defined",
+      "changed": "Changed",
       "actions": "Actions"
     },
     "valueType": {
@@ -502,19 +513,47 @@
       "custom": "Custom",
       "customHint": "Not in the unit catalogue: values in this unit are not converted."
     },
-    "version": "v{{version}}",
-    "versionOf_one": "v{{version}}",
-    "versionOf_other": "v{{version}} of {{count}}",
-    "versionsLabel": "Versions of {{name}}",
-    "definedAt": "Defined {{time}}",
-    "changed": "Changed",
     "runs": "Runs with this metric",
     "runsNamed": "Runs with metric {{name}}",
     "count_one": "{{count}} metric",
     "count_other": "{{count}} metrics",
-    "empty": "No metrics yet. They are defined when the harness uploads its first results.",
+    "empty": "No metrics yet. The harness creates them when it uploads its first results.",
     "noMatch": "No metrics match the search.",
     "error": "The metrics could not be loaded: {{message}}",
+    "edit": {
+      "action": "Edit",
+      "named": "Edit metric {{name}}",
+      "title": "Edit {{name}}",
+      "text": "A metric has one definition. A change applies to all its results, also those of earlier runs.",
+      "unitHelp": "Leave empty for a dimensionless metric. Units outside the catalogue are not converted.",
+      "reinterprets": "The stored values are not converted: they are read in the new unit and value type from now on. Uploads have to send the new unit and value type; others are rejected.",
+      "users_one": "The new unit also applies to the derived metric that uses this metric:",
+      "users_other": "The new unit also applies to the derived metrics that use this metric:"
+    },
+    "rename": {
+      "action": "Rename",
+      "named": "Rename metric {{name}}",
+      "title": "Rename {{name}}",
+      "newName": "New name",
+      "help": "Uploads and expressions refer to the metric by this name.",
+      "invalid": "A name must not be empty, start or end with spaces, or contain '`'.",
+      "same": "This is the current name.",
+      "taken": "Another metric has this name.",
+      "users_one": "The expression of this derived metric is changed to the new name:",
+      "users_other": "The expressions of these derived metrics are changed to the new name:",
+      "harness": "The results stay with the renamed metric. The harness has to upload under the new name from now on: an upload under the old name creates a new metric called",
+      "views": "Analysis views, links and other expressions that still use the old name stop working:",
+      "confirm": "Rename"
+    },
+    "delete": {
+      "action": "Delete",
+      "named": "Delete metric {{name}}",
+      "title": "Delete {{name}}?",
+      "text": "The metric has no results and no derived metric uses it. It is removed for good; an upload that uses it creates it again.",
+      "hasResults": "It cannot be deleted: runs have results for it. Results are only deleted together with their run.",
+      "inUse_one": "It cannot be deleted while a derived metric uses it. Change or delete this one first:",
+      "inUse_other": "It cannot be deleted while derived metrics use it. Change or delete these first:"
+    },
     "units": {
       "columns": {
         "symbol": "Symbol",
@@ -531,6 +570,153 @@
       "count_other": "{{count}} units",
       "noMatch": "No units match the search.",
       "error": "The unit catalogue could not be loaded: {{message}}"
+    }
+  },
+  "dsl": {
+    "kinds": {
+      "function": "function",
+      "metric": "metric",
+      "series": "series",
+      "derived": "derived metric",
+      "keyword": "prefix",
+      "value": "value"
+    },
+    "functions": {
+      "abs": "Absolute value, of a scalar or point by point.",
+      "log10": "Base-10 logarithm; the result is dimensionless.",
+      "sqrt": "Square root.",
+      "min": "With several arguments: the smallest, point by point. With one series: its smallest y in [from, to].",
+      "max": "With several arguments: the largest, point by point. With one series: its largest y in [from, to].",
+      "clamp": "Limits a value to the range [lo, hi].",
+      "mean": "Mean y of a series in [from, to].",
+      "auc": "Area under the curve in [from, to]; the unit is y·x.",
+      "time_to": "First x (from `from` on) where y reaches the threshold. No value if it never does.",
+      "rate": "Change of y per x (derivative); the unit is y/x.",
+      "cumsum": "Running total of y.",
+      "log10_x": "The series with log10 of its x values.",
+      "moving_avg": "Trailing mean over a window in x units.",
+      "rekey": "y over another series of the same sample as x, e.g. quality over bytes received."
+    },
+    "reference": {
+      "title": "DSL reference",
+      "syntax": "Syntax",
+      "metric": "An uploaded scalar metric of the same sample.",
+      "series": "An uploaded series of the same sample.",
+      "derived": "Another derived metric. A later change to it applies here too.",
+      "quoted": "A name with other characters, in backticks.",
+      "unit": "A number with a unit. Without one it takes the unit its context needs.",
+      "operators": "Arithmetic; units must fit (+ and − need convertible units).",
+      "functions": "Functions",
+      "noValue": "Bounds (from=, to=) are constants or scalars of the same sample. interp=linear (default) or interp=step. A result that cannot be computed is no value, which is not missing data."
+    }
+  },
+  "derived": {
+    "listLabel": "Derived metrics",
+    "search": "Search derived metrics",
+    "new": "New",
+    "count_one": "{{count}} derived metric",
+    "count_other": "{{count}} derived metrics",
+    "none": "No derived metrics yet.",
+    "noMatch": "No derived metrics match the search.",
+    "empty": "No derived metrics yet. Create the first one with “New”.",
+    "selectHint": "Select a derived metric, or create one with “New”.",
+    "notFound": "There is no derived metric {{name}}.",
+    "error": "The derived metrics could not be loaded: {{message}}",
+    "sampleWithout": "Repetition {{repetition}}:",
+    "status": {
+      "value": "Value",
+      "no_value": "no value",
+      "missing": "missing",
+      "error": "error",
+      "noValueHint": "The expression has no value for this sample, e.g. a threshold that was never reached. This is not missing data."
+    },
+    "detail": {
+      "edit": "Edit",
+      "created": "The derived metric is created.",
+      "changed": "The change is saved. It applies to every analysis, including past runs.",
+      "renamed": "Renamed from {{from}}.",
+      "rewritten_one": "The expression of {{names}} now uses the new name.",
+      "rewritten_other": "The expressions of {{names}} now use the new name.",
+      "expression": "Expression",
+      "copyExpression": "Copy expression",
+      "unit": "Unit",
+      "reference": "Use it as",
+      "copyReference": "Copy reference",
+      "description": "Description",
+      "lastChanged": "Last changed",
+      "uses": "Uses",
+      "usesNone": "No other derived metric",
+      "usedBy": "Used by",
+      "usedByNone": "No other derived metric uses it."
+    },
+    "editor": {
+      "titleNew": "New derived metric",
+      "titleChange": "Change {{name}}",
+      "changeNote": "A derived metric has no versions: the change replaces its definition for every analysis, including past runs.",
+      "changeUsers_one": "It also changes {{count}} derived metric built on it: {{names}}.",
+      "changeUsers_other": "It also changes {{count}} derived metrics built on it: {{names}}.",
+      "name": "Name",
+      "nameHelp": "How expressions refer to it: derived.<name>. It cannot be changed later.",
+      "nameInvalid": "A name must not be empty, start or end with spaces, or contain a backtick (`).",
+      "nameExists": "A derived metric with this name exists. Select it in the list and use “Edit” to change it.",
+      "expression": "Expression",
+      "expressionHelp": "Ctrl+Space offers functions and metric names. The expression is checked while you type.",
+      "checking": "Checking…",
+      "checkError": "The expression could not be checked: {{message}}",
+      "valid": "The expression is valid.",
+      "problems_one": "{{count}} problem",
+      "problems_other": "{{count}} problems",
+      "kind": "Result",
+      "kindScalar": "One value per sample",
+      "kindSeries": "A series per sample, over {{dimension}} ({{unit}})",
+      "resultUnit": "Result unit",
+      "inputMetrics": "Uploaded metrics",
+      "inputSeries": "Uploaded series",
+      "uses": "Derived metrics",
+      "unit": "Unit",
+      "unitHelp": "Leave empty for the expression's unit: {{unit}}.",
+      "unitHelpPending": "The unit of the result; the expression's unit must convert to it.",
+      "description": "Description",
+      "save": "Save",
+      "saveError": "The derived metric could not be saved: {{message}}",
+      "discardTitle": "Discard your changes?",
+      "discardText": "The changes to this definition are not saved.",
+      "discard": "Discard"
+    },
+    "preview": {
+      "title": "Try it",
+      "help": "Evaluates the expression on the samples of one case execution, without saving it.",
+      "run": "Run",
+      "runOption": "{{suite}} · {{started}} · {{branch}}",
+      "caseExecution": "Case execution",
+      "caseOption": "{{scenario}} v{{version}} · {{device}} · {{parameters}}",
+      "choose": "Choose a run and a case execution to see the values.",
+      "needsValid": "The values are shown once the expression is valid.",
+      "error": "The expression could not be evaluated: {{message}}",
+      "noSamples": "This case execution has no samples.",
+      "result": "Result",
+      "value": "Value"
+    },
+    "rename": {
+      "action": "Rename",
+      "title": "Rename {{name}}",
+      "newName": "New name",
+      "help": "Expressions refer to it as derived.<name>.",
+      "same": "This is the current name.",
+      "taken": "Another derived metric has this name.",
+      "users_one": "The expression of this derived metric is changed to the new name:",
+      "users_other": "The expressions of these derived metrics are changed to the new name:",
+      "views": "Analysis views, links and other expressions that still use the old name stop working:",
+      "confirm": "Rename"
+    },
+    "delete": {
+      "action": "Delete",
+      "title": "Delete {{name}}?",
+      "text": "The definition is removed for good. Uploaded results are not affected. Analysis views and links that use it stop working.",
+      "inUse_one": "It cannot be deleted while another derived metric uses it. Change or delete this one first:",
+      "inUse_other": "It cannot be deleted while other derived metrics use it. Change or delete these first:",
+      "confirm": "Delete",
+      "done": "{{name}} is deleted."
     }
   }
 }

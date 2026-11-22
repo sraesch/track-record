@@ -11,19 +11,14 @@ import { useTranslation } from 'react-i18next'
 import type { SampleDetail } from '../../api/client'
 import { formatNumber } from '../../format'
 import { Section } from '../../pages/Section'
-import {
-  byRepetition,
-  type MetricRef,
-  useMetricLabel,
-  warmupRowSx,
-} from './samples'
+import { byRepetition, warmupRowSx } from './samples'
 import { WarmupChip } from './WarmupChip'
 
-type Column = MetricRef & { unit: string }
+type Column = SampleDetail['measurements'][number]
 
 /**
  * The scalar measurements of every sample as uploaded: one row per sample,
- * one column per metric version. Nothing is aggregated here.
+ * one column per metric. Nothing is aggregated here.
  */
 export function SampleMeasurements({
   samples,
@@ -35,14 +30,10 @@ export function SampleMeasurements({
   const columns = useMemo(() => {
     const byId = new Map<number, Column>()
     for (const sample of samples) {
-      for (const m of sample.measurements) byId.set(m.metric_version_id, m)
+      for (const m of sample.measurements) byId.set(m.metric_id, m)
     }
-    return [...byId.values()].sort(
-      (a, b) =>
-        a.metric.localeCompare(b.metric) || a.metric_version - b.metric_version,
-    )
+    return [...byId.values()].sort((a, b) => a.metric.localeCompare(b.metric))
   }, [samples])
-  const label = useMetricLabel(columns)
   const warmup = samples.filter((s) => s.is_warmup).length
 
   return (
@@ -74,12 +65,12 @@ export function SampleMeasurements({
                 </TableCell>
                 {columns.map((column) => (
                   <TableCell
-                    key={column.metric_version_id}
+                    key={column.metric_id}
                     align="right"
                     sx={{ verticalAlign: 'bottom' }}
                   >
                     <Box component="span" sx={{ display: 'block', whiteSpace: 'nowrap' }}>
-                      {label(column)}
+                      {column.metric}
                     </Box>
                     {/* An empty line without a unit keeps the names aligned. */}
                     <Typography
@@ -97,7 +88,7 @@ export function SampleMeasurements({
             <TableBody>
               {rows.map((sample) => {
                 const values = new Map(
-                  sample.measurements.map((m) => [m.metric_version_id, m.value]),
+                  sample.measurements.map((m) => [m.metric_id, m.value]),
                 )
                 return (
                   <TableRow
@@ -109,10 +100,10 @@ export function SampleMeasurements({
                       {sample.is_warmup && <WarmupChip />}
                     </TableCell>
                     {columns.map((column) => {
-                      const value = values.get(column.metric_version_id)
+                      const value = values.get(column.metric_id)
                       return (
                         <TableCell
-                          key={column.metric_version_id}
+                          key={column.metric_id}
                           align="right"
                           sx={{ fontVariantNumeric: 'tabular-nums' }}
                         >

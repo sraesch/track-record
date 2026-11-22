@@ -386,10 +386,9 @@ pub fn push_case_execution_conditions(
     if let Some(metric) = &f.metric {
         q.push(
             " AND EXISTS (SELECT 1 FROM sample sa \
-              JOIN metric_version mv ON mv.id IN ( \
-                  SELECT m.metric_version_id FROM measurement m WHERE m.sample_id = sa.id \
-                  UNION ALL SELECT se.metric_version_id FROM series se WHERE se.sample_id = sa.id) \
-              JOIN metric mt ON mt.id = mv.metric_id \
+              JOIN metric mt ON mt.id IN ( \
+                  SELECT m.metric_id FROM measurement m WHERE m.sample_id = sa.id \
+                  UNION ALL SELECT se.metric_id FROM series se WHERE se.sample_id = sa.id) \
               WHERE sa.case_execution_id = ce.id AND mt.name = ",
         )
         .push_bind(metric.clone())
@@ -671,8 +670,8 @@ pub async fn list_case_executions(
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct MeasurementOut {
     pub metric: String,
-    pub metric_version_id: i64,
-    pub metric_version: i32,
+    pub metric_id: i64,
+    /// The unit the metric has now; the value was not converted.
     pub unit: String,
     pub value: f64,
 }
@@ -682,9 +681,8 @@ pub struct SeriesMeta {
     pub id: Uuid,
     pub sample_id: Uuid,
     pub metric: String,
-    pub metric_version_id: i64,
-    pub metric_version: i32,
-    /// Unit of y (the metric's unit).
+    pub metric_id: i64,
+    /// Unit of y (the unit the metric has now).
     pub unit: String,
     pub x_dimension: String,
     pub x_unit: String,
@@ -731,10 +729,10 @@ pub async fn get_case_execution(pool: &PgPool, ce_id: Uuid) -> ApiResult<CaseExe
     .bind(ce_id)
     .fetch_all(pool)
     .await?;
-    let measurements: Vec<(Uuid, String, i64, i32, String, f64)> = sqlx::query_as(
-        "SELECT m.sample_id, mt.name, mv.id, mv.version, mv.unit, m.value \
+    let measurements: Vec<(Uuid, String, i64, String, f64)> = sqlx::query_as(
+        "SELECT m.sample_id, mt.name, mt.id, mt.unit, m.value \
          FROM measurement m JOIN sample sa ON sa.id = m.sample_id \
-         JOIN metric_version mv ON mv.id = m.metric_version_id JOIN metric mt ON mt.id = mv.metric_id \
+         JOIN metric mt ON mt.id = m.metric_id \
          WHERE sa.case_execution_id = $1 ORDER BY mt.name",
     )
     .bind(ce_id)
@@ -758,12 +756,11 @@ pub async fn get_case_execution(pool: &PgPool, ce_id: Uuid) -> ApiResult<CaseExe
             )
         })
         .collect();
-    for (sample_id, metric, metric_version_id, metric_version, unit, value) in measurements {
+    for (sample_id, metric, metric_id, unit, value) in measurements {
         if let Some(s) = by_sample.get_mut(&sample_id) {
             s.measurements.push(MeasurementOut {
                 metric,
-                metric_version_id,
-                metric_version,
+                metric_id,
                 unit,
                 value,
             });
@@ -786,13 +783,12 @@ pub async fn get_case_execution(pool: &PgPool, ce_id: Uuid) -> ApiResult<CaseExe
 }
 
 async fn series_meta_where(pool: &PgPool, condition: &str, id: Uuid) -> ApiResult<Vec<SeriesMeta>> {
-    let rows: Vec<(Uuid, Uuid, String, i64, i32, String, String, String, i32)> =
+    let rows: Vec<(Uuid, Uuid, String, i64, String, String, String, i32)> =
         sqlx::query_as(&format!(
-            "SELECT se.id, se.sample_id, mt.name, mv.id, mv.version, mv.unit, se.x_dimension, \
+            "SELECT se.id, se.sample_id, mt.name, mt.id, mt.unit, se.x_dimension, \
                     se.x_unit, se.point_count \
              FROM series se JOIN sample sa ON sa.id = se.sample_id \
-             JOIN metric_version mv ON mv.id = se.metric_version_id \
-             JOIN metric mt ON mt.id = mv.metric_id \
+             JOIN metric mt ON mt.id = se.metric_id \
              WHERE {condition} ORDER BY mt.name, se.id"
         ))
         .bind(id)
@@ -801,23 +797,12 @@ async fn series_meta_where(pool: &PgPool, condition: &str, id: Uuid) -> ApiResul
     Ok(rows
         .into_iter()
         .map(
-            |(
-                id,
-                sample_id,
-                metric,
-                metric_version_id,
-                metric_version,
-                unit,
-                x_dimension,
-                x_unit,
-                point_count,
-            )| {
+            |(id, sample_id, metric, metric_id, unit, x_dimension, x_unit, point_count)| {
                 SeriesMeta {
                     id,
                     sample_id,
                     metric,
-                    metric_version_id,
-                    metric_version,
+                    metric_id,
                     unit,
                     x_dimension,
                     x_unit,

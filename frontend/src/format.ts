@@ -75,6 +75,14 @@ export function formatNumber(value: number): string {
   return numberFormat('number', { maximumSignificantDigits: 15 }).format(value)
 }
 
+/**
+ * A computed number, rounded to 6 significant digits so columns stay
+ * readable; show the full value (formatNumber) on hover.
+ */
+export function formatRounded(value: number): string {
+  return numberFormat('rounded', { maximumSignificantDigits: 6 }).format(value)
+}
+
 const byteUnits = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte']
 
 /** A file size in decimal units, e.g. "512 byte", "1.2 MB". */

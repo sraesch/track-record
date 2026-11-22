@@ -30,10 +30,10 @@ This system stores, manages and supports the analysis of benchmark results.
 | **Case** | Scenario version + assets + parameter values. The unit that is compared across runs. |
 | **Case Execution** | One case executed within a run on one client device. Groups the samples. |
 | **Sample** | One repetition of a case execution, with a warmup flag. All samples are stored. |
-| **Metric** | Definition: name, unit (FR-13a), value type, direction (higher/lower is better), description. |
+| **Metric** | Definition: name, unit (FR-13a), value type, direction (higher/lower is better), description. It is not versioned: it has one definition, which can be changed in the web UI (FR-7). |
 | **Measurement** | Scalar value of a metric for one sample. Only raw, measured values are uploaded; metrics computed from them are derived metrics (FR-17). |
 | **Series** | Ordered (x, y) points of a metric for one sample, with an x-dimension and unit (e.g. time [s], transferred [bytes]). One series per metric per sample. Only raw, measured series are uploaded; a curve over another x-dimension is a derived metric (FR-17). x never decreases but may repeat. Up to ~10k points. |
-| **Derived Metric** | Versioned expression over metrics and series, evaluated at query time (see FR-17). |
+| **Derived Metric** | Expression over metrics and series, evaluated at query time (see FR-17). It is not versioned: it has one definition, which can be changed. |
 | **Alias** | Globally stored, versioned mapping that renames or merges dimension values (e.g. two device names → one device). Dimension values include the values of a case parameter, which keep their JSON type (e.g. a renamed pipeline keeps its trend). Applies to UI, API and MCP alike. |
 | **Attachment** | File (screenshot, log, trace, profile) linked to a run, case execution or sample. |
 | **Annotation / Tag** | Free-text note or label on a run, case or point in time (e.g. "switched to new compression"). |
@@ -60,8 +60,17 @@ This system stores, manages and supports the analysis of benchmark results.
 
 ### Data integrity, versioning & lifecycle
 - **FR-6** Uploaded results are immutable. Corrections create new revisions.
-- **FR-7** Suites, scenarios, metric definitions, derived metrics and aliases are
-  versioned. Results reference the exact definition versions used.
+- **FR-7** Suites, scenarios and aliases are versioned. Results reference the
+  exact definition versions used. Derived metrics are not versioned (FR-17):
+  no result refers to them. Metrics are not versioned either
+  ([ADR 0018](adr/0018-metrics-without-versions.md)): a metric has one
+  definition, which can be changed in the web UI, and a change applies to
+  all its results, historical ones included. Stored values are not
+  converted; with another unit they are read in that unit. Uploads create
+  metrics but never change them: an upload with another unit or value type
+  than the metric has is rejected. A metric can be renamed (the derived
+  metrics that use it are changed to the new name) and, while it has no
+  results and no derived metric uses it, deleted.
 - **FR-8** All raw data (samples, series, attachments) is kept indefinitely. Nothing
   is deleted automatically.
 - **FR-9** Runs can be **marked invalid** with a reason. Invalid runs stay stored,
@@ -109,8 +118,13 @@ This system stores, manages and supports the analysis of benchmark results.
     Differences to the reference then use the latest run by measured start time.
   - Compared columns that come from different SUT versions or shared environments
     are marked.
-- **FR-17** Derived metrics are defined in the system as versioned expressions and
-  evaluated at query time, so they also apply to historical runs. Supported:
+- **FR-17** Derived metrics are defined in the system as expressions and
+  evaluated at query time, so they also apply to historical runs. A derived
+  metric has one definition, which can be changed; there are no versions. A
+  change applies to every analysis from then on, historical runs included.
+  A derived metric can be renamed; the expressions of the derived metrics
+  that use it are changed to the new name. It can be deleted when no other
+  derived metric uses it. Supported:
   - **Scalar arithmetic** over metrics of the same sample (e.g. throughput =
     bytes / time), including log10 and clamping to a range.
   - **Series reductions** (series → scalar): min, max, mean, area under curve,
@@ -128,9 +142,9 @@ This system stores, manages and supports the analysis of benchmark results.
   - **Interpolation** between points is linear or step (a value is held until the
     next point and beyond the last one), chosen in the expression.
   - **Composition:** a derived metric can use other derived metrics, scalar or
-    series, as long as there is no cycle. Each version references exact versions
-    of the metrics it uses; a new version of one of them only takes effect through
-    a new version of the metric built on it.
+    series, as long as there is no cycle. A change to a derived metric takes
+    effect in the metrics built on it. A change that would make one of them
+    invalid is rejected.
   - Cross-run expressions are out of scope; FR-13 normalization covers comparison
     against a reference.
 - **FR-17a** Derived metrics are written in a **small custom DSL**, e.g.
@@ -139,7 +153,8 @@ This system stores, manages and supports the analysis of benchmark results.
   - has a fixed set of operators and functions (no loops, no I/O), so it is safe
     to evaluate on the server;
   - is validated on save (syntax, referenced metrics exist, no cycles between
-    derived metrics, unit consistency);
+    derived metrics, unit consistency, and the derived metrics built on the
+    saved one stay valid);
   - is the same in UI, REST API and MCP.
 - **FR-18** Trend view: a case/metric/device across runs over time or over SUT
   versions, with annotations, device detail changes and environment changes marked.

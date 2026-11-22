@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { Metric, Unit } from '../api/client'
@@ -6,61 +6,36 @@ import { mockApi, problem } from '../test/api'
 import { enterText } from '../test/input'
 import { currentQuery, renderApp } from '../test/render'
 
+const metric = (
+  id: number,
+  name: string,
+  fields: Partial<Metric> = {},
+): Metric => ({
+  id,
+  name,
+  unit: 's',
+  value_type: 'float',
+  direction: 'lower_is_better',
+  description: '',
+  created_at: '2026-10-01T08:00:00Z',
+  updated_at: '2026-11-01T08:00:00Z',
+  has_results: true,
+  used_by: [],
+  ...fields,
+})
+
 const metrics: Metric[] = [
-  {
-    id: 1,
-    name: 'load_time',
-    versions: [
-      {
-        id: 10,
-        version: 1,
-        unit: 'ms',
-        value_type: 'float',
-        direction: 'lower_is_better',
-        description: 'Until the first frame.',
-        created_at: '2026-10-01T08:00:00Z',
-      },
-      {
-        id: 11,
-        version: 2,
-        unit: 's',
-        value_type: 'float',
-        direction: 'lower_is_better',
-        description: 'Until the first frame.',
-        created_at: '2026-11-01T08:00:00Z',
-      },
-    ],
-  },
-  {
-    id: 2,
-    name: 'fps',
-    versions: [
-      {
-        id: 20,
-        version: 1,
-        unit: 'fps',
-        value_type: 'float',
-        direction: 'higher_is_better',
-        description: '',
-        created_at: '2026-10-01T08:00:00Z',
-      },
-    ],
-  },
-  {
-    id: 3,
-    name: 'triangles',
-    versions: [
-      {
-        id: 30,
-        version: 1,
-        unit: 'tris',
-        value_type: 'integer',
-        direction: 'lower_is_better',
-        description: 'Triangles drawn per frame.',
-        created_at: '2026-10-01T08:00:00Z',
-      },
-    ],
-  },
+  metric(1, 'load_time', {
+    description: 'Until the first frame.',
+    used_by: ['padded'],
+  }),
+  metric(2, 'fps', { unit: 'fps', direction: 'higher_is_better' }),
+  metric(3, 'triangles', {
+    unit: 'tris',
+    value_type: 'integer',
+    description: 'Triangles drawn per frame.',
+    has_results: false,
+  }),
 ]
 
 const units: Unit[] = [
@@ -85,19 +60,14 @@ function setup(handlers: Parameters<typeof mockApi>[0] = {}) {
 
 const table = () => screen.findByRole('table', { name: 'Metric definitions' })
 const bodyRows = async () =>
-  within(await table())
-    .getAllByRole('row')
-    .slice(1)
-    // Rows of the version tables are nested in their own table.
-    .filter(
-      (row) =>
-        row.closest('table')?.getAttribute('aria-label') ===
-        'Metric definitions',
-    )
-    .filter((row) => within(row).queryAllByRole('cell').length > 1)
+  within(await table()).getAllByRole('row').slice(1)
+const dialog = (name: string) => screen.findByRole('dialog', { name })
+/** The body of the recorded request with `method`. */
+const sent = async (requests: Request[], method: string) =>
+  requests.find((r) => r.method === method)?.json()
 
 describe('Metrics page', () => {
-  it('lists the metrics with their latest definition', async () => {
+  it('lists the metrics with their definition', async () => {
     setup()
     renderApp('/metrics')
 
@@ -123,27 +93,141 @@ describe('Metrics page', () => {
     expect(within(rows[1]!).queryByText('Custom')).not.toBeInTheDocument()
   })
 
-  it('shows older versions with what they changed', async () => {
-    setup()
+  it('changes the definition of a metric', async () => {
+    const requests: Request[] = []
+    setup({
+      '/ui/api/v1/metrics/load_time': (_, request) => {
+        requests.push(request.clone())
+        return metric(1, 'load_time', { unit: 'ms' })
+      },
+    })
     const user = userEvent.setup()
     renderApp('/metrics')
     await table()
 
-    const toggle = screen.getByRole('button', { name: /v2 of 2/ })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    await user.click(toggle)
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await user.click(
+      screen.getByRole('button', { name: 'Edit metric load_time' }),
+    )
+    const edit = within(await dialog('Edit load_time'))
+    expect(edit.getByText(/applies to all its results/)).toBeInTheDocument()
+    // Nothing is reinterpreted before the unit changes.
+    expect(edit.queryByText(/not converted: they are read/)).toBeNull()
 
-    const versions = await screen.findByRole('table', {
-      name: 'Versions of load_time',
+    const unit = edit.getByRole('combobox', { name: 'Unit' })
+    await user.clear(unit)
+    await enterText(user, unit, 'ms')
+    expect(
+      edit.getByText(/not converted: they are read in the new unit/),
+    ).toBeInTheDocument()
+    expect(edit.getByText('padded')).toBeInTheDocument()
+
+    await user.click(edit.getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+    expect(await sent(requests, 'PUT')).toEqual({
+      unit: 'ms',
+      value_type: 'float',
+      direction: 'lower_is_better',
+      description: 'Until the first frame.',
     })
-    const rows = within(versions).getAllByRole('row').slice(1)
-    expect(rows).toHaveLength(2)
-    // v2 changed the unit from ms to s; v1 is the first version.
-    expect(within(rows[0]!).getByText('v2')).toBeInTheDocument()
-    expect(within(rows[0]!).getAllByText('Changed')).toHaveLength(1)
-    expect(within(rows[1]!).getByText('ms')).toBeInTheDocument()
-    expect(within(rows[1]!).queryByText('Changed')).not.toBeInTheDocument()
+  })
+
+  it('shows why a change was rejected', async () => {
+    setup({
+      '/ui/api/v1/metrics/load_time': () =>
+        problem(
+          422,
+          'breaks_derived_metrics',
+          'derived.padded uses load_time and would no longer be valid',
+        ),
+    })
+    const user = userEvent.setup()
+    renderApp('/metrics')
+    await table()
+
+    await user.click(
+      screen.getByRole('button', { name: 'Edit metric load_time' }),
+    )
+    const edit = within(await dialog('Edit load_time'))
+    await user.click(edit.getByRole('button', { name: 'Save' }))
+    expect(
+      await edit.findByText(/derived.padded uses load_time/),
+    ).toBeInTheDocument()
+  })
+
+  it('renames a metric', async () => {
+    const requests: Request[] = []
+    setup({
+      '/ui/api/v1/metrics/load_time/rename': (_, request) => {
+        requests.push(request.clone())
+        return { ...metric(1, 'startup'), rewritten: ['padded'] }
+      },
+    })
+    const user = userEvent.setup()
+    renderApp('/metrics')
+    await table()
+
+    await user.click(
+      screen.getByRole('button', { name: 'Rename metric load_time' }),
+    )
+    const rename = within(await dialog('Rename load_time'))
+    const confirm = rename.getByRole('button', { name: 'Rename' })
+    // The current name and a taken one cannot be confirmed.
+    expect(rename.getByText('This is the current name.')).toBeInTheDocument()
+    expect(confirm).toBeDisabled()
+    const name = rename.getByRole('textbox', { name: 'New name' })
+    await user.clear(name)
+    await enterText(user, name, 'fps')
+    expect(rename.getByText('Another metric has this name.')).toBeVisible()
+    expect(confirm).toBeDisabled()
+    // What the rename changes and what it breaks.
+    expect(rename.getByText('padded')).toBeInTheDocument()
+    expect(
+      rename.getByText(/harness has to upload under the new name/),
+    ).toBeInTheDocument()
+
+    await user.clear(name)
+    await enterText(user, name, 'startup')
+    await user.click(confirm)
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+    expect(await sent(requests, 'POST')).toEqual({ name: 'startup' })
+  })
+
+  it('deletes a metric without results only', async () => {
+    const requests: Request[] = []
+    setup({
+      '/ui/api/v1/metrics/triangles': (_, request) => {
+        requests.push(request.clone())
+        return new Response(null, { status: 204 })
+      },
+    })
+    const user = userEvent.setup()
+    renderApp('/metrics')
+    await table()
+
+    await user.click(
+      screen.getByRole('button', { name: 'Delete metric load_time' }),
+    )
+    const blocked = within(await dialog('Delete load_time?'))
+    expect(blocked.getByText(/runs have results for it/)).toBeInTheDocument()
+    expect(blocked.getByRole('button', { name: 'Delete' })).toBeDisabled()
+    await user.click(blocked.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Delete metric triangles' }),
+    )
+    const remove = within(await dialog('Delete triangles?'))
+    await user.click(remove.getByRole('button', { name: 'Delete' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+    expect(requests.map((r) => r.method)).toEqual(['DELETE'])
   })
 
   it('links a metric to the runs that measured it', async () => {
@@ -213,7 +297,6 @@ describe('Metrics page', () => {
     expect(within(rows[0]!).getByText('0.001 s')).toBeInTheDocument()
     expect(within(rows[1]!).getByText('Base unit')).toBeInTheDocument()
     expect(within(rows[2]!).getByText('60 s')).toBeInTheDocument()
-    // load_time uses s in its latest version, not ms any more.
     expect(
       within(rows[1]!).getByRole('link', { name: 'Show metric load_time' }),
     ).toBeInTheDocument()

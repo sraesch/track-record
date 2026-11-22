@@ -30,6 +30,12 @@ export default defineConfig({
             { name: 'markdown', test: markdownPackages },
             // ECharts is loaded with the first chart (ADR 0015).
             { name: 'charts', test: /node_modules[\\/](echarts|zrender)[\\/]/ },
+            // CodeMirror is loaded with the first expression editor
+            // (ADR 0016).
+            {
+              name: 'editor',
+              test: /node_modules[\\/](@codemirror|@lezer|style-mod|crelt|w3c-keyname)[\\/]/,
+            },
             { name: 'vendor', test: /node_modules[\\/]/ },
           ],
         },

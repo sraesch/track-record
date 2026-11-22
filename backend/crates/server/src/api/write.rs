@@ -83,7 +83,8 @@ pub async fn close_run(
         (status = 201, body = IngestResponse),
         (status = 200, description = "Everything already existed", body = IngestResponse),
         (status = 404, body = Problem),
-        (status = 409, description = "Conflicting content, or the run is not running", body = Problem),
+        (status = 409, description = "Conflicting content, the run is not running, or a metric \
+                                      exists with another unit or value type", body = Problem),
         (status = 422, body = Problem),
     ))]
 pub async fn create_case_execution(
@@ -107,7 +108,8 @@ pub async fn create_case_execution(
         (status = 201, body = IngestResponse),
         (status = 200, body = IngestResponse),
         (status = 404, body = Problem),
-        (status = 409, body = Problem),
+        (status = 409, description = "Conflicting content, or a metric exists with another \
+                                      unit or value type", body = Problem),
         (status = 422, body = Problem),
     ))]
 pub async fn create_sample(
@@ -132,7 +134,8 @@ pub async fn create_sample(
         (status = 201, body = IngestResponse),
         (status = 200, body = IngestResponse),
         (status = 404, body = Problem),
-        (status = 409, body = Problem),
+        (status = 409, description = "Conflicting content, or a metric exists with another \
+                                      unit or value type", body = Problem),
         (status = 422, body = Problem),
     ))]
 pub async fn create_series(

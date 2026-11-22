@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next'
 import type { SampleDetail } from '../../api/client'
 import { formatNumber } from '../../format'
 import { Section } from '../../pages/Section'
-import { byRepetition, useMetricLabel, warmupRowSx } from './samples'
+import { byRepetition, warmupRowSx } from './samples'
 import { SeriesCharts } from './SeriesCharts'
 import { WarmupChip } from './WarmupChip'
 
@@ -36,7 +36,6 @@ export function SampleSeries({
       ),
     [samples],
   )
-  const label = useMetricLabel(rows.map((row) => row.series))
 
   return (
     <Section
@@ -78,7 +77,7 @@ export function SampleSeries({
                       {sample.repetition}
                       {sample.is_warmup && <WarmupChip />}
                     </TableCell>
-                    <TableCell>{label(series)}</TableCell>
+                    <TableCell>{series.metric}</TableCell>
                     <TableCell>{series.unit || t('common.none')}</TableCell>
                     <TableCell>
                       {series.x_unit

@@ -100,8 +100,11 @@ missing or revoked token gets 401 before MCP is involved.
   definitions.
 - **Metric definitions travel with the data.** Every upload that references
   metrics carries a `metrics` map (name → unit, value type, direction,
-  description). `ensure_metric_version` maps identical definitions to the
-  same version.
+  description). `ensure_metric` creates the metrics that do not exist yet.
+  It never changes one, and rejects another unit or value type (TR009 → 409):
+  metrics have one definition, which is changed in the web UI
+  ([ADR 0018](0018-metrics-without-versions.md), which replaced the metric
+  versions this ADR first described).
 - **Errors are RFC 9457 problem details** with a stable `code`. The
   SQLSTATEs map as follows:
   - TR001–TR004 → 409

@@ -119,8 +119,7 @@ describe('Case execution', () => {
           ...sample(1).measurements,
           {
             metric: 'peak_memory',
-            metric_version: 1,
-            metric_version_id: 7,
+            metric_id: 7,
             unit: 'MiB',
             value: 463.3,
           },
@@ -143,33 +142,6 @@ describe('Case execution', () => {
     expect(
       within(await section('Measurements')).getByText('3 samples, 1 warmup'),
     ).toBeInTheDocument()
-  })
-
-  it('names the version where a metric has several', async () => {
-    const v2 = sample(1, {
-      measurements: [
-        {
-          metric: 'load_time',
-          metric_version: 2,
-          metric_version_id: 9,
-          unit: 's',
-          value: 4.2,
-        },
-      ],
-    })
-    mockApi({
-      [runPath]: () => runDetail(),
-      [caseExecutionPath('ce1')]: () =>
-        caseExecutionDetail('ce1', { samples: [sample(0), v2] }),
-    })
-    renderApp(pagePath())
-
-    expect((await tableRows('Measurements'))[0]).toEqual([
-      'Repetition',
-      'frames_droppedcount',
-      'load_time v1s',
-      'load_time v2s',
-    ])
   })
 
   it('lists the series of every sample', async () => {

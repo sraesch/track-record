@@ -34,14 +34,23 @@ frontend/
                         invalidation and deletion
   src/runs/case/        Case execution: overview, parameters, test case
                         tags and annotations, device details,
-                        measurements per sample, a chart per series
-                        metric, attachments
+                        measurements per sample, derived metric
+                        values, a chart per series metric, attachments
   src/aliases/          Aliases (FR-14): list with filters in the URL,
                         add, change, remove and set again; typed
                         parameter values
-  src/metrics/          Metrics (FR-7, FR-13a): definitions with all
-                        versions, unit catalogue by quantity, custom
-                        units; tab and search in the URL
+  src/metrics/          Metrics (FR-7, FR-13a): one definition per metric
+                        (no versions, ADR 0018) with edit, rename and
+                        delete; unit catalogue by quantity, custom units;
+                        tab and search in the URL
+  src/derived/          Derived metrics (FR-17): list and selected metric
+                        with uses and users, rename and delete; editor
+                        that creates a metric or changes one in place (no
+                        versions, ADR 0017),
+                        with live validation and a preview on a case
+                        execution; their values on the case execution page
+  src/dsl/              The DSL editor (CodeMirror, ADR 0016, lazily
+                        loaded) and its tokenizer and completion
   src/tags/             Tag editor shared by runs and test cases
   src/annotations/      Annotation list and editor shared by runs and
                         test cases
@@ -57,6 +66,7 @@ frontend/
   src/test/api.ts       mockApi(): fake UI API for tests (stubs fetch)
   src/test/render.tsx   renderApp(path): the whole app on a memory router
   src/test/fakeChart.tsx  Stands in for the canvas chart (jsdom has none)
+  src/test/fakeDslEditor.tsx  Stands in for CodeMirror (a text area)
   tools/openapi/        Generator for src/api/schema.d.ts (own package, TypeScript 5)
   vite.config.ts        Vite and Vitest config, dev proxy to the backend
   test.sh               lint, type check, tests and build (what CI runs)
@@ -128,7 +138,7 @@ It covers the cases the UI has to show, over 30 days from day 0
 | Run left `running`; aborted by the stale timeout (1 h) | after day 29 |
 | Incomplete loads (Pixel, city block, 20 Mbit/s): `load_time` missing, `derived.time_to_full` has no value | some samples |
 | Aliases: device `pixel8-lab1` → `pixel-8-lab-1` (days 0–6), parameter `meshopt-v1` → `meshopt` (days 0–4) | |
-| Derived metrics `throughput` (2 versions), `time_to_90`, `time_to_full`, `steady_fps` (uses `derived.time_to_90`), `load_stall` | |
+| Derived metrics `throughput`, `time_to_90`, `time_to_full`, `steady_fps` (uses `derived.time_to_90`), `load_stall` | |
 | Tags, run/test case/point-in-time annotations, attachments (log, Markdown, JSON, an SVG chart) | |
 
 The script creates a temporary `write` token and revokes it at the end. It

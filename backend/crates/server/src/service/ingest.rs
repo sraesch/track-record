@@ -94,8 +94,11 @@ pub struct ClientDeviceInput {
     pub details: Map<String, Value>,
 }
 
-/// Definition of a metric used in the request. Identical definitions map to
-/// the same metric version.
+/// Definition of a metric used in the request. It creates the metric if
+/// there is none with this name. A metric that exists is not changed: its
+/// direction and description stay as they are, and the unit and value type
+/// must be the ones it has (otherwise 409, `metric_definition_conflict`).
+/// Metrics are changed in the web UI.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MetricInput {
@@ -355,11 +358,16 @@ fn measurement_value(
 
 #[derive(Debug, Clone, Copy)]
 struct MetricRef {
-    version_id: i64,
+    id: i64,
     value_type: MetricValueType,
 }
 
-/// Ensures the metric versions of a request and maps names to them.
+/// Maps the metric names of a request to the metrics, creating those that
+/// do not exist yet. An upload never changes a metric (ADR 0018): the
+/// direction and description of an existing one stay as they are, and
+/// another unit or value type is rejected (409,
+/// `metric_definition_conflict`), as the values would be stored under the
+/// wrong unit.
 async fn ensure_metrics(
     conn: &mut PgConnection,
     metrics: &BTreeMap<String, MetricInput>,
@@ -367,19 +375,18 @@ async fn ensure_metrics(
     let mut out = HashMap::new();
     for (name, m) in metrics {
         require_name("metric name", name)?;
-        let version_id: i64 =
-            sqlx::query_scalar("SELECT ensure_metric_version($1, $2, $3, $4, $5)")
-                .bind(name)
-                .bind(&m.unit)
-                .bind(m.value_type)
-                .bind(m.direction)
-                .bind(&m.description)
-                .fetch_one(&mut *conn)
-                .await?;
+        let id: i64 = sqlx::query_scalar("SELECT ensure_metric($1, $2, $3, $4, $5)")
+            .bind(name)
+            .bind(&m.unit)
+            .bind(m.value_type)
+            .bind(m.direction)
+            .bind(&m.description)
+            .fetch_one(&mut *conn)
+            .await?;
         out.insert(
             name.clone(),
             MetricRef {
-                version_id,
+                id,
                 value_type: m.value_type,
             },
         );
@@ -724,7 +731,7 @@ async fn insert_sample(
     let mut values: BTreeMap<i64, f64> = BTreeMap::new();
     for (name, value) in data.measurements {
         let m = metric(metrics, name)?;
-        values.insert(m.version_id, measurement_value(name, m.value_type, *value)?);
+        values.insert(m.id, measurement_value(name, m.value_type, *value)?);
     }
 
     let inserted = sqlx::query(
@@ -743,7 +750,7 @@ async fn insert_sample(
     if inserted {
         let (ids, vals): (Vec<i64>, Vec<f64>) = values.iter().map(|(k, v)| (*k, *v)).unzip();
         sqlx::query(
-            "INSERT INTO measurement (sample_id, metric_version_id, value) \
+            "INSERT INTO measurement (sample_id, metric_id, value) \
              SELECT $1, m, v FROM unnest($2::bigint[], $3::float8[]) AS t(m, v)",
         )
         .bind(sample_id)
@@ -759,7 +766,7 @@ async fn insert_sample(
         .fetch_one(&mut *conn)
         .await?;
         let stored_values: Vec<(i64, f64)> =
-            sqlx::query_as("SELECT metric_version_id, value FROM measurement WHERE sample_id = $1")
+            sqlx::query_as("SELECT metric_id, value FROM measurement WHERE sample_id = $1")
                 .bind(sample_id)
                 .fetch_all(&mut *conn)
                 .await?;
@@ -799,7 +806,7 @@ async fn insert_series(
         &NewSeries {
             id: series_id,
             sample_id,
-            metric_version_id: m.version_id,
+            metric_id: m.id,
             x_dimension: &data.x_dimension,
             x_unit: &data.x_unit,
             points: &points,

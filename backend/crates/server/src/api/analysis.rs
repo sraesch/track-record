@@ -28,7 +28,7 @@ use crate::service::derived::{
     self, DerivedMetric, EvaluateRequest, EvaluateResponse, ValidateExpression, Validation,
 };
 
-/// Derived metrics with all versions (FR-17).
+/// Derived metrics (FR-17).
 #[utoipa::path(get, path = "/derived-metrics", tag = "definitions",
     responses((status = 200, body = Vec<DerivedMetric>)))]
 pub async fn list_derived_metrics(
@@ -37,7 +37,7 @@ pub async fn list_derived_metrics(
     Ok(Json(derived::list(&state.pool).await?))
 }
 
-/// A derived metric with all versions.
+/// A derived metric.
 #[utoipa::path(get, path = "/derived-metrics/{name}", tag = "definitions",
     params(("name" = String, Path)),
     responses((status = 200, body = DerivedMetric), (status = 404, body = Problem)))]

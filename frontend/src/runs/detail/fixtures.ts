@@ -129,15 +129,13 @@ export function sample(
     measurements: [
       {
         metric: 'load_time',
-        metric_version: 1,
-        metric_version_id: 5,
+        metric_id: 5,
         unit: 's',
         value: 5.9 + repetition / 10,
       },
       {
         metric: 'frames_dropped',
-        metric_version: 1,
-        metric_version_id: 3,
+        metric_id: 3,
         unit: 'count',
         value: 8 - repetition,
       },
@@ -147,8 +145,7 @@ export function sample(
         id: `fps-${id}`,
         sample_id: id,
         metric: 'fps',
-        metric_version: 1,
-        metric_version_id: 2,
+        metric_id: 2,
         unit: 'fps',
         x_dimension: 'time',
         x_unit: 's',

@@ -252,7 +252,7 @@ async fn definitions_are_listed_with_versions() {
     let (run_id, _) = seed_run(&write, &app, "dev", "2026-11-02T10:00:00Z").await;
     let mut ce = case_execution_body("dev", 10, json!([]));
     ce["test_case"]["scenario"]["definition"] = json!({"steps": ["open", "render", "close"]});
-    // A changed metric description is a new metric version.
+    // Metrics have no versions: an upload does not change one that exists.
     ce["metrics"]["load_time"]["description"] = json!("time to first frame");
     ce["samples"] = json!([sample(0, 1.0)]);
     let (status, body) = write
@@ -278,8 +278,14 @@ async fn definitions_are_listed_with_versions() {
         .iter()
         .find(|m| m["name"] == "load_time")
         .unwrap();
-    assert_eq!(load["versions"].as_array().unwrap().len(), 2);
-    assert_eq!(load["versions"][1]["description"], "time to first frame");
+    assert_eq!(
+        (&load["unit"], &load["description"], &load["has_results"]),
+        (&json!("s"), &json!(""), &json!(true))
+    );
+    assert_eq!(
+        (&load["version"], &load["versions"]),
+        (&Value::Null, &Value::Null)
+    );
     let (_, suites) = write.get(&app.m("/suites")).await;
     assert_eq!(suites[0]["versions"].as_array().unwrap().len(), 1);
 
