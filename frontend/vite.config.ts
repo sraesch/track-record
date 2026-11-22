@@ -46,5 +46,19 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     css: false,
+    // Every worker renders the whole app with React's development build
+    // in jsdom, which keeps a core busy. With Vitest's default (all cores
+    // but one) the workers slow each other down: on 10 cores the slowest
+    // test took 2.4 s with 9 workers and 1.5 s with 4, while the whole
+    // run took as long. Half the cores leaves room for a loaded machine
+    // or CI runner, where tests otherwise ran into the 5 s timeout.
+    maxWorkers: '50%',
+    // Three times Vitest's default. The heaviest tests render the whole
+    // app and need about 1 s of CPU (1.3 s in a full run on an idle
+    // machine), nearly all of it React and MUI rendering, not the tests.
+    // During load spikes (load average 45-99 on 10 cores) tests ran up to
+    // 5-10 times slower than idle, and even 0.5 s tests hit 5 s. Keep tests
+    // small instead of raising this further; see enterText().
+    testTimeout: 15_000,
   },
 })

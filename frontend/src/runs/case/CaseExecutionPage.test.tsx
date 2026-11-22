@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { formatDateTime } from '../../format'
 import { mockApi, problem } from '../../test/api'
+import { enterText } from '../../test/input'
 import { currentQuery, renderApp } from '../../test/render'
 import {
   caseExecutionDetail,
@@ -393,7 +394,8 @@ describe('Case execution', () => {
     const notes = within(await section('Test case annotations'))
     expect(await notes.findByText('No annotations yet.')).toBeInTheDocument()
     const runRequests = api.requests(runPath).length
-    await user.type(
+    await enterText(
+      user,
       notes.getByRole('textbox', { name: 'New annotation' }),
       'Flaky on this device',
     )
@@ -454,10 +456,12 @@ describe('Case execution', () => {
       ),
     ).toBeInTheDocument()
     const runRequests = api.requests(runPath).length
-    await user.type(
+    await enterText(
+      user,
       tagSection.getByRole('textbox', { name: 'New tag' }),
-      ' needs review {Enter}',
+      ' needs review ',
     )
+    await user.keyboard('{Enter}')
     expect(
       await tagSection.findByRole('button', {
         name: 'Find case executions tagged needs review in this run',

@@ -91,6 +91,11 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   (`npm run generate:api`; `test.sh` fails when stale), `openapi-fetch`
   client in `src/api/client.ts`, TanStack Query for fetching. Tests fake
   the API with `mockApi()` (`src/test/api.ts`) and render with `renderApp()`.
+  Put longer text into fields with `enterText()` (`src/test/input.ts`), not
+  `user.type`: every keystroke renders the page again, and long texts ran
+  into the timeout on loaded machines. Keep tests small; don't raise the
+  timeouts further (15 s per test, 3 s for `findBy`; reasons in
+  `vite.config.ts`).
 - After changing a UI endpoint: regenerate the backend OpenAPI documents,
   then `npm run generate:api` in `frontend/`.
 - Attachments are previewed by the app ([ADR 0013](docs/adr/0013-attachment-previews.md)),
