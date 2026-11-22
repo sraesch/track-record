@@ -1,9 +1,9 @@
 -- Schema structure: tables, views, types and immutability triggers.
 BEGIN;
-SELECT plan(28);
+SELECT plan(27);
 
 SELECT tables_are('public', ARRAY[
-    'suite', 'suite_version', 'scenario', 'scenario_version', 'metric', 'metric_version',
+    'suite', 'suite_version', 'scenario', 'scenario_version', 'metric',
     'derived_metric', 'derived_metric_dependency',
     'alias', 'alias_version', 'unit',
     'sut_version', 'environment', 'client_device', 'asset', 'test_case', 'test_case_asset',
@@ -34,7 +34,7 @@ SELECT col_type_is('alias', 'source_value', 'jsonb');
 -- Every immutable table has the guard trigger.
 SELECT has_trigger(t, 'immutable_rows')
 FROM unnest(ARRAY[
-    'suite_version', 'scenario_version', 'metric_version', 'alias_version', 'unit',
+    'suite_version', 'scenario_version', 'alias_version', 'unit',
     'environment', 'test_case', 'case_execution', 'sample',
     'measurement', 'series', 'series_point', 'attachment'
 ]) AS t;

@@ -47,7 +47,7 @@ $$;
 
 CREATE FUNCTION fx_metric(p_name text DEFAULT 'load_time') RETURNS bigint
     LANGUAGE sql AS $$
-    SELECT ensure_metric_version(p_name, 's', 'float', 'lower_is_better');
+    SELECT ensure_metric(p_name, 's', 'float', 'lower_is_better');
 $$;
 
 -- Inserts a series declaring p_point_count points but writing p_written points,
@@ -62,7 +62,7 @@ DECLARE
     v_id  uuid := gen_random_uuid();
     v_key bigint;
 BEGIN
-    INSERT INTO series (id, sample_id, metric_version_id, x_dimension, x_unit, point_count)
+    INSERT INTO series (id, sample_id, metric_id, x_dimension, x_unit, point_count)
     VALUES (v_id, p_sample_id, fx_metric(p_metric), 'time', 's', p_point_count)
     RETURNING key INTO v_key;
 
@@ -84,7 +84,7 @@ DECLARE
     v_id  uuid := gen_random_uuid();
     v_key bigint;
 BEGIN
-    INSERT INTO series (id, sample_id, metric_version_id, x_dimension, x_unit, point_count)
+    INSERT INTO series (id, sample_id, metric_id, x_dimension, x_unit, point_count)
     VALUES (v_id, p_sample_id, fx_metric(p_metric), 'bytes', 'B', cardinality(p_x))
     RETURNING key INTO v_key;
 

@@ -87,13 +87,15 @@ unit catalogue (`track-record-core::units`):
 - A saved derived metric declares its unit. The inferred unit must convert to
   it, and every value is converted to it.
 
-Units are checked twice. **On save**, against the latest versions of the
-uploaded metrics and the most recent series of each referenced metric (a
-series reference needs at least one uploaded series to know its x unit). **On evaluation**, again with
-the units of each sample's inputs (cached per combination of units). A metric
-whose unit changed between versions (`s`, later `ms`) therefore still gives
-the same value in the declared unit. Inputs whose units no longer fit are a
-data error for that sample.
+Units are checked twice. **On save**, against the uploaded metrics and the
+most recent series of each referenced metric (a series reference needs at
+least one uploaded series to know its x unit). **On evaluation**, again with
+the units of each sample's inputs (cached per combination of units): the x
+unit of a series can differ from one upload to the next. Inputs whose units
+no longer fit are a data error for that sample. A metric has one unit
+([ADR 0018](0018-metrics-without-versions.md), which replaced the metric
+versions this ADR was written with); a change to it that would make a derived
+metric invalid is rejected.
 
 ### Values
 

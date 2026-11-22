@@ -9,6 +9,7 @@ pub mod catalog;
 pub mod derived;
 pub mod ingest;
 pub mod lifecycle;
+pub mod metrics;
 pub mod query;
 pub mod runs;
 pub mod tokens;

@@ -1,7 +1,8 @@
-import type { Metric, MetricVersion, Unit } from '../api/client'
+import type { Metric, Unit } from '../api/client'
 
-// The metrics view: metric definitions (versioned, FR-7) and the unit
-// catalogue (FR-13a). Its state lives in the URL (FR-21):
+// The metrics view: uploaded metrics, which have one definition that can be
+// changed (FR-7, ADR 0018), and the unit catalogue (FR-13a). Its state
+// lives in the URL (FR-21):
 //
 //   /metrics?q=load              metrics whose name, description or unit match
 //   /metrics?tab=units&q=time    the unit catalogue, filtered
@@ -29,56 +30,39 @@ export function metricsViewToParams(view: MetricsView): URLSearchParams {
   return params
 }
 
-/** A metric as the table shows it: its latest version and the older ones. */
-export type MetricRow = {
-  id: number
-  name: string
-  latest: MetricVersion
-  /** All versions, newest first; the first one is `latest`. */
-  versions: MetricVersion[]
-}
-
-/** One row per metric with at least one version, sorted by name. */
-export function toMetricRows(metrics: readonly Metric[]): MetricRow[] {
-  return metrics
-    .flatMap((metric) => {
-      const versions = [...metric.versions].sort(
-        (a, b) => b.version - a.version,
-      )
-      const latest = versions[0]
-      return latest
-        ? [{ id: metric.id, name: metric.name, latest, versions }]
-        : []
-    })
-    .sort((a, b) => a.name.localeCompare(b.name))
+/** The metrics sorted by name. */
+export function sortMetrics(metrics: readonly Metric[]): Metric[] {
+  return [...metrics].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 const matches = (needle: string, ...haystack: string[]) =>
   haystack.some((text) => text.toLowerCase().includes(needle))
 
-/** Metrics whose name, description or unit (of any version) contain `search`. */
+/** Metrics whose name, description or unit contain `search`. */
 export function filterMetrics(
-  rows: readonly MetricRow[],
+  metrics: readonly Metric[],
   search: string | undefined,
-): readonly MetricRow[] {
+): readonly Metric[] {
   const needle = search?.trim().toLowerCase()
-  if (!needle) return rows
-  return rows.filter((row) =>
-    row.versions.some((v) => matches(needle, row.name, v.description, v.unit)),
-  )
+  if (!needle) return metrics
+  return metrics.filter((m) => matches(needle, m.name, m.description, m.unit))
 }
 
-/** The fields that differ from the previous version, to mark them. */
-export type ChangedField = 'unit' | 'value_type' | 'direction' | 'description'
+/**
+ * Whether the backend accepts `name` for a metric: not empty, no spaces
+ * around it, no backtick (expressions could not quote it).
+ */
+export function isValidMetricName(name: string): boolean {
+  return name.trim() !== '' && name === name.trim() && !name.includes('`')
+}
 
-export function changedFields(
-  version: MetricVersion,
-  previous: MetricVersion | undefined,
-): ChangedField[] {
-  if (!previous) return []
-  return (['unit', 'value_type', 'direction', 'description'] as const).filter(
-    (field) => version[field] !== previous[field],
-  )
+/** Why a metric cannot be deleted, if it cannot. */
+export function deleteBlocker(
+  metric: Metric,
+): 'results' | 'derived' | undefined {
+  if (metric.has_results) return 'results'
+  if (metric.used_by.length > 0) return 'derived'
+  return undefined
 }
 
 /** The units of one quantity, base unit first, then by size. */
@@ -122,29 +106,29 @@ export function filterUnits(
   })
 }
 
-/** How many metrics use each unit symbol in their latest version. */
+/** The names of the metrics that use each unit symbol. */
 export function metricsPerUnit(
-  rows: readonly MetricRow[],
+  metrics: readonly Metric[],
 ): Map<string, string[]> {
   const perUnit = new Map<string, string[]>()
-  for (const row of rows) {
-    const names = perUnit.get(row.latest.unit) ?? []
-    names.push(row.name)
-    perUnit.set(row.latest.unit, names)
+  for (const metric of metrics) {
+    const names = perUnit.get(metric.unit) ?? []
+    names.push(metric.name)
+    perUnit.set(metric.unit, names)
   }
   return perUnit
 }
 
 /**
- * Units used by a metric (latest version) that are not in the catalogue.
- * They are allowed, but values in them are not converted (FR-13a).
+ * Units used by a metric that are not in the catalogue. They are allowed,
+ * but values in them are not converted (FR-13a).
  */
 export function customUnits(
-  rows: readonly MetricRow[],
+  metrics: readonly Metric[],
   units: readonly Unit[],
 ): { symbol: string; metrics: string[] }[] {
   const known = new Set(units.map((u) => u.symbol))
-  return [...metricsPerUnit(rows).entries()]
+  return [...metricsPerUnit(metrics).entries()]
     .filter(([symbol]) => !known.has(symbol))
     .map(([symbol, metrics]) => ({ symbol, metrics }))
     .sort((a, b) => a.symbol.localeCompare(b.symbol))

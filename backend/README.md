@@ -105,8 +105,32 @@ All ids are client-generated UUIDs. The first write returns 201. Repeating it
 with the same content returns 200. Sending other content under the same id
 returns 409. Errors are `application/problem+json` with a stable `code`.
 
-Invalidation, hard delete, token management, alias editing and saving
-derived metrics exist only on the UI port.
+Every upload that uses metrics carries their definition (`metrics`: name →
+unit, value type, direction, description). It creates the metrics that do
+not exist yet and never changes one
+([ADR 0018](../docs/adr/0018-metrics-without-versions.md)): for an existing
+metric, direction and description are ignored, and another unit or value
+type is rejected with 409 `metric_definition_conflict`.
+
+Invalidation, hard delete, token management, alias editing, changing metrics
+and saving derived metrics exist only on the UI port.
+
+### Metrics
+
+A metric has one definition and no versions; `GET /metrics` lists them with
+`has_results` and the derived metrics that use them (`used_by`).
+
+- `PUT /ui/api/v1/metrics/{name}` changes unit, value type, direction and
+  description. The change applies to all results of the metric. Stored
+  values are not converted: with another unit they are read in that unit,
+  and uploads have to send the new unit from then on. A unit that would make
+  a derived metric using the metric invalid is rejected with 422
+  `breaks_derived_metrics`.
+- `POST /ui/api/v1/metrics/{name}/rename` renames a metric and rewrites the
+  expressions of the derived metrics that use it (`rewritten`). An upload
+  under the old name creates a new metric.
+- `DELETE /ui/api/v1/metrics/{name}` deletes a metric without results that
+  no derived metric uses; otherwise 409 `metric_in_use`.
 
 ### Derived metrics and analysis
 

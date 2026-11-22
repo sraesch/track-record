@@ -26,11 +26,17 @@ behind it.
 - **Deduplication and versioning in the database:** `ensure_*` functions
   return the matching row, creating it if needed, and lock the parent row so
   concurrent uploads get consistent version numbers.
-  - Harness-sent definitions (suites, scenarios, metrics), environments and
-    test cases are deduplicated by content hash, so sending an old definition
+  - Harness-sent definitions (suites, scenarios), environments and test
+    cases are deduplicated by content hash, so sending an old definition
     returns its old version.
   - Aliases, which are edited in the UI, get a new version unless the content
     equals the latest one.
+- **Metrics are not versioned**
+  ([ADR 0018](0018-metrics-without-versions.md), which replaced the
+  versions this ADR first described). `metric` holds the one definition and
+  can be updated; `measurement` and `series` refer to the metric.
+  `ensure_metric()` creates a metric for an upload and rejects another unit
+  or value type for an existing one.
 - **Derived metrics are not versioned**
   ([ADR 0017](0017-derived-metrics-without-versions.md), which replaced the
   versions this ADR first described). `derived_metric` holds the one

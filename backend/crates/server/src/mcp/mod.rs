@@ -40,6 +40,7 @@ use crate::service::analysis::{self as analysis, AggregatesRequest, TrendRequest
 use crate::service::annotations::{self, AnnotationQuery, CreateAnnotation, UpdateAnnotation};
 use crate::service::catalog::{self, TestCaseQuery};
 use crate::service::derived::{self, EvaluateRequest, ValidateExpression};
+use crate::service::metrics;
 use crate::service::runs::{self, CaseExecutionListQuery, RunFilter};
 
 const INSTRUCTIONS: &str = "\
@@ -327,11 +328,12 @@ impl McpServer {
     }
 
     #[tool(
-        description = "Uploaded metrics with all versions: unit, value type and direction.",
+        description = "Uploaded metrics: unit, value type, direction and the derived \
+                       metrics that use them. A metric has one definition, which can change.",
         annotations(read_only_hint = true)
     )]
     async fn list_metrics(&self) -> Result<CallToolResult, ErrorData> {
-        respond(catalog::metrics(&self.state.pool).await)
+        respond(metrics::list(&self.state.pool).await)
     }
 
     #[tool(

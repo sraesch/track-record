@@ -47,7 +47,7 @@
       "description": "Suites, scenarios and test cases with all their versions."
     },
     "metrics": {
-      "description": "Metric definitions with their units and direction, and the unit catalogue."
+      "description": "The uploaded metrics with their unit and direction, and the unit catalogue. A metric has one definition, which can be changed here."
     },
     "derivedMetrics": {
       "description": "Define derived metrics in the DSL and change them when needed. They are computed at query time, also for historical runs."
@@ -288,7 +288,6 @@
     "repetition": "Repetition",
     "warmup": "Warmup",
     "warmupHint": "Left out of aggregation by default.",
-    "metricVersion": "{{metric}} v{{version}}",
     "overview": {
       "title": "Overview",
       "run": "Run",
@@ -496,8 +495,7 @@
       "valueType": "Value type",
       "direction": "Direction",
       "description": "Description",
-      "version": "Version",
-      "defined": "Defined",
+      "changed": "Changed",
       "actions": "Actions"
     },
     "valueType": {
@@ -515,19 +513,47 @@
       "custom": "Custom",
       "customHint": "Not in the unit catalogue: values in this unit are not converted."
     },
-    "version": "v{{version}}",
-    "versionOf_one": "v{{version}}",
-    "versionOf_other": "v{{version}} of {{count}}",
-    "versionsLabel": "Versions of {{name}}",
-    "definedAt": "Defined {{time}}",
-    "changed": "Changed",
     "runs": "Runs with this metric",
     "runsNamed": "Runs with metric {{name}}",
     "count_one": "{{count}} metric",
     "count_other": "{{count}} metrics",
-    "empty": "No metrics yet. They are defined when the harness uploads its first results.",
+    "empty": "No metrics yet. The harness creates them when it uploads its first results.",
     "noMatch": "No metrics match the search.",
     "error": "The metrics could not be loaded: {{message}}",
+    "edit": {
+      "action": "Edit",
+      "named": "Edit metric {{name}}",
+      "title": "Edit {{name}}",
+      "text": "A metric has one definition. A change applies to all its results, also those of earlier runs.",
+      "unitHelp": "Leave empty for a dimensionless metric. Units outside the catalogue are not converted.",
+      "reinterprets": "The stored values are not converted: they are read in the new unit and value type from now on. Uploads have to send the new unit and value type; others are rejected.",
+      "users_one": "The new unit also applies to the derived metric that uses this metric:",
+      "users_other": "The new unit also applies to the derived metrics that use this metric:"
+    },
+    "rename": {
+      "action": "Rename",
+      "named": "Rename metric {{name}}",
+      "title": "Rename {{name}}",
+      "newName": "New name",
+      "help": "Uploads and expressions refer to the metric by this name.",
+      "invalid": "A name must not be empty, start or end with spaces, or contain '`'.",
+      "same": "This is the current name.",
+      "taken": "Another metric has this name.",
+      "users_one": "The expression of this derived metric is changed to the new name:",
+      "users_other": "The expressions of these derived metrics are changed to the new name:",
+      "harness": "The results stay with the renamed metric. The harness has to upload under the new name from now on: an upload under the old name creates a new metric called",
+      "views": "Analysis views, links and other expressions that still use the old name stop working:",
+      "confirm": "Rename"
+    },
+    "delete": {
+      "action": "Delete",
+      "named": "Delete metric {{name}}",
+      "title": "Delete {{name}}?",
+      "text": "The metric has no results and no derived metric uses it. It is removed for good; an upload that uses it creates it again.",
+      "hasResults": "It cannot be deleted: runs have results for it. Results are only deleted together with their run.",
+      "inUse_one": "It cannot be deleted while a derived metric uses it. Change or delete this one first:",
+      "inUse_other": "It cannot be deleted while derived metrics use it. Change or delete these first:"
+    },
     "units": {
       "columns": {
         "symbol": "Symbol",

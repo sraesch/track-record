@@ -8,12 +8,12 @@
 //!   be changed (ADR 0017): a change applies to every later evaluation,
 //!   historical runs included, and to the derived metrics built on it.
 //!
-//! Validation checks units against the latest metric versions and the most
-//! recent series of each referenced metric. Evaluation checks again with
-//! the units of each sample, so a metric whose unit changed between
-//! versions still converts correctly. Every result is converted to one
-//! output unit: the declared unit of a saved metric, the requested unit, or
-//! the unit the expression has with the latest units.
+//! Validation checks units against the metrics (each has one definition,
+//! ADR 0018) and the most recent series of each referenced metric.
+//! Evaluation checks again with the units of each sample: the x unit of a
+//! series can differ from one upload to the next. Every result is converted
+//! to one output unit: the declared unit of a saved metric, the requested
+//! unit, or the unit the expression has with the latest units.
 
 use std::collections::{BTreeSet, HashMap};
 
@@ -83,8 +83,105 @@ async fn users_of(pool: &PgPool, name: &str) -> ApiResult<BTreeSet<String>> {
     Ok(rows.into_iter().collect())
 }
 
-/// Units of the latest metric versions and of the most recent series of
-/// each metric: what validation checks against.
+/// Id, name and expression of every derived metric, sorted by name.
+pub async fn expressions<'e>(
+    executor: impl sqlx::PgExecutor<'e>,
+) -> ApiResult<Vec<(i64, String, String)>> {
+    Ok(
+        sqlx::query_as("SELECT id, name, expression FROM derived_metric ORDER BY name")
+            .fetch_all(executor)
+            .await?,
+    )
+}
+
+/// The uploaded metrics an expression refers to, as scalar or as series.
+/// None if it does not parse.
+fn uploaded_inputs(expression: &str) -> BTreeSet<String> {
+    parse(expression)
+        .map(|e| {
+            let refs = e.references();
+            refs.metrics.into_iter().chain(refs.series).collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The derived metrics among `expressions` (see [`expressions`]) that refer
+/// to the uploaded metric `metric`, sorted by name.
+pub fn users_of_metric(expressions: &[(i64, String, String)], metric: &str) -> Vec<String> {
+    expressions
+        .iter()
+        .filter(|(_, _, expression)| uploaded_inputs(expression).contains(metric))
+        .map(|(_, name, _)| name.clone())
+        .collect()
+}
+
+/// For every uploaded metric that derived metrics refer to: the names of
+/// those derived metrics, sorted.
+pub async fn metric_users(pool: &PgPool) -> ApiResult<HashMap<String, Vec<String>>> {
+    let mut out: HashMap<String, Vec<String>> = HashMap::new();
+    for (_, name, expression) in expressions(pool).await? {
+        for metric in uploaded_inputs(&expression) {
+            out.entry(metric).or_default().push(name.clone());
+        }
+    }
+    Ok(out)
+}
+
+/// An uploaded metric has one definition (ADR 0018), so a changed unit takes
+/// effect in the derived metrics that use the metric, directly or through
+/// other derived metrics. One message for each of them that is valid now and
+/// would not be with `unit`.
+pub async fn broken_by_metric_unit(
+    pool: &PgPool,
+    metric: &str,
+    unit: &str,
+) -> ApiResult<Vec<String>> {
+    let all: BTreeSet<String> = expressions(pool)
+        .await?
+        .into_iter()
+        .map(|(_, name, _)| name)
+        .collect();
+    let library = load_library(pool, &all).await?;
+    let mut users = Vec::new();
+    let mut names = BTreeSet::new();
+    for user in &all {
+        if let Ok(root) = Root::definition(&library, user)
+            && let Ok((raw, _)) = root.closure(&library)
+            && (raw.metrics.contains(metric) || raw.series.contains(metric))
+        {
+            names.extend(raw.metrics);
+            names.extend(raw.series);
+            users.push((user, root));
+        }
+    }
+    if users.is_empty() {
+        return Ok(vec![]);
+    }
+    let catalogue = catalog::unit_catalogue(pool).await?;
+    let before = LatestUnits::load(pool, &names).await?;
+    let mut after = before.clone();
+    if let Some(u) = after.metrics.get_mut(metric) {
+        *u = unit.to_owned();
+    }
+    if let Some(s) = after.series.get_mut(metric) {
+        s.unit = unit.to_owned();
+    }
+    let mut out = Vec::new();
+    for (user, root) in users {
+        if compile(&library, &catalogue, &root, &before).is_ok()
+            && let Err(d) = compile(&library, &catalogue, &root, &after)
+        {
+            out.push(format!(
+                "derived.{user} uses {metric} and would no longer be valid with unit {unit:?}: {}",
+                d[0].message
+            ));
+        }
+    }
+    Ok(out)
+}
+
+/// Units of the metrics and of the most recent series of each metric: what
+/// validation checks against.
 #[derive(Debug, Clone, Default)]
 pub struct LatestUnits {
     metrics: HashMap<String, String>,
@@ -94,18 +191,14 @@ pub struct LatestUnits {
 impl LatestUnits {
     pub async fn load(pool: &PgPool, names: &BTreeSet<String>) -> ApiResult<Self> {
         let names: Vec<&String> = names.iter().collect();
-        let metrics: Vec<(String, String)> = sqlx::query_as(
-            "SELECT DISTINCT ON (m.id) m.name, v.unit FROM metric m \
-             JOIN metric_version v ON v.metric_id = m.id \
-             WHERE m.name = ANY($1) ORDER BY m.id, v.version DESC",
-        )
-        .bind(&names)
-        .fetch_all(pool)
-        .await?;
+        let metrics: Vec<(String, String)> =
+            sqlx::query_as("SELECT m.name, m.unit FROM metric m WHERE m.name = ANY($1)")
+                .bind(&names)
+                .fetch_all(pool)
+                .await?;
         let series: Vec<(String, String, String, String)> = sqlx::query_as(
-            "SELECT DISTINCT ON (m.id) m.name, v.unit, se.x_unit, se.x_dimension FROM metric m \
-             JOIN metric_version v ON v.metric_id = m.id \
-             JOIN series se ON se.metric_version_id = v.id \
+            "SELECT DISTINCT ON (m.id) m.name, m.unit, se.x_unit, se.x_dimension FROM metric m \
+             JOIN series se ON se.metric_id = m.id \
              WHERE m.name = ANY($1) ORDER BY m.id, se.created_at DESC, se.key DESC",
         )
         .bind(&names)
@@ -141,7 +234,8 @@ impl UnitSource for LatestUnits {
 }
 
 /// Raw inputs of the given samples: the referenced measurements and series,
-/// each in the unit it was uploaded in. Every sample gets an entry.
+/// as they were uploaded, with the unit their metric has now. Every sample
+/// gets an entry.
 pub async fn load_sample_data(
     pool: &PgPool,
     sample_ids: &[Uuid],
@@ -154,9 +248,8 @@ pub async fn load_sample_data(
     if !refs.metrics.is_empty() {
         let names: Vec<&String> = refs.metrics.iter().collect();
         let rows: Vec<(Uuid, String, String, f64)> = sqlx::query_as(
-            "SELECT m.sample_id, mt.name, mv.unit, m.value FROM measurement m \
-             JOIN metric_version mv ON mv.id = m.metric_version_id \
-             JOIN metric mt ON mt.id = mv.metric_id \
+            "SELECT m.sample_id, mt.name, mt.unit, m.value FROM measurement m \
+             JOIN metric mt ON mt.id = m.metric_id \
              WHERE m.sample_id = ANY($1) AND mt.name = ANY($2)",
         )
         .bind(sample_ids)
@@ -172,9 +265,8 @@ pub async fn load_sample_data(
     if !refs.series.is_empty() {
         let names: Vec<&String> = refs.series.iter().collect();
         let rows: Vec<(Uuid, Uuid, String, String, String, String)> = sqlx::query_as(
-            "SELECT se.id, se.sample_id, mt.name, mv.unit, se.x_unit, se.x_dimension \
-             FROM series se JOIN metric_version mv ON mv.id = se.metric_version_id \
-             JOIN metric mt ON mt.id = mv.metric_id \
+            "SELECT se.id, se.sample_id, mt.name, mt.unit, se.x_unit, se.x_dimension \
+             FROM series se JOIN metric mt ON mt.id = se.metric_id \
              WHERE se.sample_id = ANY($1) AND mt.name = ANY($2)",
         )
         .bind(sample_ids)

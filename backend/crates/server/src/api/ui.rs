@@ -1,6 +1,6 @@
 //! Endpoints that exist only on the UI port (behind the auth proxy): run
-//! invalidation and hard delete, token management, alias and derived
-//! metric editing.
+//! invalidation and hard delete, token management, alias, metric and
+//! derived metric editing.
 //! No API token can reach them (NFR-2).
 
 use axum::Json;
@@ -15,6 +15,7 @@ use crate::service::derived::{
     self, RenameDerivedMetric, RenamedDerivedMetric, SaveDerivedMetric, SavedDerivedMetric,
 };
 use crate::service::lifecycle::{self, DeleteRun, InvalidateRun};
+use crate::service::metrics::{self, Metric, RenameMetric, RenamedMetric, SaveMetric};
 use crate::service::tokens::{self, ApiToken, CreateToken, CreatedToken};
 
 /// Mark a run invalid with a reason (FR-9).
@@ -159,5 +160,60 @@ pub async fn delete_derived_metric(
     ApiPath(name): ApiPath<String>,
 ) -> ApiResult<StatusCode> {
     derived::delete(&state.pool, &name).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Change the definition of an uploaded metric (FR-7). A metric has no
+/// versions: the change applies to every result of the metric, historical
+/// ones included. Stored values are not converted; with another unit they
+/// are read in that unit. Uploads have to send the new unit and value type
+/// from then on.
+#[utoipa::path(put, path = "/metrics/{name}", tag = "ui",
+    params(("name" = String, Path)),
+    request_body = SaveMetric,
+    responses((status = 200, description = "Changed, or saved again unchanged", body = Metric),
+              (status = 404, body = Problem),
+              (status = 422, description = "Invalid unit, or a unit that breaks a derived \
+                                            metric that uses this metric",
+               body = Problem)))]
+pub async fn save_metric(
+    State(state): State<AppState>,
+    ApiPath(name): ApiPath<String>,
+    ApiJson(req): ApiJson<SaveMetric>,
+) -> ApiResult<Json<Metric>> {
+    Ok(Json(metrics::save(&state.pool, &name, &req).await?))
+}
+
+/// Rename an uploaded metric. Its results stay with it, and the expressions
+/// of the derived metrics that use it are changed to the new name
+/// (`rewritten`). Analysis views and other expressions that use the old
+/// name stop working, and an upload under the old name creates a new
+/// metric.
+#[utoipa::path(post, path = "/metrics/{name}/rename", tag = "ui",
+    params(("name" = String, Path)),
+    request_body = RenameMetric,
+    responses((status = 200, body = RenamedMetric), (status = 404, body = Problem),
+              (status = 409, description = "The new name is taken", body = Problem),
+              (status = 422, description = "Invalid name", body = Problem)))]
+pub async fn rename_metric(
+    State(state): State<AppState>,
+    ApiPath(name): ApiPath<String>,
+    ApiJson(req): ApiJson<RenameMetric>,
+) -> ApiResult<Json<RenamedMetric>> {
+    Ok(Json(metrics::rename(&state.pool, &name, &req).await?))
+}
+
+/// Delete an uploaded metric. Only possible for a metric without results
+/// that no derived metric uses. Cannot be undone.
+#[utoipa::path(delete, path = "/metrics/{name}", tag = "ui",
+    params(("name" = String, Path)),
+    responses((status = 204), (status = 404, body = Problem),
+              (status = 409, description = "The metric has results, or derived metrics use it",
+               body = Problem)))]
+pub async fn delete_metric(
+    State(state): State<AppState>,
+    ApiPath(name): ApiPath<String>,
+) -> ApiResult<StatusCode> {
+    metrics::delete(&state.pool, &name).await?;
     Ok(StatusCode::NO_CONTENT)
 }

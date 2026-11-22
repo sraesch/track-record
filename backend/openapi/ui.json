@@ -1148,7 +1148,7 @@
         "tags": [
           "definitions"
         ],
-        "summary": "Metrics with all versions.",
+        "summary": "Uploaded metrics. A metric has one definition, which can be changed in\nthe web UI; there are no versions (FR-7).",
         "operationId": "list_metrics",
         "responses": {
           "200": {
@@ -1160,6 +1160,180 @@
                   "items": {
                     "$ref": "#/components/schemas/Metric"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ui/api/v1/metrics/{name}": {
+      "put": {
+        "tags": [
+          "ui"
+        ],
+        "summary": "Change the definition of an uploaded metric (FR-7). A metric has no\nversions: the change applies to every result of the metric, historical\nones included. Stored values are not converted; with another unit they\nare read in that unit. Uploads have to send the new unit and value type\nfrom then on.",
+        "operationId": "save_metric",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveMetric"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Changed, or saved again unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Metric"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid unit, or a unit that breaks a derived metric that uses this metric",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ui"
+        ],
+        "summary": "Delete an uploaded metric. Only possible for a metric without results\nthat no derived metric uses. Cannot be undone.",
+        "operationId": "delete_metric",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The metric has results, or derived metrics use it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ui/api/v1/metrics/{name}/rename": {
+      "post": {
+        "tags": [
+          "ui"
+        ],
+        "summary": "Rename an uploaded metric. Its results stay with it, and the expressions\nof the derived metrics that use it are changed to the new name\n(`rewritten`). Analysis views and other expressions that use the old\nname stop working, and an upload under the old name creates a new\nmetric.",
+        "operationId": "rename_metric",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameMetric"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenamedMetric"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The new name is taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -3571,8 +3745,7 @@
         "type": "object",
         "required": [
           "metric",
-          "metric_version_id",
-          "metric_version",
+          "metric_id",
           "unit",
           "value"
         ],
@@ -3580,16 +3753,13 @@
           "metric": {
             "type": "string"
           },
-          "metric_version": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "metric_version_id": {
+          "metric_id": {
             "type": "integer",
             "format": "int64"
           },
           "unit": {
-            "type": "string"
+            "type": "string",
+            "description": "The unit the metric has now; the value was not converted."
           },
           "value": {
             "type": "number",
@@ -3599,12 +3769,34 @@
       },
       "Metric": {
         "type": "object",
+        "description": "An uploaded metric. It has one definition, which can be changed in the\nweb UI.",
         "required": [
           "id",
           "name",
-          "versions"
+          "unit",
+          "value_type",
+          "direction",
+          "description",
+          "created_at",
+          "updated_at",
+          "has_results",
+          "used_by"
         ],
         "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/MetricDirection"
+          },
+          "has_results": {
+            "type": "boolean",
+            "description": "True if measurements or series of the metric are stored. Such a\nmetric cannot be deleted."
+          },
           "id": {
             "type": "integer",
             "format": "int64"
@@ -3612,11 +3804,24 @@
           "name": {
             "type": "string"
           },
-          "versions": {
+          "unit": {
+            "type": "string",
+            "description": "Unit symbol; `\"\"` for dimensionless (FR-13a)."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the definition was last changed."
+          },
+          "used_by": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/MetricVersion"
-            }
+              "type": "string"
+            },
+            "description": "Names of the derived metrics whose expressions refer to the metric."
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/MetricValueType"
           }
         }
       },
@@ -3656,44 +3861,6 @@
           "integer",
           "boolean"
         ]
-      },
-      "MetricVersion": {
-        "type": "object",
-        "required": [
-          "id",
-          "version",
-          "unit",
-          "value_type",
-          "direction",
-          "description",
-          "created_at"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "description": {
-            "type": "string"
-          },
-          "direction": {
-            "$ref": "#/components/schemas/MetricDirection"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "unit": {
-            "type": "string"
-          },
-          "value_type": {
-            "$ref": "#/components/schemas/MetricValueType"
-          },
-          "version": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
       },
       "OverlayResponse": {
         "type": "object",
@@ -3864,10 +4031,45 @@
         },
         "additionalProperties": false
       },
+      "RenameMetric": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The new name."
+          }
+        },
+        "additionalProperties": false
+      },
       "RenamedDerivedMetric": {
         "allOf": [
           {
             "$ref": "#/components/schemas/DerivedMetric"
+          },
+          {
+            "type": "object",
+            "required": [
+              "rewritten"
+            ],
+            "properties": {
+              "rewritten": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Derived metrics whose expressions were changed to the new name."
+              }
+            }
+          }
+        ]
+      },
+      "RenamedMetric": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Metric"
           },
           {
             "type": "object",
@@ -4339,6 +4541,30 @@
         },
         "additionalProperties": false
       },
+      "SaveMetric": {
+        "type": "object",
+        "required": [
+          "unit",
+          "value_type",
+          "direction"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/MetricDirection"
+          },
+          "unit": {
+            "type": "string",
+            "description": "Unit symbol; `\"\"` for dimensionless. Stored values are not converted."
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/MetricValueType"
+          }
+        },
+        "additionalProperties": false
+      },
       "SavedDerivedMetric": {
         "allOf": [
           {
@@ -4443,8 +4669,7 @@
           "id",
           "sample_id",
           "metric",
-          "metric_version_id",
-          "metric_version",
+          "metric_id",
           "unit",
           "x_dimension",
           "x_unit",
@@ -4458,11 +4683,7 @@
           "metric": {
             "type": "string"
           },
-          "metric_version": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "metric_version_id": {
+          "metric_id": {
             "type": "integer",
             "format": "int64"
           },
@@ -4476,7 +4697,7 @@
           },
           "unit": {
             "type": "string",
-            "description": "Unit of y (the metric's unit)."
+            "description": "Unit of y (the unit the metric has now)."
           },
           "x_dimension": {
             "type": "string"
@@ -5150,7 +5371,7 @@
     },
     {
       "name": "definitions",
-      "description": "Versioned definitions and dimensions"
+      "description": "Definitions and dimensions"
     },
     {
       "name": "annotations",

@@ -29,10 +29,11 @@ const tabId = (tab: MetricsTab) => `metrics-tab-${tab}`
 const panelId = (tab: MetricsTab) => `metrics-panel-${tab}`
 
 /**
- * Metric definitions (FR-7) with their unit, value type and direction, and
- * the unit catalogue (FR-13a). Metrics are defined by the harness when it
- * uploads results, so this view only reads. Tab and search are in the URL
- * (FR-21).
+ * The uploaded metrics (FR-7) with their unit, value type and direction,
+ * and the unit catalogue (FR-13a). The harness creates a metric when it
+ * first uploads results for it. A metric has one definition and no versions
+ * (ADR 0018): it is changed, renamed and deleted here. Tab and search are in
+ * the URL (FR-21).
  */
 export function MetricsPage() {
   const { t } = useTranslation()
@@ -147,7 +148,12 @@ export function MetricsPage() {
             </EmptyState>
           ) : (
             <>
-              <MetricTable rows={shownMetrics} catalogue={catalogue} />
+              <MetricTable
+                rows={shownMetrics}
+                metrics={rows}
+                units={units.data ?? []}
+                catalogue={catalogue}
+              />
               <Typography
                 variant="body2"
                 color="text.secondary"

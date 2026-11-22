@@ -1,7 +1,8 @@
 -- Definitions: content deduplication, version numbering and immutability of
 -- the versioned ones (FR-7); derived metrics, which are changed in place.
+-- Metrics, which are changed in place too, are in 11_metrics.sql.
 BEGIN;
-SELECT plan(48);
+SELECT plan(45);
 
 -- Scenarios: deduplicated by content -----------------------------------------
 
@@ -23,22 +24,11 @@ SELECT ensure_scenario_version('render', '{"steps": 2, "mode": "cold"}') AS r1 \
 SELECT is((SELECT version FROM scenario_version WHERE id = :r1), 1,
     'versions are numbered per scenario');
 
--- Suites and metrics follow the same rules ------------------------------------
+-- Suites follow the same rules -------------------------------------------------
 
 SELECT is(ensure_suite_version('nightly', '{"scenarios": ["load"]}'),
           ensure_suite_version('nightly', '{"scenarios": ["load"]}'),
     'same suite definition returns the same version');
-
-SELECT ensure_metric_version('load_time', 's', 'float', 'lower_is_better') AS m1 \gset
-
-SELECT is(ensure_metric_version('load_time', 's', 'float', 'lower_is_better'), :m1::bigint,
-    'same metric definition returns the same version');
-SELECT ensure_metric_version('load_time', 'ms', 'float', 'lower_is_better') AS m2 \gset
-SELECT is((SELECT version FROM metric_version WHERE id = :m2), 2,
-    'changed unit creates metric version 2');
-SELECT isnt(ensure_metric_version('load_time', 's', 'float', 'lower_is_better', 'Time to first frame'),
-            :m1::bigint,
-    'changed description creates a new metric version');
 
 -- Derived metrics: one definition, which can be changed (ADR 0017) -------------
 
@@ -192,8 +182,8 @@ SELECT throws_ok(
     $$ UPDATE scenario_version SET definition = '{}' $$,
     'TR001', NULL, 'scenario versions cannot be updated');
 SELECT throws_ok(
-    $$ DELETE FROM metric_version $$,
-    'TR002', NULL, 'metric versions cannot be deleted');
+    $$ DELETE FROM suite_version $$,
+    'TR002', NULL, 'suite versions cannot be deleted');
 SELECT throws_ok(
     $$ TRUNCATE alias_version $$,
     'TR001', NULL, 'alias versions cannot be truncated');

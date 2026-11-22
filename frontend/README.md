@@ -39,9 +39,10 @@ frontend/
   src/aliases/          Aliases (FR-14): list with filters in the URL,
                         add, change, remove and set again; typed
                         parameter values
-  src/metrics/          Metrics (FR-7, FR-13a): definitions with all
-                        versions, unit catalogue by quantity, custom
-                        units; tab and search in the URL
+  src/metrics/          Metrics (FR-7, FR-13a): one definition per metric
+                        (no versions, ADR 0018) with edit, rename and
+                        delete; unit catalogue by quantity, custom units;
+                        tab and search in the URL
   src/derived/          Derived metrics (FR-17): list and selected metric
                         with uses and users, rename and delete; editor
                         that creates a metric or changes one in place (no

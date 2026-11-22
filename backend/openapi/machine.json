@@ -930,7 +930,7 @@
         "tags": [
           "definitions"
         ],
-        "summary": "Metrics with all versions.",
+        "summary": "Uploaded metrics. A metric has one definition, which can be changed in\nthe web UI; there are no versions (FR-7).",
         "operationId": "list_metrics",
         "responses": {
           "200": {
@@ -1584,7 +1584,7 @@
             }
           },
           "409": {
-            "description": "Conflicting content, or the run is not running",
+            "description": "Conflicting content, the run is not running, or a metric exists with another unit or value type",
             "content": {
               "application/json": {
                 "schema": {
@@ -1684,7 +1684,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "Conflicting content, or a metric exists with another unit or value type",
             "content": {
               "application/json": {
                 "schema": {
@@ -1793,7 +1793,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "Conflicting content, or a metric exists with another unit or value type",
             "content": {
               "application/json": {
                 "schema": {
@@ -3844,8 +3844,7 @@
         "type": "object",
         "required": [
           "metric",
-          "metric_version_id",
-          "metric_version",
+          "metric_id",
           "unit",
           "value"
         ],
@@ -3853,16 +3852,13 @@
           "metric": {
             "type": "string"
           },
-          "metric_version": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "metric_version_id": {
+          "metric_id": {
             "type": "integer",
             "format": "int64"
           },
           "unit": {
-            "type": "string"
+            "type": "string",
+            "description": "The unit the metric has now; the value was not converted."
           },
           "value": {
             "type": "number",
@@ -3884,12 +3880,34 @@
       },
       "Metric": {
         "type": "object",
+        "description": "An uploaded metric. It has one definition, which can be changed in the\nweb UI.",
         "required": [
           "id",
           "name",
-          "versions"
+          "unit",
+          "value_type",
+          "direction",
+          "description",
+          "created_at",
+          "updated_at",
+          "has_results",
+          "used_by"
         ],
         "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/MetricDirection"
+          },
+          "has_results": {
+            "type": "boolean",
+            "description": "True if measurements or series of the metric are stored. Such a\nmetric cannot be deleted."
+          },
           "id": {
             "type": "integer",
             "format": "int64"
@@ -3897,11 +3915,24 @@
           "name": {
             "type": "string"
           },
-          "versions": {
+          "unit": {
+            "type": "string",
+            "description": "Unit symbol; `\"\"` for dimensionless (FR-13a)."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the definition was last changed."
+          },
+          "used_by": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/MetricVersion"
-            }
+              "type": "string"
+            },
+            "description": "Names of the derived metrics whose expressions refer to the metric."
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/MetricValueType"
           }
         }
       },
@@ -3936,7 +3967,7 @@
       },
       "MetricInput": {
         "type": "object",
-        "description": "Definition of a metric used in the request. Identical definitions map to\nthe same metric version.",
+        "description": "Definition of a metric used in the request. It creates the metric if\nthere is none with this name. A metric that exists is not changed: its\ndirection and description stay as they are, and the unit and value type\nmust be the ones it has (otherwise 409, `metric_definition_conflict`).\nMetrics are changed in the web UI.",
         "required": [
           "unit",
           "value_type",
@@ -3966,44 +3997,6 @@
           "integer",
           "boolean"
         ]
-      },
-      "MetricVersion": {
-        "type": "object",
-        "required": [
-          "id",
-          "version",
-          "unit",
-          "value_type",
-          "direction",
-          "description",
-          "created_at"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "description": {
-            "type": "string"
-          },
-          "direction": {
-            "$ref": "#/components/schemas/MetricDirection"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "unit": {
-            "type": "string"
-          },
-          "value_type": {
-            "$ref": "#/components/schemas/MetricValueType"
-          },
-          "version": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
       },
       "NamedDefinition": {
         "type": "object",
@@ -4777,8 +4770,7 @@
           "id",
           "sample_id",
           "metric",
-          "metric_version_id",
-          "metric_version",
+          "metric_id",
           "unit",
           "x_dimension",
           "x_unit",
@@ -4792,11 +4784,7 @@
           "metric": {
             "type": "string"
           },
-          "metric_version": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "metric_version_id": {
+          "metric_id": {
             "type": "integer",
             "format": "int64"
           },
@@ -4810,7 +4798,7 @@
           },
           "unit": {
             "type": "string",
-            "description": "Unit of y (the metric's unit)."
+            "description": "Unit of y (the unit the metric has now)."
           },
           "x_dimension": {
             "type": "string"
@@ -5529,7 +5517,7 @@
     },
     {
       "name": "definitions",
-      "description": "Versioned definitions and dimensions"
+      "description": "Definitions and dimensions"
     },
     {
       "name": "annotations",

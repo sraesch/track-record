@@ -21,7 +21,7 @@ SELECT is(unit_conversion_factor('triangles', 'triangles'), 1::double precision,
     'a unit always converts to itself');
 
 SELECT lives_ok(
-    $$ SELECT ensure_metric_version('triangle_count', 'triangles', 'integer', 'higher_is_better') $$,
+    $$ SELECT ensure_metric('triangle_count', 'triangles', 'integer', 'higher_is_better') $$,
     'a metric can use a unit outside the catalogue');
 
 SELECT is((SELECT count(*)::int FROM unit

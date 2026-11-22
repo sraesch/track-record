@@ -26,7 +26,7 @@ pub struct Points {
 pub struct NewSeries<'a> {
     pub id: Uuid,
     pub sample_id: Uuid,
-    pub metric_version_id: i64,
+    pub metric_id: i64,
     pub x_dimension: &'a str,
     pub x_unit: &'a str,
     pub points: &'a Points,
@@ -46,7 +46,7 @@ pub enum InsertOutcome {
 struct StoredMeta {
     key: i64,
     sample_id: Uuid,
-    metric_version_id: i64,
+    metric_id: i64,
     x_dimension: String,
     x_unit: String,
     point_count: i32,
@@ -60,12 +60,12 @@ pub async fn insert(
 ) -> sqlx::Result<InsertOutcome> {
     let count = i32::try_from(series.points.x.len()).expect("point count fits i32");
     let key: Option<i64> = sqlx::query_scalar(
-        "INSERT INTO series (id, sample_id, metric_version_id, x_dimension, x_unit, point_count) \
+        "INSERT INTO series (id, sample_id, metric_id, x_dimension, x_unit, point_count) \
          VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING RETURNING key",
     )
     .bind(series.id)
     .bind(series.sample_id)
-    .bind(series.metric_version_id)
+    .bind(series.metric_id)
     .bind(series.x_dimension)
     .bind(series.x_unit)
     .bind(count)
@@ -87,14 +87,14 @@ pub async fn insert(
     }
 
     let stored: StoredMeta = sqlx::query_as(
-        "SELECT key, sample_id, metric_version_id, x_dimension, x_unit, point_count \
+        "SELECT key, sample_id, metric_id, x_dimension, x_unit, point_count \
          FROM series WHERE id = $1",
     )
     .bind(series.id)
     .fetch_one(&mut *conn)
     .await?;
     let same_meta = stored.sample_id == series.sample_id
-        && stored.metric_version_id == series.metric_version_id
+        && stored.metric_id == series.metric_id
         && stored.x_dimension == series.x_dimension
         && stored.x_unit == series.x_unit
         && stored.point_count == count;

@@ -8,7 +8,6 @@ import { useChartColors } from '../../charts/colors'
 import { formatNumber } from '../../format'
 import { ErrorAlert } from '../../pages/ErrorAlert'
 import { useSeriesPoints } from '../queries'
-import { useMetricLabel } from './samples'
 import {
   type ChartLine,
   groupSeries,
@@ -28,7 +27,6 @@ export function SeriesCharts({
   samples: readonly SampleDetail[]
 }) {
   const groups = useMemo(() => groupSeries(samples), [samples])
-  const label = useMetricLabel(groups.map((group) => group.metric))
   return (
     <Box sx={{ display: 'grid', gap: 3, px: 2, pb: 2 }}>
       {groups.map((group) => (
@@ -36,7 +34,7 @@ export function SeriesCharts({
           key={group.key}
           runId={runId}
           group={group}
-          title={label(group.metric)}
+          title={group.metric}
         />
       ))}
     </Box>

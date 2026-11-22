@@ -13,9 +13,8 @@
 //! - `rate` gives y/x, `auc` y·x, `time_to` the unit of x.
 //!
 //! The units of the inputs come from an [`Env`]. When evaluating, they are
-//! the units of the measurements of one sample, so a metric whose unit
-//! changed between versions (s, later ms) still gives consistent results:
-//! the result is converted to the declared unit.
+//! the units of the inputs of one sample (the x unit of a series can differ
+//! between uploads); the result is converted to the declared unit.
 
 use super::ast::{BinOp, Expr, ExprKind, NamedArg};
 use super::{Diagnostic, Span};

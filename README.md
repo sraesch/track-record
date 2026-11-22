@@ -19,8 +19,9 @@ trends over time and versions, series overlays and derived metrics.
   schema-validated. Only raw, measured values are uploaded; everything computed
   from them is a derived metric.
 - **Immutable, versioned data**: results never change after upload (corrections
-  create revisions). Suites, scenarios, metrics and aliases are versioned, and
-  results reference the exact versions used. Raw data is kept indefinitely.
+  create revisions). Suites, scenarios and aliases are versioned, and results
+  reference the exact versions used. A metric has one definition, which can
+  be changed in the web UI. Raw data is kept indefinitely.
 - **Analysis**: filtering on any dimension, sample aggregation (mean, median,
   percentiles, stddev, confidence intervals), unit conversion and normalization,
   parameters as axes, side-by-side comparison of runs, devices or parameter

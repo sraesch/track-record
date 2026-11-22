@@ -1,36 +1,35 @@
 import { describe, expect, it } from 'vitest'
-import type { Metric, MetricVersion, Unit } from '../api/client'
+import type { Metric, Unit } from '../api/client'
 import {
-  changedFields,
   customUnits,
+  deleteBlocker,
   filterMetrics,
   filterUnits,
   groupUnits,
+  isValidMetricName,
   metricsPerUnit,
   metricsViewToParams,
   parseMetricsView,
-  toMetricRows,
+  sortMetrics,
 } from './metricModel'
 
-const version = (
-  v: number,
-  fields: Partial<MetricVersion> = {},
-): MetricVersion => ({
-  id: v,
-  version: v,
+const metric = (
+  id: number,
+  name: string,
+  fields: Partial<Metric> = {},
+): Metric => ({
+  id,
+  name,
   unit: 'ms',
   value_type: 'float',
   direction: 'lower_is_better',
   description: '',
   created_at: '2026-11-01T00:00:00Z',
+  updated_at: '2026-11-01T00:00:00Z',
+  has_results: true,
+  used_by: [],
   ...fields,
 })
-
-const metric = (
-  id: number,
-  name: string,
-  versions: MetricVersion[],
-): Metric => ({ id, name, versions })
 
 const unit = (symbol: string, quantity: string, to_base: number): Unit => ({
   symbol,
@@ -58,46 +57,53 @@ describe('metrics view in the URL', () => {
   })
 })
 
-describe('toMetricRows', () => {
-  it('sorts by name, versions newest first, skips metrics without versions', () => {
-    const rows = toMetricRows([
-      metric(1, 'load_time', [version(1), version(3), version(2)]),
-      metric(2, 'empty', []),
-      metric(3, 'fps', [version(1, { unit: 'fps' })]),
+describe('sortMetrics', () => {
+  it('sorts by name', () => {
+    const metrics = [metric(1, 'load_time'), metric(3, 'fps')]
+    expect(sortMetrics(metrics).map((m) => m.name)).toEqual([
+      'fps',
+      'load_time',
     ])
-    expect(rows.map((r) => r.name)).toEqual(['fps', 'load_time'])
-    expect(rows[1]!.latest.version).toBe(3)
-    expect(rows[1]!.versions.map((v) => v.version)).toEqual([3, 2, 1])
+    expect(metrics[0]!.name).toBe('load_time')
   })
 })
 
 describe('filterMetrics', () => {
-  const rows = toMetricRows([
-    metric(1, 'load_time', [version(1, { description: 'Until loaded' })]),
-    metric(2, 'memory', [
-      version(1, { unit: 'MB' }),
-      version(2, { unit: 'MiB' }),
-    ]),
-  ])
+  const metrics = [
+    metric(1, 'load_time', { description: 'Until loaded' }),
+    metric(2, 'memory', { unit: 'MiB' }),
+  ]
 
-  it('matches name, description and the unit of any version, ignoring case', () => {
-    expect(filterMetrics(rows, 'LOAD').map((r) => r.name)).toEqual([
+  it('matches name, description and unit, ignoring case', () => {
+    expect(filterMetrics(metrics, 'LOAD').map((m) => m.name)).toEqual([
       'load_time',
     ])
-    expect(filterMetrics(rows, 'until').map((r) => r.name)).toEqual([
+    expect(filterMetrics(metrics, 'until').map((m) => m.name)).toEqual([
       'load_time',
     ])
-    expect(filterMetrics(rows, 'MB').map((r) => r.name)).toEqual(['memory'])
-    expect(filterMetrics(rows, undefined)).toBe(rows)
+    expect(filterMetrics(metrics, 'mib').map((m) => m.name)).toEqual(['memory'])
+    expect(filterMetrics(metrics, undefined)).toBe(metrics)
   })
 })
 
-describe('changedFields', () => {
-  it('lists what differs from the previous version', () => {
-    expect(changedFields(version(1), undefined)).toEqual([])
+describe('isValidMetricName', () => {
+  it('rejects names that expressions could not refer to', () => {
+    expect(isValidMetricName('load time (cold)')).toBe(true)
+    expect(isValidMetricName('')).toBe(false)
+    expect(isValidMetricName(' load_time')).toBe(false)
+    expect(isValidMetricName('load`time')).toBe(false)
+  })
+})
+
+describe('deleteBlocker', () => {
+  it('says why a metric cannot be deleted', () => {
+    expect(deleteBlocker(metric(1, 'a'))).toBe('results')
     expect(
-      changedFields(version(2, { unit: 's', description: 'new' }), version(1)),
-    ).toEqual(['unit', 'description'])
+      deleteBlocker(metric(1, 'a', { has_results: false, used_by: ['d'] })),
+    ).toBe('derived')
+    expect(deleteBlocker(metric(1, 'a', { has_results: false }))).toBe(
+      undefined,
+    )
   })
 })
 
@@ -128,15 +134,11 @@ describe('unit catalogue', () => {
   })
 
   it('finds the metrics per unit and the custom units', () => {
-    const rows = toMetricRows([
-      metric(1, 'load_time', [version(1, { unit: 's' })]),
-      metric(2, 'parse_time', [version(1, { unit: 's' })]),
-      // Only the latest version counts.
-      metric(3, 'triangles', [
-        version(1, { unit: 'ms' }),
-        version(2, { unit: 'tris' }),
-      ]),
-    ])
+    const rows = [
+      metric(1, 'load_time', { unit: 's' }),
+      metric(2, 'parse_time', { unit: 's' }),
+      metric(3, 'triangles', { unit: 'tris' }),
+    ]
     expect(metricsPerUnit(rows).get('s')).toEqual(['load_time', 'parse_time'])
     expect(metricsPerUnit(rows).has('ms')).toBe(false)
     expect(customUnits(rows, units)).toEqual([

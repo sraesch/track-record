@@ -45,7 +45,7 @@ pub const UI_PREFIX: &str = "/ui/api/v1";
     tags(
         (name = "ingestion", description = "Incremental, idempotent upload of results (FR-1 to FR-5)"),
         (name = "runs", description = "Runs and their results"),
-        (name = "definitions", description = "Versioned definitions and dimensions"),
+        (name = "definitions", description = "Definitions and dimensions"),
         (name = "annotations", description = "Tags and annotations"),
         (name = "analysis", description = "Aggregates, trends, comparisons, series views and export (FR-12 to FR-20)"),
         (name = "ui", description = "Web UI only: never reachable with an API token"),
@@ -123,6 +123,8 @@ fn ui_only_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(ui::set_alias))
         .routes(routes!(ui::save_derived_metric, ui::delete_derived_metric))
         .routes(routes!(ui::rename_derived_metric))
+        .routes(routes!(ui::save_metric, ui::delete_metric))
+        .routes(routes!(ui::rename_metric))
 }
 
 #[derive(serde::Serialize, ToSchema)]
