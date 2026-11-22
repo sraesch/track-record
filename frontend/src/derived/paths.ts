@@ -6,6 +6,5 @@ export function derivedHref(view: DerivedView): string {
   return query ? `/derived-metrics?${query}` : '/derived-metrics'
 }
 
-/** URL of a derived metric, at one version or the latest. */
-export const derivedMetricHref = (name: string, version?: number) =>
-  derivedHref({ name, version })
+/** URL of a derived metric. */
+export const derivedMetricHref = (name: string) => derivedHref({ name })

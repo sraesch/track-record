@@ -113,7 +113,7 @@ erDiagram
     series ||--o{ series_point : ""
     metric_version ||--o{ measurement : ""
     metric_version ||--o{ series : ""
-    derived_metric_version ||--o{ derived_metric_dependency : "pins"
+    derived_metric ||--o{ derived_metric_dependency : "uses"
     run ||--o{ attachment : ""
     run ||--o{ run_tag : ""
     run ||--o{ annotation : ""
@@ -121,14 +121,15 @@ erDiagram
 
 | Area | Tables | Notes |
 |---|---|---|
-| Definitions | `suite[_version]`, `scenario[_version]`, `metric[_version]`, `derived_metric[_version]`, `derived_metric_dependency`, `alias[_version]` | Immutable versions. Create through `ensure_*`, `save_derived_metric`, `set_alias`. A derived metric version pins the versions it uses. Alias values are JSON scalars. |
+| Definitions | `suite[_version]`, `scenario[_version]`, `metric[_version]`, `alias[_version]` | Immutable versions. Create through `ensure_*`, `set_alias`. Alias values are JSON scalars. |
+| Derived metrics | `derived_metric`, `derived_metric_dependency` | One definition per derived metric, not versioned ([ADR 0017](../docs/adr/0017-derived-metrics-without-versions.md)). Create and change only through `save_derived_metric`, which records the derived metrics an expression uses and rejects cycles. No rename, no delete. |
 | Units | `unit` | Predefined units with conversion factors (FR-13a). Grows only through migrations. Other unit symbols are allowed anywhere but are not converted. |
 | Dimensions | `sut_version`, `environment`, `client_device`, `asset`, `test_case`, `test_case_asset` | Deduplicated, immutable. Create through `ensure_*`. Numeric parameters can carry a unit (`test_case.parameter_units`). |
 | Results | `run`, `case_execution`, `sample`, `measurement`, `series`, `series_point`, `attachment` | Client UUIDs, immutable. Only run status/end time/validity change. Raw values only: one series per sample and metric, x never decreases. |
 | Editable | `run_tag`, `test_case_tag`, `annotation`, `api_token` | Normal updates and deletes. |
 
 Views: `current_case_execution` (hides superseded corrections),
-`current_alias`, `latest_derived_metric_version`.
+`current_alias`.
 
 Lifecycle functions: `abort_stale_runs(timeout)`, `run_last_upload_at(run_id)`,
 `delete_run(run_id)`. A run is stale when nothing was uploaded for it within the
@@ -144,7 +145,7 @@ Custom SQLSTATEs raised by the schema, for the backend to map to API errors:
 
 | Code | Meaning |
 |---|---|
-| `TR001` | Row is immutable (update or truncate rejected) |
+| `TR001` | Row is immutable (update or truncate rejected; also a renamed derived metric) |
 | `TR002` | Delete outside `delete_run()` |
 | `TR003` | Invalid run status transition |
 | `TR004` | Run is not running (new case execution rejected) |

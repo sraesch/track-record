@@ -9,13 +9,14 @@ import { Link as RouterLink } from 'react-router'
 import {
   ApiError,
   type CaseExecutionDetail,
+  type DerivedMetric,
   type EvaluateRequest,
   type EvaluateResponse,
 } from '../api/client'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { Section } from '../pages/Section'
 import { liveRunInterval } from '../runs/queries'
-import { allMissing, type DerivedRow, resultsBySample } from './derivedModel'
+import { allMissing, resultsBySample } from './derivedModel'
 import {
   ScalarTable,
   SeriesResultChart,
@@ -25,14 +26,14 @@ import { derivedHref, derivedMetricHref } from './paths'
 import { useDerivedMetrics, useEvaluations } from './queries'
 import { previewPoints } from './EvaluationPreview'
 
-type Evaluated = { row: DerivedRow; response: EvaluateResponse }
-type Skipped = { row: DerivedRow; reason: string }
+type Evaluated = { row: DerivedMetric; response: EvaluateResponse }
+type Skipped = { row: DerivedMetric; reason: string }
 
 /**
- * The latest version of every derived metric (FR-17), evaluated on the
- * samples of a case execution: scalars in a table, one column per metric,
- * series as charts. Metrics whose inputs this case does not have are only
- * named, as are those that could not be evaluated.
+ * Every derived metric (FR-17), evaluated on the samples of a case
+ * execution with its current definition: scalars in a table, one column
+ * per metric, series as charts. Metrics whose inputs this case does not
+ * have are only named, as are those that could not be evaluated.
  */
 export function CaseDerivedMetrics({
   caseExecution,

@@ -269,7 +269,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Derived metrics with all versions (FR-17). */
+        /** Derived metrics (FR-17). */
         get: operations["list_derived_metrics"];
         put?: never;
         post?: never;
@@ -327,12 +327,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A derived metric with all versions. */
+        /** A derived metric. */
         get: operations["get_derived_metric"];
         /**
-         * Save a derived metric (FR-17). The expression is validated first
-         *     (FR-17a); the derived metric versions it uses are pinned. Content equal
-         *     to the latest version returns that version with 200.
+         * Create a derived metric or change its definition (FR-17). A derived
+         *     metric has no versions: the change applies to every analysis, historical
+         *     runs included, and to the derived metrics built on it. The expression is
+         *     validated first (FR-17a), together with those metrics.
          */
         put: operations["save_derived_metric"];
         post?: never;
@@ -1003,14 +1004,8 @@ export interface components {
             /** @description Must repeat the run id to confirm the deletion. */
             confirm_run_id: string;
         };
+        /** @description A derived metric (FR-17). It has one definition, which can be changed. */
         DerivedMetric: {
-            /** Format: int64 */
-            id: number;
-            name: string;
-            /** @description Oldest first. */
-            versions: components["schemas"]["DerivedMetricVersion"][];
-        };
-        DerivedMetricVersion: {
             /** Format: date-time */
             created_at: string;
             description: string;
@@ -1019,10 +1014,13 @@ export interface components {
             id: number;
             name: string;
             unit: string;
-            /** @description Exact versions of the derived metrics it uses (FR-17). */
-            uses: components["schemas"]["UsedVersion"][];
-            /** Format: int32 */
-            version: number;
+            /**
+             * Format: date-time
+             * @description When the definition was last changed.
+             */
+            updated_at: string;
+            /** @description Names of the derived metrics the expression uses directly. */
+            uses: string[];
         };
         DeviceRef: {
             /** Format: int64 */
@@ -1076,11 +1074,6 @@ export interface components {
             name?: string | null;
             /** @description Output unit; default: the declared unit, or the expression's unit. */
             unit?: string | null;
-            /**
-             * Format: int32
-             * @description Version of `name`; the latest by default.
-             */
-            version?: number | null;
         };
         EvaluateResponse: {
             expression: string;
@@ -1386,8 +1379,11 @@ export interface components {
             /** @description Unit of the result; the expression's unit must convert to it. */
             unit: string;
         };
-        SavedDerivedMetric: components["schemas"]["DerivedMetricVersion"] & {
-            /** @description False if the content equals the latest version, which is returned. */
+        SavedDerivedMetric: components["schemas"]["DerivedMetric"] & {
+            /**
+             * @description True if the derived metric is new, false if it existed and now has
+             *     this definition.
+             */
             created: boolean;
         };
         SeriesAggregateResponse: {
@@ -1605,19 +1601,13 @@ export interface components {
         UpdateAnnotation: {
             body: string;
         };
-        /** @description A derived metric version an expression uses. */
-        UsedVersion: {
-            name: string;
-            /** Format: int32 */
-            version: number;
-            /** Format: int64 */
-            version_id: number;
-        };
         ValidateExpression: {
             expression: string;
             /**
-             * @description Name the expression will be saved under; a reference to it, direct
-             *     or through other derived metrics, is a cycle.
+             * @description Name the expression will be saved under. A reference to it, direct
+             *     or through other derived metrics, is a cycle. If the derived metric
+             *     exists, the metrics built on it are checked too: the expression is
+             *     invalid if it would break one of them.
              */
             name?: string | null;
             /** @description Unit the result must convert to. */
@@ -1632,8 +1622,8 @@ export interface components {
             kind?: string | null;
             /** @description Unit of the result (the declared unit if one was given), if valid. */
             unit?: string | null;
-            /** @description Derived metric versions referenced directly (latest versions). */
-            uses: components["schemas"]["UsedVersion"][];
+            /** @description Names of the derived metrics the expression refers to directly. */
+            uses: string[];
             valid: boolean;
             x_dimension?: string | null;
             /** @description For a series: unit and dimension of x. */
@@ -2340,6 +2330,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Changed, or saved again unchanged */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2348,6 +2339,7 @@ export interface operations {
                     "application/json": components["schemas"]["SavedDerivedMetric"];
                 };
             };
+            /** @description Created */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2356,7 +2348,7 @@ export interface operations {
                     "application/json": components["schemas"]["SavedDerivedMetric"];
                 };
             };
-            /** @description Invalid expression or a cycle */
+            /** @description Invalid expression, a cycle, or a change that breaks a derived metric built on this one */
             422: {
                 headers: {
                     [name: string]: unknown;

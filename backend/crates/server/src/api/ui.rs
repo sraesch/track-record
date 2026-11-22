@@ -102,14 +102,19 @@ pub async fn set_alias(
     Ok(Json(catalog::set_alias(&state.pool, &req).await?))
 }
 
-/// Save a derived metric (FR-17). The expression is validated first
-/// (FR-17a); the derived metric versions it uses are pinned. Content equal
-/// to the latest version returns that version with 200.
+/// Create a derived metric or change its definition (FR-17). A derived
+/// metric has no versions: the change applies to every analysis, historical
+/// runs included, and to the derived metrics built on it. The expression is
+/// validated first (FR-17a), together with those metrics.
 #[utoipa::path(put, path = "/derived-metrics/{name}", tag = "ui",
     params(("name" = String, Path)),
     request_body = SaveDerivedMetric,
-    responses((status = 201, body = SavedDerivedMetric), (status = 200, body = SavedDerivedMetric),
-              (status = 422, description = "Invalid expression or a cycle", body = Problem)))]
+    responses((status = 201, description = "Created", body = SavedDerivedMetric),
+              (status = 200, description = "Changed, or saved again unchanged",
+               body = SavedDerivedMetric),
+              (status = 422, description = "Invalid expression, a cycle, or a change that \
+                                            breaks a derived metric built on this one",
+               body = Problem)))]
 pub async fn save_derived_metric(
     State(state): State<AppState>,
     ApiPath(name): ApiPath<String>,

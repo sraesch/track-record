@@ -10,7 +10,7 @@ import Typography from '@mui/material/Typography'
 import { useId, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
-  DerivedMetricVersion,
+  DerivedMetric,
   ValidateExpression,
   Validation,
 } from '../api/client'
@@ -27,7 +27,11 @@ import { Facts } from '../pages/Facts'
 import { Section } from '../pages/Section'
 import { useDebouncedValue } from '../pages/useDebouncedValue'
 import type { SavedState } from './DerivedMetricDetail'
-import type { DerivedRow, DerivedView, SetDerivedView } from './derivedModel'
+import {
+  type DerivedView,
+  derivedUsersDeep,
+  type SetDerivedView,
+} from './derivedModel'
 import { EvaluationPreview } from './EvaluationPreview'
 import { FunctionReference } from './FunctionReference'
 import { useSaveDerivedMetric, useValidation } from './queries'
@@ -36,11 +40,9 @@ import { useSaveDerivedMetric, useValidation } from './queries'
 export const validationDelay = 400
 
 type Props = {
-  /** The metric a new version is for; none for a new metric. */
-  row?: DerivedRow
-  /** The version the new one starts from. */
-  base?: DerivedMetricVersion
-  rows: readonly DerivedRow[]
+  /** The derived metric to change; none for a new one. */
+  metric?: DerivedMetric
+  metrics: readonly DerivedMetric[]
   view: DerivedView
   setView: SetDerivedView
 }
@@ -48,30 +50,40 @@ type Props = {
 type Draft = { name: string; expression: string; unit: string }
 
 /**
- * Writes a derived metric or a new version of one (FR-17, FR-17a). The
+ * Writes a new derived metric or changes one (FR-17, FR-17a). The
  * expression is checked by the server while typing: problems are
  * underlined and listed, and a valid expression shows its kind, unit,
  * inputs and the derived metrics it uses, and can be tried on a case
- * execution before saving. Saving always adds a version.
+ * execution before saving.
+ *
+ * A derived metric has no versions (ADR 0017). Saving a change replaces
+ * the definition: for every analysis, past runs included, and for the
+ * derived metrics built on it, which the server checks too.
  */
-export function DerivedMetricEditor({ row, base, rows, view, setView }: Props) {
+export function DerivedMetricEditor({ metric, metrics, view, setView }: Props) {
   const { t } = useTranslation()
-  const isNew = !row
+  const isNew = !metric
   const [name, setName] = useState('')
-  const [expression, setExpression] = useState(base?.expression ?? '')
-  const [unit, setUnit] = useState(base?.unit ?? '')
-  const [description, setDescription] = useState(base?.description ?? '')
+  const [expression, setExpression] = useState(metric?.expression ?? '')
+  const [unit, setUnit] = useState(metric?.unit ?? '')
+  const [description, setDescription] = useState(metric?.description ?? '')
   const [discarding, setDiscarding] = useState(false)
   const problemsId = useId()
 
-  const metricName = row?.name ?? name.trim()
-  const nameError =
-    isNew && name !== '' && !isValidDerivedName(name)
+  const metricName = metric?.name ?? name.trim()
+  // "New" never replaces a derived metric: that is what "Edit" is for.
+  const exists = isNew && metrics.some((m) => m.name === name.trim())
+  const nameError = !isNew || name === ''
+    ? undefined
+    : !isValidDerivedName(name)
       ? t('derived.editor.nameInvalid')
-      : undefined
-  const existing = isNew
-    ? rows.find((r) => r.name === name.trim())
-    : undefined
+      : exists
+        ? t('derived.editor.nameExists')
+        : undefined
+  const users = useMemo(
+    () => (metric ? derivedUsersDeep(metrics, metric.name) : []),
+    [metrics, metric],
+  )
 
   // The draft as it was when typing paused; a string, so it only changes
   // with the text.
@@ -107,14 +119,14 @@ export function DerivedMetricEditor({ row, base, rows, view, setView }: Props) {
     [current, expression],
   )
 
-  const metrics = useMetrics()
+  const uploaded = useMetrics()
   const units = useUnits()
   const names: DslNames = useMemo(
     () => ({
-      metrics: metrics.data?.map((m) => m.name) ?? [],
-      derived: rows.map((r) => r.name).filter((n) => n !== row?.name),
+      metrics: uploaded.data?.map((m) => m.name) ?? [],
+      derived: metrics.map((m) => m.name).filter((n) => n !== metric?.name),
     }),
-    [metrics.data, rows, row?.name],
+    [uploaded.data, metrics, metric?.name],
   )
   const unitOptions = useMemo(
     () => units.data?.map((u) => u.symbol) ?? [],
@@ -125,23 +137,20 @@ export function DerivedMetricEditor({ row, base, rows, view, setView }: Props) {
   const savedUnit = unit.trim() || current?.unit || ''
   const dirty = isNew
     ? name !== '' || expression !== '' || unit !== '' || description !== ''
-    : expression !== base?.expression ||
-      unit !== base?.unit ||
-      description !== base?.description
-  // A new version that changes nothing would only return the latest one;
-  // an unchanged older version is saved again as the latest (a revert).
+    : expression !== metric.expression ||
+      unit !== metric.unit ||
+      description !== metric.description
   const canSave =
     !!current?.valid &&
     metricName !== '' &&
     isValidDerivedName(metricName) &&
-    (isNew || dirty || base?.id !== row.latest.id) &&
+    (isNew ? !exists : dirty) &&
     !save.isPending
 
   const close = () =>
     setView({
       search: view.search,
-      name: row?.name,
-      version: view.version,
+      name: metric?.name,
       run: view.run,
       caseExecution: view.caseExecution,
     })
@@ -156,10 +165,10 @@ export function DerivedMetricEditor({ row, base, rows, view, setView }: Props) {
       {
         onSuccess: (saved) => {
           const state: SavedState = {
-            saved: { version: saved.version, created: saved.created },
+            saved: { name: saved.name, created: saved.created },
           }
-          // Shows the saved (latest) version. The editor's history entry
-          // is replaced, so Back does not reopen it.
+          // Shows the saved metric. The editor's history entry is
+          // replaced, so Back does not reopen it.
           setView(
             {
               search: view.search,
@@ -179,10 +188,7 @@ export function DerivedMetricEditor({ row, base, rows, view, setView }: Props) {
       title={
         isNew
           ? t('derived.editor.titleNew')
-          : t('derived.editor.titleVersion', {
-              name: row.name,
-              version: row.latest.version + 1,
-            })
+          : t('derived.editor.titleChange', { name: metric.name })
       }
     >
       <Box
@@ -194,12 +200,18 @@ export function DerivedMetricEditor({ row, base, rows, view, setView }: Props) {
         }}
         sx={{ display: 'grid', gap: 2 }}
       >
-        {!isNew && base && base.id !== row.latest.id && (
+        {!isNew && (
           <Alert severity="info">
-            {t('derived.editor.fromOlder', {
-              version: base.version,
-              latest: row.latest.version,
-            })}
+            {t('derived.editor.changeNote')}
+            {users.length > 0 && (
+              <>
+                {' '}
+                {t('derived.editor.changeUsers', {
+                  count: users.length,
+                  names: users.join(', '),
+                })}
+              </>
+            )}
           </Alert>
         )}
         {isNew && (
@@ -209,14 +221,7 @@ export function DerivedMetricEditor({ row, base, rows, view, setView }: Props) {
             onChange={(event) => setName(event.target.value)}
             required
             error={nameError !== undefined}
-            helperText={
-              nameError ??
-              (existing
-                ? t('derived.editor.nameExists', {
-                    version: existing.latest.version + 1,
-                  })
-                : t('derived.editor.nameHelp'))
-            }
+            helperText={nameError ?? t('derived.editor.nameHelp')}
             slotProps={{
               htmlInput: { spellCheck: false, sx: { fontFamily: 'monospace' } },
             }}
@@ -310,11 +315,7 @@ export function DerivedMetricEditor({ row, base, rows, view, setView }: Props) {
             disabled={!canSave}
             loading={save.isPending}
           >
-            {isNew
-              ? t('derived.editor.save')
-              : t('derived.editor.saveVersion', {
-                  version: row.latest.version + 1,
-                })}
+            {t('derived.editor.save')}
           </Button>
         </Box>
       </Box>
@@ -467,16 +468,7 @@ function ValidationFacts({ validation }: { validation: Validation }) {
           value:
             validation.uses.length === 0
               ? t('derived.detail.usesNone')
-              : code(
-                  validation.uses
-                    .map((u) =>
-                      t('derived.detail.metricVersion', {
-                        name: u.name,
-                        version: u.version,
-                      }),
-                    )
-                    .join(', '),
-                ),
+              : code(validation.uses.join(', ')),
         },
       ]}
     />

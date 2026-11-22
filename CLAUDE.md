@@ -23,8 +23,8 @@ per series metric with a line per sample, device details, test case tags and ann
 attachments), the aliases page (add, change, remove and set again device
 and parameter aliases), the metrics page (metric definitions with all
 versions, unit catalogue, custom units) and the derived metrics page (list,
-versions, uses and users, editor with live validation and a preview on a
-case execution); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
+uses and users, editor that creates or changes a metric with live validation
+and a preview on a case execution); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 
@@ -76,6 +76,11 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   (parse, unit check, evaluation) lives in `track-record-core::dsl` without
   I/O; `service::derived` loads definitions and sample inputs. The metric of
   every analysis view is a DSL expression.
+- Derived metrics have no versions
+  ([ADR 0017](docs/adr/0017-derived-metrics-without-versions.md)): `PUT`
+  creates one or changes its definition, and `derived.<name>` is resolved by
+  name when it is evaluated. Saving also checks the derived metrics built on
+  the saved one (`broken_users` in `service::derived`).
 
 ## Frontend
 
@@ -140,7 +145,8 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
 - Results are protected by triggers (`TR001`/`TR002`); never work around them.
   Hard delete only through `delete_run()`.
 - Create definitions and dimensions through the `ensure_*` functions, not raw
-  inserts.
+  inserts. Derived metrics are created and changed only through
+  `save_derived_metric()`, which keeps them free of cycles.
 
 ## Tech stack
 
@@ -197,8 +203,11 @@ only in code.
 - Nothing is deleted automatically: no TTLs, retention jobs or compaction that
   drops raw samples, series or attachments (FR-8). The only deletion path is the
   explicit hard delete of a run in the web UI (FR-10).
-- Suites, scenarios, metric definitions, derived metrics and aliases are
-  **versioned**. Results reference the exact definition versions used (FR-7).
+- Suites, scenarios, metric definitions and aliases are **versioned**.
+  Results reference the exact definition versions used (FR-7).
+- Derived metrics are **not versioned**: one definition, which can be changed
+  (FR-17, ADR 0017). The name is the identity and never changes; derived
+  metrics are not deleted.
 - A changed scenario definition is a **new scenario version and a different
   case**. Never mix old and new versions in one trend.
 - Client device identity is its **stable name**. Device detail changes (OS,
@@ -256,8 +265,9 @@ only in code.
 - A derived metric can have **no value** (e.g. threshold never reached); an
   uploaded measurement always has one. No value is not missing data: show it,
   count it in aggregates, and don't compute differences against it (FR-12a).
-- Derived metrics may use other derived metrics, without cycles. Each version
-  pins the exact versions it uses (FR-17).
+- Derived metrics may use other derived metrics, without cycles. A change to
+  a derived metric takes effect in the metrics built on it; a change that
+  would make one of them invalid is rejected on save (FR-17).
 - Every run, case execution and analysis view has a URL that reproduces it,
   filters included. Keep view state in the URL (FR-21).
 - The derived metric DSL is the **same** in UI, API and MCP, and must stay

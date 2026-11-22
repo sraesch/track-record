@@ -116,10 +116,15 @@ Derived metrics are DSL expressions over the metrics of one sample
 `derived.throughput * 8`:
 
 - `POST /derived-metrics/validate` checks syntax, references and units and
-  returns diagnostics with byte offsets.
-- `PUT /ui/api/v1/derived-metrics/{name}` saves a new version (UI port only).
-- `POST /derived-metrics/evaluate` evaluates an expression or a saved version
-  on the samples of one case execution.
+  returns diagnostics with byte offsets. With the `name` of an existing
+  derived metric it also checks the derived metrics built on it.
+- `PUT /ui/api/v1/derived-metrics/{name}` creates a derived metric (201) or
+  changes its definition (200), UI port only. There are no versions
+  ([ADR 0017](../docs/adr/0017-derived-metrics-without-versions.md)): a
+  change applies to every analysis and to the derived metrics built on the
+  changed one, and is rejected with 422 if it would make one of them invalid.
+- `POST /derived-metrics/evaluate` evaluates an expression or a saved derived
+  metric on the samples of one case execution.
 
 The analysis endpoints take a JSON view spec with a run filter, the metric as
 a DSL expression, an optional unit and `include_warmup`:

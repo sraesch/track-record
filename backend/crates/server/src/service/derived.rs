@@ -4,9 +4,9 @@
 //! References resolve as follows:
 //! - a bare name is an uploaded scalar metric of the sample,
 //! - `series.<name>` an uploaded series of the sample,
-//! - `derived.<name>` a derived metric: the latest version when validating
-//!   or evaluating an ad-hoc expression, the pinned version when evaluating
-//!   a saved one.
+//! - `derived.<name>` a derived metric. It has one definition, which can
+//!   be changed (ADR 0017): a change applies to every later evaluation,
+//!   historical runs included, and to the derived metrics built on it.
 //!
 //! Validation checks units against the latest metric versions and the most
 //! recent series of each referenced metric. Evaluation checks again with
@@ -19,13 +19,15 @@ use std::collections::{BTreeSet, HashMap};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{PgExecutor, PgPool};
+use sqlx::PgPool;
 use track_record_core::dsl::check::SeriesUnits;
 use track_record_core::dsl::eval::{EvalError, Value};
 use track_record_core::dsl::program::{
     Definition, Evaluator, Library, Root, SampleData, UnitSource, compile,
 };
-use track_record_core::dsl::{Diagnostic, Kind, References, Signature, parse};
+use track_record_core::dsl::{
+    Diagnostic, Expr, ExprKind, Kind, References, Signature, Span, parse,
+};
 use track_record_core::series::Series;
 use track_record_core::units::UnitCatalogue;
 use utoipa::ToSchema;
@@ -37,63 +39,48 @@ use crate::service::catalog;
 
 // Loading ------------------------------------------------------------------------
 
-/// Latest version id of each named derived metric that exists.
-async fn latest_versions(
-    executor: impl PgExecutor<'_>,
-    names: &BTreeSet<String>,
-) -> ApiResult<HashMap<String, i64>> {
-    let names: Vec<&String> = names.iter().collect();
-    let rows: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT name, derived_metric_version_id FROM latest_derived_metric_version \
-         WHERE name = ANY($1)",
-    )
-    .bind(names)
-    .fetch_all(executor)
-    .await?;
-    Ok(rows.into_iter().collect())
-}
-
-/// The given derived metric versions and every version they use.
-pub async fn load_library(pool: &PgPool, version_ids: &[i64]) -> ApiResult<Library> {
-    if version_ids.is_empty() {
+/// The named derived metrics that exist and every derived metric they use.
+pub async fn load_library(pool: &PgPool, names: &BTreeSet<String>) -> ApiResult<Library> {
+    if names.is_empty() {
         return Ok(Library::default());
     }
-    let rows: Vec<(i64, String, i32, String, String)> = sqlx::query_as(
+    let names: Vec<&String> = names.iter().collect();
+    let rows: Vec<(String, String, String)> = sqlx::query_as(
         "WITH RECURSIVE closure(id) AS ( \
-             SELECT unnest($1::bigint[]) \
+             SELECT id FROM derived_metric WHERE name = ANY($1) \
              UNION \
-             SELECT d.uses_version_id FROM derived_metric_dependency d \
-             JOIN closure c ON c.id = d.derived_metric_version_id) \
-         SELECT v.id, dm.name, v.version, v.expression, v.unit \
-         FROM derived_metric_version v JOIN derived_metric dm ON dm.id = v.derived_metric_id \
-         WHERE v.id IN (SELECT id FROM closure)",
+             SELECT d.uses_derived_metric_id FROM derived_metric_dependency d \
+             JOIN closure c ON c.id = d.derived_metric_id) \
+         SELECT name, expression, unit FROM derived_metric \
+         WHERE id IN (SELECT id FROM closure)",
     )
-    .bind(version_ids)
+    .bind(names)
     .fetch_all(pool)
     .await?;
-    let ids: Vec<i64> = rows.iter().map(|r| r.0).collect();
-    let deps: Vec<(i64, String, i64)> = sqlx::query_as(
-        "SELECT d.derived_metric_version_id, dm.name, d.uses_version_id \
-         FROM derived_metric_dependency d JOIN derived_metric dm ON dm.id = d.uses_derived_metric_id \
-         WHERE d.derived_metric_version_id = ANY($1)",
-    )
-    .bind(&ids)
-    .fetch_all(pool)
-    .await?;
-    let mut uses: HashMap<i64, HashMap<String, i64>> = HashMap::new();
-    for (version, name, used) in deps {
-        uses.entry(version).or_default().insert(name, used);
-    }
     Ok(Library::new(rows.into_iter().map(
-        |(version_id, name, version, expression, unit)| Definition {
-            version_id,
+        |(name, expression, unit)| Definition {
             name,
-            version,
             expression,
             unit,
-            uses: uses.remove(&version_id).unwrap_or_default(),
         },
     )))
+}
+
+/// The derived metrics built on `name`, directly or through others.
+async fn users_of(pool: &PgPool, name: &str) -> ApiResult<BTreeSet<String>> {
+    let rows: Vec<String> = sqlx::query_scalar(
+        "WITH RECURSIVE users(id) AS ( \
+             SELECT d.derived_metric_id FROM derived_metric_dependency d \
+             JOIN derived_metric m ON m.id = d.uses_derived_metric_id WHERE m.name = $1 \
+             UNION \
+             SELECT d.derived_metric_id FROM derived_metric_dependency d \
+             JOIN users u ON u.id = d.uses_derived_metric_id) \
+         SELECT name FROM derived_metric WHERE id IN (SELECT id FROM users)",
+    )
+    .bind(name)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().collect())
 }
 
 /// Units of the latest metric versions and of the most recent series of
@@ -236,14 +223,6 @@ impl From<&Diagnostic> for DslDiagnostic {
     }
 }
 
-/// A derived metric version an expression uses.
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct UsedVersion {
-    pub name: String,
-    pub version: i32,
-    pub version_id: i64,
-}
-
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ExpressionInputs {
     /// Uploaded scalar metrics the expression needs (including through the
@@ -266,8 +245,8 @@ pub struct Validation {
     /// For a series: unit and dimension of x.
     pub x_unit: Option<String>,
     pub x_dimension: Option<String>,
-    /// Derived metric versions referenced directly (latest versions).
-    pub uses: Vec<UsedVersion>,
+    /// Names of the derived metrics the expression refers to directly.
+    pub uses: Vec<String>,
     pub inputs: ExpressionInputs,
 }
 
@@ -277,8 +256,10 @@ pub struct ValidateExpression {
     pub expression: String,
     /// Unit the result must convert to.
     pub unit: Option<String>,
-    /// Name the expression will be saved under; a reference to it, direct
-    /// or through other derived metrics, is a cycle.
+    /// Name the expression will be saved under. A reference to it, direct
+    /// or through other derived metrics, is a cycle. If the derived metric
+    /// exists, the metrics built on it are checked too: the expression is
+    /// invalid if it would break one of them.
     pub name: Option<String>,
 }
 
@@ -289,11 +270,15 @@ pub struct Analysis {
     pub root: Option<Root>,
     pub result: Result<Signature, Vec<Diagnostic>>,
     pub inferred_unit: String,
-    pub uses: Vec<UsedVersion>,
+    /// The derived metrics referenced directly that exist, sorted.
+    pub uses: Vec<String>,
     pub inputs: References,
 }
 
-/// Parses and checks an expression with the latest definitions and units.
+/// Parses and checks an expression with the current definitions and the
+/// latest units. With `name`, the expression is checked as the definition
+/// of that derived metric: it must not use itself, and it must not break a
+/// derived metric built on it.
 pub async fn analyze(
     pool: &PgPool,
     expression: &str,
@@ -316,14 +301,19 @@ pub async fn analyze(
         }
     };
     let refs = expr.references();
-    let uses = latest_versions(pool, &refs.derived).await?;
-    let ids: Vec<i64> = uses.values().copied().collect();
-    let library = load_library(pool, &ids).await?;
+    let library = load_library(pool, &refs.derived).await?;
 
+    let root = Root {
+        expr,
+        unit: unit.map(str::to_owned),
+    };
     let mut inputs = refs.clone();
     inputs.derived.clear();
-    for id in library_ids(&library, &ids) {
-        if let Some(d) = library.get(id)
+    // The raw inputs of everything the expression uses, directly or not.
+    let mut used = library.uses_closure(refs.derived.iter().cloned());
+    used.extend(refs.derived.iter().cloned());
+    for used in used {
+        if let Some(d) = library.get(&used)
             && let Ok(e) = parse(&d.expression)
         {
             let r = e.references();
@@ -334,71 +324,51 @@ pub async fn analyze(
     let names: BTreeSet<String> = inputs.metrics.union(&inputs.series).cloned().collect();
     let latest = LatestUnits::load(pool, &names).await?;
 
-    let root = Root {
-        expr,
-        uses: uses.clone(),
-        unit: unit.map(str::to_owned),
+    let mut result = match name.and_then(|name| cycle(&library, &root, name)) {
+        // With a cycle there is nothing more to check: the metrics in it
+        // would be checked with the stored definition of `name`, not with
+        // this expression.
+        Some(diagnostic) => Err(vec![diagnostic]),
+        None => compile(&library, &catalogue, &root, &latest).map(|c| c.root),
     };
-    let mut result = compile(&library, &catalogue, &root, &latest);
     let mut inferred_unit = String::new();
-    if let Ok(c) = &result {
-        inferred_unit = c.root.inferred_unit.clone();
+    if let Ok(checked) = &result {
+        inferred_unit = checked.inferred_unit.clone();
     }
-    if let Some(name) = name
-        && let Some(diag) = cycle(&library, &root, name)
-    {
-        match &mut result {
-            Ok(_) => result = Err(vec![diag]),
-            Err(d) => d.push(diag),
+    if let (Some(name), Ok(checked)) = (name, &result) {
+        let definition = Definition {
+            name: name.to_owned(),
+            expression: expression.to_owned(),
+            unit: checked.signature.unit.clone(),
+        };
+        let broken = broken_users(pool, &catalogue, &library, definition, root.expr.span).await?;
+        if !broken.is_empty() {
+            result = Err(broken);
         }
     }
-    let mut used: Vec<UsedVersion> = uses
+    let uses = refs
+        .derived
         .iter()
-        .filter_map(|(name, id)| {
-            library.get(*id).map(|d| UsedVersion {
-                name: name.clone(),
-                version: d.version,
-                version_id: *id,
-            })
-        })
+        .filter(|used| library.get(used).is_some())
+        .cloned()
         .collect();
-    used.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(Analysis {
         library,
         catalogue,
-        result: result.map(|c| c.root.signature),
+        result: result.map(|c| c.signature),
         root: Some(root),
         inferred_unit,
-        uses: used,
+        uses,
         inputs,
     })
 }
 
-/// All version ids in the library reachable from `ids` (the library holds
-/// exactly that closure).
-fn library_ids(library: &Library, ids: &[i64]) -> BTreeSet<i64> {
-    let mut seen = BTreeSet::new();
-    let mut stack: Vec<i64> = ids.to_vec();
-    while let Some(id) = stack.pop() {
-        if seen.insert(id)
-            && let Some(d) = library.get(id)
-        {
-            stack.extend(d.uses.values().copied());
-        }
-    }
-    seen
-}
-
-/// A diagnostic if the expression would use the derived metric `name`.
+/// A diagnostic if the expression would use the derived metric `name`,
+/// which it is the definition of.
 fn cycle(library: &Library, root: &Root, name: &str) -> Option<Diagnostic> {
-    for (used, id) in &root.uses {
-        let closure = library_ids(library, &[*id]);
-        if used == name
-            || closure
-                .iter()
-                .any(|v| library.get(*v).is_some_and(|d| d.name == name))
-        {
-            let span = find_reference(&root.expr, used).unwrap_or(root.expr.span);
+    for used in root.expr.references().derived {
+        if used == name || library.uses_closure([used.clone()]).contains(name) {
+            let span = find_reference(&root.expr, &used).unwrap_or(root.expr.span);
             return Some(Diagnostic::new(
                 span,
                 format!("derived.{used} uses derived.{name}: a derived metric cannot use itself"),
@@ -408,11 +378,62 @@ fn cycle(library: &Library, root: &Root, name: &str) -> Option<Diagnostic> {
     None
 }
 
-fn find_reference(
-    expr: &track_record_core::dsl::Expr,
-    name: &str,
-) -> Option<track_record_core::dsl::Span> {
-    use track_record_core::dsl::ExprKind;
+/// A derived metric has no versions, so a changed definition takes effect
+/// in the derived metrics built on it. One diagnostic for each of them that
+/// is valid now and would not be with `definition`, reported at `span`.
+/// `library` holds what the new definition uses.
+async fn broken_users(
+    pool: &PgPool,
+    catalogue: &UnitCatalogue,
+    library: &Library,
+    definition: Definition,
+    span: Span,
+) -> ApiResult<Vec<Diagnostic>> {
+    let users = users_of(pool, &definition.name).await?;
+    if users.is_empty() {
+        return Ok(vec![]);
+    }
+    let name = definition.name.clone();
+    let before = load_library(pool, &users).await?;
+    let mut after = before.clone();
+    after.merge(library);
+    after.insert(definition);
+
+    let check = |library: &Library, user: &str, units: &LatestUnits| -> Result<(), String> {
+        let root = Root::definition(library, user)?;
+        compile(library, catalogue, &root, units)
+            .map(|_| ())
+            .map_err(|d| d[0].message.clone())
+    };
+    let mut names = BTreeSet::new();
+    for library in [&before, &after] {
+        for user in &users {
+            if let Ok(root) = Root::definition(library, user)
+                && let Ok((raw, _)) = root.closure(library)
+            {
+                names.extend(raw.metrics);
+                names.extend(raw.series);
+            }
+        }
+    }
+    let latest = LatestUnits::load(pool, &names).await?;
+    let mut out = Vec::new();
+    for user in &users {
+        if check(&before, user, &latest).is_ok()
+            && let Err(message) = check(&after, user, &latest)
+        {
+            out.push(Diagnostic::new(
+                span,
+                format!(
+                    "derived.{user} uses derived.{name} and would no longer be valid: {message}"
+                ),
+            ));
+        }
+    }
+    Ok(out)
+}
+
+fn find_reference(expr: &Expr, name: &str) -> Option<Span> {
     match &expr.kind {
         ExprKind::Derived(n) if n == name => Some(expr.span),
         ExprKind::Neg(e) => find_reference(e, name),
@@ -529,33 +550,28 @@ pub struct SaveDerivedMetric {
     pub description: String,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct DerivedMetricVersion {
-    pub id: i64,
-    pub name: String,
-    pub version: i32,
-    pub expression: String,
-    pub unit: String,
-    pub description: String,
-    pub created_at: DateTime<Utc>,
-    /// Exact versions of the derived metrics it uses (FR-17).
-    pub uses: Vec<UsedVersion>,
-}
-
+/// A derived metric (FR-17). It has one definition, which can be changed.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct DerivedMetric {
     pub id: i64,
     pub name: String,
-    /// Oldest first.
-    pub versions: Vec<DerivedMetricVersion>,
+    pub expression: String,
+    pub unit: String,
+    pub description: String,
+    pub created_at: DateTime<Utc>,
+    /// When the definition was last changed.
+    pub updated_at: DateTime<Utc>,
+    /// Names of the derived metrics the expression uses directly.
+    pub uses: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct SavedDerivedMetric {
-    /// False if the content equals the latest version, which is returned.
+    /// True if the derived metric is new, false if it existed and now has
+    /// this definition.
     pub created: bool,
     #[serde(flatten)]
-    pub version: DerivedMetricVersion,
+    pub metric: DerivedMetric,
 }
 
 fn check_name(name: &str) -> ApiResult<()> {
@@ -567,9 +583,14 @@ fn check_name(name: &str) -> ApiResult<()> {
     Ok(())
 }
 
-/// Saves a new version unless the content equals the latest one (FR-7).
-/// The expression is validated first (FR-17a); the versions it uses are
-/// pinned.
+/// Creates a derived metric or changes its definition (FR-17). The
+/// expression is validated first (FR-17a), together with the derived
+/// metrics built on this one: the change takes effect in them too.
+///
+/// The check and the save are not one transaction. The database rules out
+/// cycles by itself; two changes made at the same moment can otherwise
+/// leave a metric that no longer fits the one it uses, which evaluation
+/// reports per sample.
 pub async fn save(
     pool: &PgPool,
     name: &str,
@@ -583,123 +604,72 @@ pub async fn save(
     if let Err(d) = &a.result {
         return Err(invalid(&req.expression, d));
     }
-    let uses: Vec<i64> = a.uses.iter().map(|u| u.version_id).collect();
-    let mut tx = pool.begin().await?;
-    let before: Option<i64> = sqlx::query_scalar(
-        "SELECT derived_metric_version_id FROM latest_derived_metric_version WHERE name = $1",
-    )
-    .bind(name)
-    .fetch_optional(&mut *tx)
-    .await?;
-    let id: i64 = sqlx::query_scalar("SELECT save_derived_metric($1, $2, $3, $4, $5)")
-        .bind(name)
-        .bind(&req.expression)
-        .bind(&req.unit)
-        .bind(&req.description)
-        .bind(&uses)
-        .fetch_one(&mut *tx)
-        .await?;
-    tx.commit().await?;
-    let version = versions_where(pool, "v.id = $1", id)
-        .await?
-        .pop()
-        .ok_or_else(|| {
-            ApiError::Internal(anyhow::anyhow!(
-                "saved derived metric version {id} vanished"
-            ))
-        })?;
+    let (_, created): (i64, bool) =
+        sqlx::query_as("SELECT metric_id, created FROM save_derived_metric($1, $2, $3, $4, $5)")
+            .bind(name)
+            .bind(&req.expression)
+            .bind(&req.unit)
+            .bind(&req.description)
+            .bind(&a.uses)
+            .fetch_one(pool)
+            .await?;
     Ok(SavedDerivedMetric {
-        created: before != Some(id),
-        version,
+        created,
+        metric: get(pool, name).await?,
     })
 }
 
-async fn versions_where(
-    pool: &PgPool,
-    condition: &str,
-    arg: i64,
-) -> ApiResult<Vec<DerivedMetricVersion>> {
-    let rows: Vec<(i64, String, i32, String, String, String, DateTime<Utc>)> =
-        sqlx::query_as(&format!(
-            "SELECT v.id, dm.name, v.version, v.expression, v.unit, v.description, v.created_at \
-         FROM derived_metric_version v JOIN derived_metric dm ON dm.id = v.derived_metric_id \
-         WHERE {condition} ORDER BY dm.name, v.version"
-        ))
-        .bind(arg)
-        .fetch_all(pool)
-        .await?;
-    let ids: Vec<i64> = rows.iter().map(|r| r.0).collect();
-    let deps: Vec<(i64, String, i32, i64)> = sqlx::query_as(
-        "SELECT d.derived_metric_version_id, dm.name, v.version, v.id \
-         FROM derived_metric_dependency d JOIN derived_metric_version v ON v.id = d.uses_version_id \
-         JOIN derived_metric dm ON dm.id = v.derived_metric_id \
-         WHERE d.derived_metric_version_id = ANY($1) ORDER BY dm.name",
+type DerivedMetricRow = (
+    i64,
+    String,
+    String,
+    String,
+    String,
+    DateTime<Utc>,
+    DateTime<Utc>,
+    Vec<String>,
+);
+
+/// All derived metrics, or the one called `name`; sorted by name.
+async fn metrics_where(pool: &PgPool, name: Option<&str>) -> ApiResult<Vec<DerivedMetric>> {
+    let rows: Vec<DerivedMetricRow> = sqlx::query_as(
+        "SELECT m.id, m.name, m.expression, m.unit, m.description, m.created_at, m.updated_at, \
+                ARRAY(SELECT u.name FROM derived_metric_dependency d \
+                      JOIN derived_metric u ON u.id = d.uses_derived_metric_id \
+                      WHERE d.derived_metric_id = m.id ORDER BY u.name) \
+         FROM derived_metric m WHERE $1::text IS NULL OR m.name = $1 ORDER BY m.name",
     )
-    .bind(&ids)
+    .bind(name)
     .fetch_all(pool)
     .await?;
-    let mut uses: HashMap<i64, Vec<UsedVersion>> = HashMap::new();
-    for (of, name, version, version_id) in deps {
-        uses.entry(of).or_default().push(UsedVersion {
-            name,
-            version,
-            version_id,
-        });
-    }
     Ok(rows
         .into_iter()
         .map(
-            |(id, name, version, expression, unit, description, created_at)| DerivedMetricVersion {
-                uses: uses.remove(&id).unwrap_or_default(),
-                id,
-                name,
-                version,
-                expression,
-                unit,
-                description,
-                created_at,
+            |(id, name, expression, unit, description, created_at, updated_at, uses)| {
+                DerivedMetric {
+                    id,
+                    name,
+                    expression,
+                    unit,
+                    description,
+                    created_at,
+                    updated_at,
+                    uses,
+                }
             },
         )
         .collect())
 }
 
-fn group(versions: Vec<DerivedMetricVersion>, ids: &HashMap<String, i64>) -> Vec<DerivedMetric> {
-    let mut out: Vec<DerivedMetric> = Vec::new();
-    for v in versions {
-        if out.last().is_none_or(|m| m.name != v.name) {
-            out.push(DerivedMetric {
-                id: ids.get(&v.name).copied().unwrap_or_default(),
-                name: v.name.clone(),
-                versions: vec![],
-            });
-        }
-        out.last_mut().expect("just pushed").versions.push(v);
-    }
-    out
-}
-
-async fn metric_ids(pool: &PgPool) -> ApiResult<HashMap<String, i64>> {
-    let rows: Vec<(String, i64)> = sqlx::query_as("SELECT name, id FROM derived_metric")
-        .fetch_all(pool)
-        .await?;
-    Ok(rows.into_iter().collect())
-}
-
 pub async fn list(pool: &PgPool) -> ApiResult<Vec<DerivedMetric>> {
-    let versions = versions_where(pool, "$1 = $1", 0).await?;
-    Ok(group(versions, &metric_ids(pool).await?))
+    metrics_where(pool, None).await
 }
 
 pub async fn get(pool: &PgPool, name: &str) -> ApiResult<DerivedMetric> {
-    let id: i64 = sqlx::query_scalar("SELECT id FROM derived_metric WHERE name = $1")
-        .bind(name)
-        .fetch_optional(pool)
+    metrics_where(pool, Some(name))
         .await?
-        .ok_or_else(|| ApiError::not_found(format!("derived metric {name} not found")))?;
-    let versions = versions_where(pool, "dm.id = $1", id).await?;
-    Ok(group(versions, &HashMap::from([(name.to_owned(), id)]))
         .pop()
-        .expect("a derived metric has at least one version"))
+        .ok_or_else(|| ApiError::not_found(format!("derived metric {name} not found")))
 }
 
 // Evaluation on one case execution -------------------------------------------------
@@ -712,8 +682,6 @@ pub struct EvaluateRequest {
     pub expression: Option<String>,
     /// A saved derived metric.
     pub name: Option<String>,
-    /// Version of `name`; the latest by default.
-    pub version: Option<i32>,
     /// Output unit; default: the declared unit, or the expression's unit.
     pub unit: Option<String>,
     /// For series results: downsample to at most this many points.
@@ -785,27 +753,18 @@ pub fn classify(
     }
 }
 
-/// Prepares a saved version for evaluation, in its declared unit or `unit`.
-async fn prepare_saved(
-    pool: &PgPool,
-    name: &str,
-    version: Option<i32>,
-    unit: Option<&str>,
-) -> ApiResult<Prepared> {
-    let metric = get(pool, name).await?;
-    let v = match version {
-        Some(n) => metric
-            .versions
-            .iter()
-            .find(|v| v.version == n)
-            .ok_or_else(|| {
-                ApiError::not_found(format!("derived metric {name} has no version {n}"))
-            })?,
-        None => metric.versions.last().expect("at least one version"),
+/// Prepares a saved derived metric for evaluation, in its declared unit or
+/// `unit`.
+async fn prepare_saved(pool: &PgPool, name: &str, unit: Option<&str>) -> ApiResult<Prepared> {
+    let library = load_library(pool, &BTreeSet::from([name.to_owned()])).await?;
+    let Some(definition) = library.get(name) else {
+        return Err(ApiError::not_found(format!(
+            "derived metric {name} not found"
+        )));
     };
-    let library = load_library(pool, &[v.id]).await?;
+    let expression = definition.expression.clone();
     let catalogue = catalog::unit_catalogue(pool).await?;
-    let mut root = Root::definition(&library, v.id).map_err(ApiError::invalid)?;
+    let mut root = Root::definition(&library, name).map_err(ApiError::invalid)?;
     let (inputs, _) = root.closure(&library).map_err(ApiError::invalid)?;
     let names: BTreeSet<String> = inputs.metrics.union(&inputs.series).cloned().collect();
     let latest = LatestUnits::load(pool, &names).await?;
@@ -813,13 +772,13 @@ async fn prepare_saved(
         root.unit = Some(unit.to_owned());
     }
     let compiled =
-        compile(&library, &catalogue, &root, &latest).map_err(|d| invalid(&v.expression, &d))?;
+        compile(&library, &catalogue, &root, &latest).map_err(|d| invalid(&expression, &d))?;
     Ok(Prepared {
         signature: compiled.root.signature,
         library,
         catalogue,
         root,
-        expression: format!("derived.{name}@{}", v.version),
+        expression: format!("derived.{name}"),
     })
 }
 
@@ -827,13 +786,9 @@ async fn prepare_saved(
 /// case execution (warmup samples included).
 pub async fn evaluate(pool: &PgPool, req: &EvaluateRequest) -> ApiResult<EvaluateResponse> {
     let prepared = match (&req.expression, &req.name) {
-        (Some(e), None) if req.version.is_none() => prepare(pool, e, req.unit.as_deref()).await?,
-        (None, Some(name)) => prepare_saved(pool, name, req.version, req.unit.as_deref()).await?,
-        _ => {
-            return Err(ApiError::bad_request(
-                "give either expression or name (with an optional version)",
-            ));
-        }
+        (Some(e), None) => prepare(pool, e, req.unit.as_deref()).await?,
+        (None, Some(name)) => prepare_saved(pool, name, req.unit.as_deref()).await?,
+        _ => return Err(ApiError::bad_request("give either expression or name")),
     };
     if req.max_points.is_some_and(|m| m < 2) {
         return Err(ApiError::bad_request("max_points must be at least 2"));

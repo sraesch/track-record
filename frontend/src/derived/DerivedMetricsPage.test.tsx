@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type {
   DerivedMetric,
-  DerivedMetricVersion,
   EvaluateResponse,
+  SaveDerivedMetric,
   Validation,
 } from '../api/client'
 import {
@@ -22,46 +22,30 @@ const listPath = '/ui/api/v1/derived-metrics'
 const validatePath = '/ui/api/v1/derived-metrics/validate'
 const evaluatePath = '/ui/api/v1/derived-metrics/evaluate'
 
-const version = (
+const metric = (
   name: string,
-  n: number,
-  overrides: Partial<DerivedMetricVersion> = {},
-): DerivedMetricVersion => ({
-  id: n * 100 + name.length,
+  overrides: Partial<DerivedMetric> = {},
+): DerivedMetric => ({
+  id: name.length,
   name,
-  version: n,
   expression: 'bytes_transferred / load_time',
-  unit: 'MB/s',
-  description: 'Average download rate.',
+  unit: 'Mbit/s',
+  description: 'Comparable to the link bandwidth.',
   created_at: '2026-11-01T08:00:00Z',
+  updated_at: '2026-11-03T08:00:00Z',
   uses: [],
   ...overrides,
 })
 
 function derivedMetrics(): DerivedMetric[] {
   return [
-    {
-      id: 1,
-      name: 'throughput',
-      versions: [
-        version('throughput', 1),
-        version('throughput', 2, {
-          unit: 'Mbit/s',
-          description: 'Comparable to the link bandwidth.',
-        }),
-      ],
-    },
-    {
-      id: 2,
-      name: 'efficiency',
-      versions: [
-        version('efficiency', 1, {
-          expression: 'derived.throughput / power',
-          unit: 'MB/J',
-          uses: [{ name: 'throughput', version: 1, version_id: 110 }],
-        }),
-      ],
-    },
+    metric('throughput'),
+    metric('efficiency', {
+      expression: 'derived.throughput / power',
+      unit: 'MB/J',
+      description: '',
+      uses: ['throughput'],
+    }),
   ]
 }
 
@@ -114,47 +98,32 @@ describe('Derived metrics', () => {
     expect(list.getByText('2 derived metrics')).toBeInTheDocument()
 
     const detail = within(await panel('throughput'))
-    expect(detail.getAllByText('bytes_transferred / load_time')).not.toHaveLength(0)
+    expect(detail.getByText('bytes_transferred / load_time')).toBeInTheDocument()
     expect(detail.getByText('Mbit/s')).toBeInTheDocument()
     expect(detail.getByText('derived.throughput')).toBeInTheDocument()
     expect(detail.getByText('Comparable to the link bandwidth.')).toBeInTheDocument()
-    // efficiency still pins version 1 of throughput.
-    expect(
-      detail.getByRole('link', { name: 'efficiency v1' }),
-    ).toHaveAttribute('href', '/derived-metrics?name=efficiency')
-    expect(detail.getByText('pins v1')).toBeInTheDocument()
-
-    const history = within(
-      detail.getByRole('list', { name: 'Versions of throughput' }),
+    expect(detail.getByRole('link', { name: 'efficiency' })).toHaveAttribute(
+      'href',
+      '/derived-metrics?name=efficiency',
     )
-    expect(history.getAllByRole('link').map((l) => l.getAttribute('href'))).toEqual([
-      '/derived-metrics?name=throughput',
-      '/derived-metrics?name=throughput&version=1',
-    ])
+    // One definition, which "Edit" changes: there are no versions.
+    expect(detail.getByRole('link', { name: 'Edit' })).toHaveAttribute(
+      'href',
+      '/derived-metrics?name=throughput&edit=change',
+    )
+    expect(detail.queryByText(/version/i)).toBeNull()
   })
 
-  it('shows an older version and the versions a metric uses', async () => {
+  it('links to the derived metrics a metric uses', async () => {
     mockApi({ [listPath]: derivedMetrics })
-    const router = renderApp('/derived-metrics?name=throughput&version=1')
+    const router = renderApp('/derived-metrics?name=efficiency')
 
-    const detail = within(await panel('throughput'))
-    expect(
-      detail.getByText('This is version 1; the latest is version 2.'),
-    ).toBeInTheDocument()
-    expect(detail.getByText('MB/s')).toBeInTheDocument()
-
-    const user = userEvent.setup()
-    const list = within(
-      screen.getByRole('navigation', { name: 'Derived metrics' }),
-    )
-    await user.click(list.getByRole('link', { name: /^efficiency/ }))
     const efficiency = within(await panel('efficiency'))
-    expect(
-      efficiency.getByRole('link', { name: 'throughput v1' }),
-    ).toHaveAttribute('href', '/derived-metrics?name=throughput&version=1')
-    expect(efficiency.getByText('latest is v2')).toBeInTheDocument()
     expect(efficiency.getByText('No other derived metric uses it.')).toBeInTheDocument()
-    expect(currentQuery(router)).toBe('name=efficiency')
+    const user = userEvent.setup()
+    await user.click(efficiency.getByRole('link', { name: 'throughput' }))
+    expect(await panel('throughput')).toBeInTheDocument()
+    expect(currentQuery(router)).toBe('name=throughput')
   })
 
   it('searches the list and says when a metric does not exist', async () => {
@@ -190,14 +159,10 @@ describe('Derived metrics', () => {
         return validate(url, request)
       },
       [`${listPath}/rate`]: async (_, request) => {
-        const body = (await request.json()) as {
-          expression: string
-          unit: string
-          description: string
-        }
+        const body = (await request.json()) as SaveDerivedMetric
         saved.push({ method: request.method, body })
-        const created = version('rate', 1, { ...body })
-        metrics = [...metrics, { id: 3, name: 'rate', versions: [created] }]
+        const created = metric('rate', body)
+        metrics = [...metrics, created]
         return { ...created, created: true }
       },
     })
@@ -245,62 +210,99 @@ describe('Derived metrics', () => {
         description: 'Bytes per second.',
       },
     })
-    expect(await screen.findByText('Saved as version 1.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('The derived metric is created.'),
+    ).toBeInTheDocument()
     expect(currentQuery(router)).toBe('name=rate')
   })
 
-  it('starts a new version from the selected one', async () => {
+  it('does not replace an existing metric from "New"', async () => {
+    mockApi({ [listPath]: derivedMetrics, [validatePath]: validate })
+    renderApp('/derived-metrics?edit=new')
+
+    const user = userEvent.setup()
+    const form = within(await panel('New derived metric'))
+    await enterText(user, form.getByRole('textbox', { name: 'Name' }), 'throughput')
+    await enterText(user, await editor(), 'load_time')
+    expect(await form.findByText('The expression is valid.')).toBeInTheDocument()
+    expect(
+      form.getByText(/A derived metric with this name exists/),
+    ).toBeInTheDocument()
+    expect(form.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('changes a derived metric in place', async () => {
     const saved: unknown[] = []
+    const checks: unknown[] = []
     let metrics = derivedMetrics()
     mockApi({
       [listPath]: () => metrics,
-      [validatePath]: validate,
+      [validatePath]: async (url, request) => {
+        checks.push(await request.clone().json())
+        return validate(url, request)
+      },
       [`${listPath}/throughput`]: async (_, request) => {
-        const body = (await request.json()) as Partial<DerivedMetricVersion>
+        const body = (await request.json()) as SaveDerivedMetric
         saved.push(body)
-        const created = version('throughput', 3, body)
-        metrics = metrics.map((m) =>
-          m.name === 'throughput'
-            ? { ...m, versions: [...m.versions, created] }
-            : m,
-        )
-        return { ...created, created: true }
+        const changed = metric('throughput', {
+          ...body,
+          updated_at: '2026-11-22T08:00:00Z',
+        })
+        metrics = metrics.map((m) => (m.name === 'throughput' ? changed : m))
+        return { ...changed, created: false }
       },
     })
-    const router = renderApp('/derived-metrics?name=throughput&version=1')
+    const router = renderApp('/derived-metrics?name=throughput')
 
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('link', { name: 'New version' }))
-    expect(currentQuery(router)).toBe('name=throughput&version=1&edit=version')
+    await user.click(await screen.findByRole('link', { name: 'Edit' }))
+    expect(currentQuery(router)).toBe('name=throughput&edit=change')
 
-    const form = within(await panel('New version of throughput (v3)'))
-    expect(
-      form.getByText(/Starts from version 1; the latest is version 2/),
-    ).toBeInTheDocument()
+    const form = within(await panel('Change throughput'))
+    // The change reaches every analysis and the metrics built on this one.
+    expect(form.getByRole('alert')).toHaveTextContent(
+      /no versions.*including past runs\. It also changes 1 derived metric built on it: efficiency\./,
+    )
     expect(await editor()).toHaveValue('bytes_transferred / load_time')
-    expect(form.getByRole('combobox', { name: 'Unit' })).toHaveValue('MB/s')
+    expect(form.getByRole('combobox', { name: 'Unit' })).toHaveValue('Mbit/s')
     expect(await form.findByText('The expression is valid.')).toBeInTheDocument()
-    // Saving an older version unchanged makes it the latest again.
-    expect(form.getByRole('button', { name: 'Save version 3' })).toBeEnabled()
+    expect(form.getByRole('button', { name: 'Save' })).toBeDisabled()
 
-    await user.click(form.getByRole('button', { name: 'Save version 3' }))
+    await enterText(user, await editor(), ' * 8')
+    expect(await form.findByText('The expression is valid.')).toBeInTheDocument()
+    // Checked under its name: the server also checks the metrics built on it.
+    expect(checks.at(-1)).toEqual({
+      expression: 'bytes_transferred / load_time * 8',
+      unit: 'Mbit/s',
+      name: 'throughput',
+    })
+    await user.click(form.getByRole('button', { name: 'Save' }))
+
     await waitFor(() => expect(saved).toHaveLength(1))
     expect(saved[0]).toEqual({
-      expression: 'bytes_transferred / load_time',
-      unit: 'MB/s',
-      description: 'Average download rate.',
+      expression: 'bytes_transferred / load_time * 8',
+      unit: 'Mbit/s',
+      description: 'Comparable to the link bandwidth.',
     })
-    expect(await screen.findByText('Saved as version 3.')).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        'The change is saved. It applies to every analysis, including past runs.',
+      ),
+    ).toBeInTheDocument()
     expect(currentQuery(router)).toBe('name=throughput')
+    const detail = within(await panel('throughput'))
+    expect(
+      await detail.findByText('bytes_transferred / load_time * 8'),
+    ).toBeInTheDocument()
   })
 
   it('asks before discarding changes and saves nothing unchanged', async () => {
     mockApi({ [listPath]: derivedMetrics, [validatePath]: validate })
-    const router = renderApp('/derived-metrics?name=throughput&edit=version')
+    const router = renderApp('/derived-metrics?name=throughput&edit=change')
 
-    const form = within(await panel('New version of throughput (v3)'))
+    const form = within(await panel('Change throughput'))
     expect(await form.findByText('The expression is valid.')).toBeInTheDocument()
-    expect(form.getByRole('button', { name: 'Save version 3' })).toBeDisabled()
+    expect(form.getByRole('button', { name: 'Save' })).toBeDisabled()
 
     const user = userEvent.setup()
     await enterText(user, await editor(), ' * 8')

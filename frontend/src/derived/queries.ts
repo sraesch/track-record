@@ -13,7 +13,7 @@ import {
   unwrap,
   type ValidateExpression,
 } from '../api/client'
-import { toDerivedRows } from './derivedModel'
+import { sortDerived } from './derivedModel'
 
 // Everything about derived metrics starts with `derivedKeys.all`, so saving
 // one refreshes the list, validations and evaluations at once: other
@@ -27,13 +27,13 @@ export const derivedKeys = {
     ['derived-metrics', 'evaluate', request] as const,
 }
 
-/** All derived metrics with their versions, one row per metric (FR-17). */
+/** All derived metrics, sorted by name (FR-17). */
 export function useDerivedMetrics() {
   return useQuery({
     queryKey: derivedKeys.list,
     queryFn: async ({ signal }) =>
       unwrap(await api.GET('/ui/api/v1/derived-metrics', { signal })),
-    select: toDerivedRows,
+    select: sortDerived,
   })
 }
 
@@ -109,8 +109,9 @@ export function useEvaluations(
 }
 
 /**
- * Saves a derived metric (FR-17): a new version, or the latest one again
- * if nothing changed.
+ * Saves a derived metric (FR-17): creates it, or changes its definition.
+ * There are no versions, so a change applies to every analysis and to the
+ * derived metrics built on it.
  */
 export function useSaveDerivedMetric() {
   const queryClient = useQueryClient()

@@ -255,9 +255,16 @@ async fn derived_metrics_validate_save_and_evaluate() {
     .await;
     assert_eq!(status, StatusCode::CREATED, "{out}");
     assert_eq!(
-        (out["version"].as_i64(), out["created"].as_bool()),
-        (Some(1), Some(true))
+        (out["expression"].as_str(), out["created"].as_bool()),
+        (Some("max(series.fps)"), Some(true))
     );
+    // There are no versions (ADR 0017).
+    assert_eq!(
+        (&out["version"], &out["versions"]),
+        (&Value::Null, &Value::Null)
+    );
+    let created_at = out["updated_at"].clone();
+    assert_eq!(out["created_at"], created_at);
     let (status, out) = save(
         "peak",
         json!({"expression": "max(series.fps)", "unit": "fps"}),
@@ -267,6 +274,22 @@ async fn derived_metrics_validate_save_and_evaluate() {
         (status, out["created"].as_bool()),
         (StatusCode::OK, Some(false))
     );
+    assert_eq!(out["updated_at"], created_at, "nothing changed: {out}");
+    // A derived metric is changed in place.
+    let (status, out) = save(
+        "peak",
+        json!({"expression": "max(series.fps, from=1[s])", "unit": "fps", "description": "after 1 s"}),
+    )
+    .await;
+    assert_eq!(
+        (status, out["created"].as_bool()),
+        (StatusCode::OK, Some(false)),
+        "{out}"
+    );
+    assert_eq!(out["expression"], "max(series.fps, from=1[s])");
+    assert_eq!(out["description"], "after 1 s");
+    assert_ne!(out["updated_at"], created_at);
+    assert_eq!(out["created_at"], created_at);
 
     // Saving is not reachable with a token.
     let response = write
@@ -294,32 +317,47 @@ async fn derived_metrics_validate_save_and_evaluate() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{out}");
-    assert_eq!(out["uses"][0]["name"], "double");
-    assert_eq!(out["uses"][0]["version"], 1);
+    assert_eq!(out["uses"], json!(["double"]));
+
+    // 1.5 * 2 + 1 and 1.25 * 2 + 1.
+    let plus = || {
+        let read = read.clone();
+        let url = app.m("/derived-metrics/evaluate");
+        async move {
+            let (status, out) = read
+                .post(&url, &json!({"case_execution_id": ce, "name": "plus"}))
+                .await;
+            assert_eq!(status, StatusCode::OK, "{out}");
+            out
+        }
+    };
+    let out = plus().await;
+    assert_eq!(
+        (out["unit"].as_str(), out["expression"].as_str()),
+        (Some("s"), Some("derived.plus"))
+    );
+    assert!(
+        close(&out["samples"][0]["value"], 4.0) && close(&out["samples"][1]["value"], 3.5),
+        "{out}"
+    );
+
+    // Changing double changes plus, which is built on it: there are no
+    // pinned versions. 1.5 * 3 + 1 and 1.25 * 3 + 1.
     let (status, out) = save(
         "double",
         json!({"expression": "load_time * 3", "unit": "ms"}),
     )
     .await;
     assert_eq!(
-        (status, out["version"].as_i64()),
-        (StatusCode::CREATED, Some(2))
-    );
-
-    // plus keeps using double v1 (pinned): 1.5 * 2 + 1 and 1.25 * 2 + 1.
-    let (status, out) = read
-        .post(
-            &app.m("/derived-metrics/evaluate"),
-            &json!({"case_execution_id": ce, "name": "plus"}),
-        )
-        .await;
-    assert_eq!(status, StatusCode::OK, "{out}");
-    assert_eq!(out["unit"], "s");
-    assert!(
-        close(&out["samples"][0]["value"], 4.0) && close(&out["samples"][1]["value"], 3.5),
+        (status, out["created"].as_bool()),
+        (StatusCode::OK, Some(false)),
         "{out}"
     );
-    // An ad-hoc expression uses the latest version.
+    let out = plus().await;
+    assert!(
+        close(&out["samples"][0]["value"], 5.5) && close(&out["samples"][1]["value"], 4.75),
+        "{out}"
+    );
     let (_, out) = read
         .post(
             &app.m("/derived-metrics/evaluate"),
@@ -327,6 +365,43 @@ async fn derived_metrics_validate_save_and_evaluate() {
         )
         .await;
     assert!(close(&out["samples"][0]["value"], 4.5), "{out}");
+    // A version can no longer be asked for.
+    let (status, _) = read
+        .post(
+            &app.m("/derived-metrics/evaluate"),
+            &json!({"case_execution_id": ce, "name": "double", "version": 1}),
+        )
+        .await;
+    assert!(status.is_client_error(), "{status}");
+
+    // A change that would break a metric built on this one is rejected, on
+    // save and while typing.
+    let breaking = json!({"expression": "max(series.fps)", "unit": "fps"});
+    let (status, out) = save("double", breaking.clone()).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{out}");
+    let detail = out["detail"].as_str().unwrap();
+    assert!(
+        detail.contains("derived.plus uses derived.double and would no longer be valid"),
+        "{out}"
+    );
+    let v =
+        validate(json!({"expression": "max(series.fps)", "unit": "fps", "name": "double"})).await;
+    assert_eq!(v["valid"], false, "{v}");
+    assert_eq!(
+        (
+            v["diagnostics"][0]["start"].as_u64(),
+            v["diagnostics"][0]["end"].as_u64()
+        ),
+        (Some(0), Some(15)),
+        "{v}"
+    );
+    // Under another name, or as a change the users can live with, it is fine.
+    let v =
+        validate(json!({"expression": "max(series.fps)", "unit": "fps", "name": "other"})).await;
+    assert_eq!(v["valid"], true, "{v}");
+    let v = validate(json!({"expression": "load_time * 4", "unit": "s", "name": "double"})).await;
+    assert_eq!(v["valid"], true, "{v}");
+    assert!(close(&plus().await["samples"][0]["value"], 5.5));
 
     // Cycles and self references are rejected.
     let (status, out) = save("double", json!({"expression": "derived.plus", "unit": "s"})).await;
@@ -351,10 +426,11 @@ async fn derived_metrics_validate_save_and_evaluate() {
         .map(|m| m["name"].as_str().unwrap())
         .collect();
     assert_eq!(names, vec!["double", "peak", "plus"]);
+    assert_eq!(list[2]["uses"], json!(["double"]));
     let (status, one) = read.get(&app.m("/derived-metrics/double")).await;
     assert_eq!(
-        (status, one["versions"].as_array().unwrap().len()),
-        (StatusCode::OK, 2)
+        (status, one["expression"].as_str(), one["unit"].as_str()),
+        (StatusCode::OK, Some("load_time * 3"), Some("ms"))
     );
     assert_eq!(
         read.get(&app.m("/derived-metrics/none")).await.0,
@@ -404,7 +480,7 @@ async fn derived_metrics_validate_save_and_evaluate() {
             &json!({"metric": "derived.plus"}),
         )
         .await;
-    assert!(close(&out["groups"][0]["stats"]["mean"], 3.75), "{out}");
+    assert!(close(&out["groups"][0]["stats"]["mean"], 5.125), "{out}");
     let (_, out) = ui
         .post(
             &app.u("/analysis/aggregates"),

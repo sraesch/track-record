@@ -29,14 +29,16 @@ behind it.
   - Harness-sent definitions (suites, scenarios, metrics), environments and
     test cases are deduplicated by content hash, so sending an old definition
     returns its old version.
-  - UI-edited definitions (derived metrics, aliases) get a new version unless
-    the content equals the latest one.
-- **Derived metric composition** (FR-17): `derived_metric_dependency` pins
-  the exact versions a derived metric version uses. A version can only use
-  versions that existed before it, at most one per derived metric, and
-  `save_derived_metric()` rejects a metric that would depend on itself. The
-  pinned versions are part of the content, so pinning a newer version creates
-  a new version.
+  - Aliases, which are edited in the UI, get a new version unless the content
+    equals the latest one.
+- **Derived metrics are not versioned**
+  ([ADR 0017](0017-derived-metrics-without-versions.md), which replaced the
+  versions this ADR first described). `derived_metric` holds the one
+  definition and can be updated; its name cannot change and it is not
+  deleted. `derived_metric_dependency` records which derived metrics an
+  expression uses and is replaced with the expression.
+  `save_derived_metric()` rejects a metric that would depend on itself
+  (FR-17).
 - **Alias values are JSON scalars** (`jsonb`), so aliases on case parameter
   values keep their type: `10` and `"10"` are different values.
 - **Units** (FR-13a) are stored as symbols (text) on metrics, series

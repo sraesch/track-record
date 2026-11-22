@@ -7,9 +7,14 @@
 FR-17 and FR-17a ask for derived metrics written in a small, safe DSL that is
 validated on save, is the same in the UI, REST API and MCP, and is evaluated at
 query time so it also applies to historical runs. Derived metrics can use other
-derived metrics without cycles, and each version pins the versions it uses
-(FR-7). A derived metric can have no value, which is not missing data
-(FR-12a). Every metric has a unit, and units in the catalogue convert (FR-13a).
+derived metrics without cycles. A derived metric can have no value, which is
+not missing data (FR-12a). Every metric has a unit, and units in the catalogue
+convert (FR-13a).
+
+Derived metrics were versioned when this ADR was written, each version pinning
+the versions it used. [ADR 0017](0017-derived-metrics-without-versions.md)
+removed the versions; the section on composition below describes the current
+state.
 
 The analysis endpoints (FR-12, FR-16, FR-18 to FR-21) need one way to name the
 metric of a view, and long operations must stream (NFR-7,
@@ -82,9 +87,9 @@ unit catalogue (`track-record-core::units`):
 - A saved derived metric declares its unit. The inferred unit must convert to
   it, and every value is converted to it.
 
-Units are checked twice. **On save**, against the latest metric versions and
-the most recent series of each referenced metric (a series reference needs at
-least one uploaded series to know its x unit). **On evaluation**, again with
+Units are checked twice. **On save**, against the latest versions of the
+uploaded metrics and the most recent series of each referenced metric (a
+series reference needs at least one uploaded series to know its x unit). **On evaluation**, again with
 the units of each sample's inputs (cached per combination of units). A metric
 whose unit changed between versions (`s`, later `ms`) therefore still gives
 the same value in the declared unit. Inputs whose units no longer fit are a
@@ -101,17 +106,21 @@ data error for that sample.
 - Points of a series with a non-finite y count as missing points: reductions
   skip them and they are dropped from series results.
 
-### Composition and versions
+### Composition
 
-- Saving resolves each `derived.<name>` to its latest version and passes those
-  ids as `p_uses` to `save_derived_metric()`. Evaluating a saved version uses
-  the pinned versions, recursively. A new version of a used metric only
-  takes effect through a new version of the metric built on it (FR-17).
+- `derived.<name>` means the definition that derived metric has when the
+  expression is evaluated. A derived metric has one definition and no
+  versions ([ADR 0017](0017-derived-metrics-without-versions.md)), so a
+  change to it takes effect in the metrics built on it (FR-17).
+- Saving passes the names an expression refers to as `p_uses` to
+  `save_derived_metric()`, which records them.
 - The backend rejects a save whose dependencies include the metric itself,
-  before the database's own TR007 check.
-- Evaluation memoizes each derived version per sample and evaluates
+  before the database's own TR007 check, and a change that would make a
+  derived metric built on the saved one invalid.
+- Evaluation memoizes each derived metric per sample and evaluates
   dependencies before the metric that uses them. Nesting is limited to 32
-  levels. There is no cache across requests yet (NFR-5 allows one later).
+  levels, and a cycle is an error, should one exist despite the checks.
+  There is no cache across requests yet (NFR-5 allows one later).
 
 ### Safety
 

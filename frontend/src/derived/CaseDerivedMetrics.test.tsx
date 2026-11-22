@@ -22,18 +22,12 @@ const evaluatePath = '/ui/api/v1/derived-metrics/evaluate'
 const metric = (name: string, expression: string, unit = ''): DerivedMetric => ({
   id: name.length,
   name,
-  versions: [
-    {
-      id: name.length * 10,
-      name,
-      version: 1,
-      expression,
-      unit,
-      description: '',
-      created_at: '2026-11-01T08:00:00Z',
-      uses: [],
-    },
-  ],
+  expression,
+  unit,
+  description: '',
+  created_at: '2026-11-01T08:00:00Z',
+  updated_at: '2026-11-01T08:00:00Z',
+  uses: [],
 })
 
 const metrics = [
@@ -57,7 +51,7 @@ const samples = (
 
 const responses: Record<string, EvaluateResponse | Response> = {
   throughput: {
-    expression: 'derived.throughput@1',
+    expression: 'derived.throughput',
     kind: 'scalar',
     unit: 'MB/s',
     samples: samples((r) =>
@@ -65,7 +59,7 @@ const responses: Record<string, EvaluateResponse | Response> = {
     ),
   },
   smooth_fps: {
-    expression: 'derived.smooth_fps@1',
+    expression: 'derived.smooth_fps',
     kind: 'series',
     unit: 'fps',
     x_dimension: 'time',
@@ -77,7 +71,7 @@ const responses: Record<string, EvaluateResponse | Response> = {
     ),
   },
   stall: {
-    expression: 'derived.stall@1',
+    expression: 'derived.stall',
     kind: 'scalar',
     unit: '1/s',
     samples: samples(() => ({

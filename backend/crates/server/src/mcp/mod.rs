@@ -343,8 +343,8 @@ impl McpServer {
     }
 
     #[tool(
-        description = "Derived metrics with all versions: expression, unit and the \
-                       versions they use.",
+        description = "Derived metrics: expression, unit and the derived metrics they \
+                       use. A derived metric has one definition, which can change.",
         annotations(read_only_hint = true)
     )]
     async fn list_derived_metrics(&self) -> Result<CallToolResult, ErrorData> {

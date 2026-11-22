@@ -13,6 +13,7 @@ import useMediaQuery from '@mui/material/useMediaQuery'
 import { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link as RouterLink, useSearchParams } from 'react-router'
+import type { DerivedMetric } from '../api/client'
 import { EmptyState } from '../pages/EmptyState'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { PageHeader } from '../pages/PageHeader'
@@ -20,7 +21,6 @@ import { SearchField } from '../pages/SearchField'
 import { DerivedMetricDetail } from './DerivedMetricDetail'
 import { DerivedMetricEditor } from './DerivedMetricEditor'
 import {
-  type DerivedRow,
   type DerivedView,
   derivedViewToParams,
   type SetDerivedView,
@@ -33,7 +33,8 @@ import { useDerivedMetrics } from './queries'
 /**
  * Derived metrics (FR-17): the list on the left, the selected metric or the
  * editor on the right; stacked on narrow screens, list first. Selection,
- * version, search and editor are in the URL (FR-21).
+ * search and editor are in the URL (FR-21). A derived metric has one
+ * definition, which the editor changes (ADR 0017).
  */
 export function DerivedMetricsPage() {
   const { t } = useTranslation()
@@ -56,7 +57,7 @@ export function DerivedMetricsPage() {
   const theme = useTheme()
   const stacked = useMediaQuery(theme.breakpoints.down('md'))
   const panel = useRef<HTMLDivElement>(null)
-  const shownKey = `${view.name ?? ''}|${view.version ?? ''}|${view.edit ?? ''}`
+  const shownKey = `${view.name ?? ''}|${view.edit ?? ''}`
   const firstKey = useRef(shownKey)
   useEffect(() => {
     if (stacked && shownKey !== firstKey.current) {
@@ -100,21 +101,22 @@ export function DerivedMetricsPage() {
           ) : !metrics.data ? null : view.edit === 'new' ? (
             <DerivedMetricEditor
               key="new"
-              rows={rows}
+              metrics={rows}
               view={view}
               setView={setView}
             />
-          ) : view.edit === 'version' && selected ? (
-            <EditVersion
-              row={selected}
-              rows={rows}
+          ) : view.edit === 'change' && selected ? (
+            <DerivedMetricEditor
+              key={selected.name}
+              metric={selected}
+              metrics={rows}
               view={view}
               setView={setView}
             />
           ) : selected ? (
             <DerivedMetricDetail
-              row={selected}
-              rows={rows}
+              metric={selected}
+              metrics={rows}
               view={view}
             />
           ) : view.name ? (
@@ -130,32 +132,6 @@ export function DerivedMetricsPage() {
   )
 }
 
-/** The editor for a new version, starting from the selected version. */
-function EditVersion({
-  row,
-  rows,
-  view,
-  setView,
-}: {
-  row: DerivedRow
-  rows: readonly DerivedRow[]
-  view: DerivedView
-  setView: SetDerivedView
-}) {
-  const base =
-    row.versions.find((v) => v.version === view.version) ?? row.latest
-  return (
-    <DerivedMetricEditor
-      key={`${row.name}@${base.version}`}
-      row={row}
-      base={base}
-      rows={rows}
-      view={view}
-      setView={setView}
-    />
-  )
-}
-
 function DerivedList({
   view,
   rows,
@@ -165,8 +141,8 @@ function DerivedList({
   onSearch,
 }: {
   view: DerivedView
-  rows: readonly DerivedRow[]
-  shown: readonly DerivedRow[]
+  rows: readonly DerivedMetric[]
+  shown: readonly DerivedMetric[]
   loaded: boolean
   fetching: boolean
   onSearch: (search: string) => void
@@ -265,14 +241,11 @@ function DerivedList({
                         color="text.secondary"
                         sx={{ whiteSpace: 'nowrap' }}
                       >
-                        {t('derived.versionUnit', {
-                          version: row.latest.version,
-                          unit: row.latest.unit || t('metrics.unit.dimensionless'),
-                        })}
+                        {row.unit || t('metrics.unit.dimensionless')}
                       </Typography>
                     </Box>
                   }
-                  secondary={row.latest.expression}
+                  secondary={row.expression}
                   slotProps={{
                     secondary: {
                       noWrap: true,
