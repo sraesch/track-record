@@ -61,6 +61,10 @@ describe('Run detail', () => {
     expect(overview.getByText('v1.5.0')).toBeInTheDocument()
     expect(overview.getByText('release')).toBeInTheDocument()
     expect(overview.getByText(runId)).toBeInTheDocument()
+    // The suite opens the version the run was executed with.
+    expect(
+      overview.getByRole('link', { name: 'streaming-nightly' }),
+    ).toHaveAttribute('href', '/suites?name=streaming-nightly&version=2')
     expect(screen.getByRole('link', { name: 'All runs' })).toHaveAttribute(
       'href',
       '/runs',

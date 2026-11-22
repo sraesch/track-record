@@ -44,7 +44,7 @@
       "description": "Overlay series from different samples and runs, resample and aggregate them."
     },
     "suites": {
-      "description": "Suites, scenarios and test cases with all their versions."
+      "description": "The suites and scenarios the harness uploads, with all their versions, and the test cases of a scenario. Look up what a version changed, and tag or annotate test cases."
     },
     "metrics": {
       "description": "The uploaded metrics with their unit and direction, and the unit catalogue. A metric has one definition, which can be changed here."
@@ -477,6 +477,100 @@
       "title": "Remove alias?",
       "text": "Results show {{source}} again instead of {{target}}. The alias keeps its history and can be set again.",
       "confirm": "Remove"
+    }
+  },
+  "suites": {
+    "tabs": {
+      "label": "Suites or scenarios",
+      "suites": "Suites",
+      "scenarios": "Scenarios"
+    },
+    "kind": {
+      "suites": {
+        "listLabel": "Suites",
+        "search": "Search suites",
+        "count_one": "{{count}} suite",
+        "count_other": "{{count}} suites",
+        "none": "No suites yet.",
+        "noMatch": "No suites match the search.",
+        "empty": "No suites yet. The harness uploads them with its results.",
+        "selectHint": "Select a suite to see its versions.",
+        "notFound": "There is no suite {{name}}.",
+        "error": "The suites could not be loaded: {{message}}",
+        "runs": "Runs of this suite",
+        "about": "The harness uploads a suite with every run. A changed definition is a new version; a run keeps the version it was executed with."
+      },
+      "scenarios": {
+        "listLabel": "Scenarios",
+        "search": "Search scenarios",
+        "count_one": "{{count}} scenario",
+        "count_other": "{{count}} scenarios",
+        "none": "No scenarios yet.",
+        "noMatch": "No scenarios match the search.",
+        "empty": "No scenarios yet. The harness uploads them with its results.",
+        "selectHint": "Select a scenario to see its versions.",
+        "notFound": "There is no scenario {{name}}.",
+        "error": "The scenarios could not be loaded: {{message}}",
+        "runs": "Runs with this scenario",
+        "about": "The harness uploads a scenario with its results. A changed definition is a new version and a different case: trends start over and never mix versions."
+      }
+    },
+    "versions": {
+      "title": "Versions",
+      "count_one": "{{count}} version",
+      "count_other": "{{count}} versions",
+      "version": "Version",
+      "latest": "latest",
+      "uploaded": "First uploaded",
+      "changes": "Changes",
+      "testCases": "Test cases",
+      "first": "First version",
+      "changed": "Changed: {{keys}}",
+      "added": "Added: {{keys}}",
+      "removed": "Removed: {{keys}}",
+      "notFound": "{{name}} has no version {{version}}. Select one of its versions."
+    },
+    "definition": {
+      "title": "Definition of version {{version}}",
+      "copy": "Copy definition as JSON",
+      "empty": "This version was uploaded without details.",
+      "compared": "Differences from version {{version}} are marked.",
+      "was": "Version {{version}}: {{value}}",
+      "added": "New in this version",
+      "removed": "Removed in this version"
+    },
+    "testCases": {
+      "title": "Test cases of version {{version}}",
+      "description": "A test case is this scenario version with assets and parameter values. Select one for its tags and annotations.",
+      "count_one": "{{count}} test case",
+      "count_other": "{{count}} test cases",
+      "tagged_one": "{{count}} of {{total}} tagged {{tag}}",
+      "tagged_other": "{{count}} of {{total}} tagged {{tag}}",
+      "tagFilter": "Tagged {{tag}}",
+      "clearTag": "Show all test cases",
+      "columns": {
+        "testCase": "Test case",
+        "parameters": "Parameters",
+        "assets": "Assets",
+        "tags": "Tags"
+      },
+      "name": "Test case {{id}}",
+      "empty": "No test cases of this version were uploaded.",
+      "noneTagged": "No test case of this version is tagged {{tag}}.",
+      "error": "The test cases could not be loaded: {{message}}",
+      "notFound": "Version {{version}} has no test case {{id}}.",
+      "shown_one": "{{count}} of {{total}} shown",
+      "shown_other": "{{count}} of {{total}} shown",
+      "showMore": "Show more",
+      "tags": {
+        "title": "Tags of test case {{id}}",
+        "description": "Labels on this test case. Every execution of it, in every run, shows them.",
+        "show": "Show the test cases tagged {{tag}}"
+      },
+      "annotations": {
+        "title": "Annotations of test case {{id}}",
+        "description": "Notes on this test case. Every execution of it, in every run, shows them."
+      }
     }
   },
   "metrics": {

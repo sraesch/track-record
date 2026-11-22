@@ -20,7 +20,9 @@ for every view, color modes), the run list and the run detail (tags,
 annotations, case executions, attachments with previews, invalidation,
 deletion) and the case execution page (measurements per sample, a chart
 per series metric with a line per sample, device details, test case tags and annotations, derived metric values,
-attachments), the aliases page (add, change, remove and set again device
+attachments), the suites & scenarios page (versions of a suite or scenario
+with what each changed, the test cases of a scenario version with their tags
+and annotations), the aliases page (add, change, remove and set again device
 and parameter aliases), the metrics page (one definition per metric with edit,
 rename and delete, unit catalogue, custom units) and the derived metrics page (list,
 uses and users, editor that creates or changes a metric with live validation

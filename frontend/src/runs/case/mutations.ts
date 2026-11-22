@@ -1,8 +1,10 @@
-// Changes to the test case of a case execution: its tags. A test case is
-// shared by its executions in every run, so after a change the case
-// executions of all runs are refetched, but not the runs or their series.
+// Changes to a test case: its tags. A test case is shared by its
+// executions in every run, so after a change the case executions of all
+// runs and the test case lists (suites & scenarios page) are refetched,
+// but not the runs or their series.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, expectOk } from '../../api/client'
+import { testCaseKeys } from '../../suites/queries'
 import { isCaseExecutionKey } from '../queries'
 
 function useTestCaseMutation<T>(fn: (variables: T) => Promise<unknown>) {
@@ -10,9 +12,12 @@ function useTestCaseMutation<T>(fn: (variables: T) => Promise<unknown>) {
   return useMutation({
     mutationFn: fn,
     onSettled: () =>
-      queryClient.invalidateQueries({
-        predicate: (query) => isCaseExecutionKey(query.queryKey),
-      }),
+      Promise.all([
+        queryClient.invalidateQueries({
+          predicate: (query) => isCaseExecutionKey(query.queryKey),
+        }),
+        queryClient.invalidateQueries({ queryKey: testCaseKeys.all }),
+      ]),
   })
 }
 
