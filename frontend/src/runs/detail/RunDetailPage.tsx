@@ -18,6 +18,7 @@ import { EmptyState } from '../../pages/EmptyState'
 import { ErrorAlert } from '../../pages/ErrorAlert'
 import { PageHeader } from '../../pages/PageHeader'
 import { useCaseExecutions, useRun } from '../queries'
+import { runListHref } from '../runFilters'
 import {
   type CaseFilters,
   caseFiltersToParams,
@@ -145,6 +146,15 @@ function RunDetailView({ run }: { run: RunDetail }) {
             title={t('runDetail.environment.title')}
             emptyText={t('runDetail.environment.empty')}
             details={run.shared_environment}
+            actions={
+              <Button
+                component={Link}
+                size="small"
+                to={runListHref({ environment: run.shared_environment_id })}
+              >
+                {t('runDetail.environment.runs')}
+              </Button>
+            }
           />
         </Box>
         {/* Above the case executions, which can be a long list. */}

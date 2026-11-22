@@ -133,6 +133,19 @@
       "from": "Started from",
       "to": "Started until",
       "any": "Any",
+      "more": "More filters",
+      "moreActive": "More filters ({{count}} set)",
+      "fewer": "Fewer filters",
+      "commit": "Commit",
+      "sutTag": "SUT tag",
+      "buildConfig": "Build configuration",
+      "scenario": "Scenario",
+      "asset": "Asset",
+      "metric": "Metric",
+      "params": "Parameters",
+      "paramsHint": "Type name=value and press Enter",
+      "paramsInvalid": "Use name=value, e.g. size=10 or mode=\"fast\"",
+      "environment": "Shared environment {{id}}",
       "clear": "Clear filters"
     },
     "shown_one": "{{count}} run shown",
@@ -228,7 +241,8 @@
     },
     "environment": {
       "title": "Shared environment",
-      "empty": "No details recorded."
+      "empty": "No details recorded.",
+      "runs": "Runs with this environment"
     },
     "invalidate": {
       "action": "Mark invalid",

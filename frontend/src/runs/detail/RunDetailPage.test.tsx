@@ -102,6 +102,9 @@ describe('Run detail', () => {
     expect(environment.getByText('backend.version')).toBeInTheDocument()
     expect(environment.getByText('2.4.0')).toBeInTheDocument()
     expect(environment.getByText('eu-central')).toBeInTheDocument()
+    expect(
+      environment.getByRole('link', { name: 'Runs with this environment' }),
+    ).toHaveAttribute('href', '/runs?env=3')
   })
 
   it('lists the case executions with names and values after aliases', async () => {

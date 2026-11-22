@@ -2,7 +2,9 @@ import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider } from '@mui/material/styles'
 import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
-import { type createBrowserRouter, RouterProvider } from 'react-router'
+import type { createBrowserRouter } from 'react-router'
+// From `react-router/dom`, so navigations can use `flushSync`.
+import { RouterProvider } from 'react-router/dom'
 import { createQueryClient } from './api/queryClient'
 import { theme } from './theme'
 
