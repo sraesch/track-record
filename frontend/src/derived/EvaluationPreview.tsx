@@ -5,6 +5,7 @@ import LinearProgress from '@mui/material/LinearProgress'
 import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import type { TFunction } from 'i18next'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CaseExecutionSummary, RunSummary } from '../api/client'
@@ -173,7 +174,7 @@ export function EvaluationPreview({ view, setView, expression, unit }: Props) {
 /** A case execution as the picker names it: scenario, device, parameters. */
 function caseLabel(
   c: CaseExecutionSummary,
-  t: ReturnType<typeof useTranslation>['t'],
+  t: TFunction,
 ): string {
   const parameters = Object.entries(c.test_case.resolved_parameters)
     .map(([name, value]) => `${name}=${formatJsonValue(value)}`)

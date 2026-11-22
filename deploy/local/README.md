@@ -46,7 +46,9 @@ cd frontend && npm run seed
 
 ### An API token for the harness or MCP
 
-Tokens are created on the UI port, e.g. through the UI's proxy:
+Create one on the *API tokens* page of the UI
+(http://localhost:8088/tokens), or on the UI port directly, e.g. through
+the UI's proxy:
 
 ```bash
 curl -s -X POST localhost:8088/ui/api/v1/tokens -H 'content-type: application/json' -d '{"name": "local harness", "scope": "write"}'

@@ -13,6 +13,7 @@ import { PlaceholderPage } from './pages/PlaceholderPage'
 import { RunDetailPage } from './runs/detail/RunDetailPage'
 import { RunListPage } from './runs/RunListPage'
 import { SuitesPage } from './suites/SuitesPage'
+import { TokensPage } from './tokens/TokensPage'
 
 // The page of each view in the side menu; views without one show a
 // placeholder until they are built.
@@ -22,6 +23,7 @@ const pages: Partial<Record<NavItemId, ReactElement>> = {
   metrics: <MetricsPage />,
   aliases: <AliasesPage />,
   derivedMetrics: <DerivedMetricsPage />,
+  tokens: <TokensPage />,
 }
 
 // All routes of the app. Every view has its own URL, and view state (filters,

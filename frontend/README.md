@@ -54,6 +54,9 @@ frontend/
                         versions, ADR 0017),
                         with live validation and a preview on a case
                         execution; their values on the case execution page
+  src/tokens/           API tokens (NFR-2): list, create with a scope
+                        (the secret is shown once), revoke; revoked
+                        tokens on request, in the URL
   src/dsl/              The DSL editor (CodeMirror, ADR 0016, lazily
                         loaded) and its tokenizer and completion
   src/tags/             Tag editor shared by runs and test cases

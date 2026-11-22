@@ -33,6 +33,10 @@ export type SampleResult = Schemas['SampleResult']
 export type RunStatus = Schemas['RunStatus']
 export type RunTrigger = Schemas['RunTrigger']
 export type Validity = Schemas['Validity']
+export type ApiToken = Schemas['ApiToken']
+export type CreateToken = Schemas['CreateToken']
+export type CreatedToken = Schemas['CreatedToken']
+export type TokenScope = Schemas['TokenScope']
 export type RunListQuery = NonNullable<
   paths['/ui/api/v1/runs']['get']['parameters']['query']
 >
