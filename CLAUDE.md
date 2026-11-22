@@ -35,6 +35,7 @@ backend/test.sh -- ingest         # selected backend tests (arguments go to carg
 cargo run -p track-record-server -- serve          # run the server (in backend/; env vars in backend/README.md)
 cargo run -p track-record-server -- openapi machine > openapi/machine.json   # regenerate (in backend/; also `ui`)
 docker build --file backend/Dockerfile --tag track-record-server .   # backend image (from the repo root)
+docker buildx build --platform linux/amd64,linux/arm64 --file backend/Dockerfile .   # both platforms (cross-compiled)
 frontend/test.sh                  # frontend: npm ci, oxlint, tsc, vitest, build (needs Node.js 24)
 frontend/test.sh -- App           # selected frontend tests (arguments go to vitest run)
 npm run dev                       # frontend dev server (in frontend/; proxies /ui/api to localhost:8081)
@@ -140,11 +141,14 @@ local test commands; when a new part gets tests, add a job that runs the same
 command (`backend` runs `backend/test.sh` and builds the server image,
 `frontend` runs `frontend/test.sh` and builds the UI image). After
 the checks pass, pushes to `develop`, `main` and `v*` tags
-publish `ghcr.io/<owner>/track-record-db` for amd64 and arm64
-([ADR 0007](docs/adr/0007-image-publishing.md)); pull requests never
-publish. After each publish, `.github/scripts/cleanup-images.sh` deletes
-`sha-` images beyond the newest 10 (index and children together). Actions are
-pinned to commit hashes; keep it that way.
+publish `ghcr.io/<owner>/track-record-db`, `-server` and `-frontend` for
+amd64 and arm64 ([ADR 0007](docs/adr/0007-image-publishing.md),
+[ADR 0014](docs/adr/0014-server-and-frontend-images.md)), each after its own
+checks, through the reusable `.github/workflows/publish-image.yml`; pull
+requests never publish. After each publish, `.github/scripts/cleanup-images.sh`
+deletes `sha-` images beyond the newest 10 (index and children together).
+Dockerfile build stages run on the build platform and cross-compile; never
+build under emulation. Actions are pinned to commit hashes; keep it that way.
 
 Backend crates are decided in ADR 0008: axum, sqlx (runtime queries),
 utoipa (OpenAPI from code), rmcp for MCP; workspace in `backend/`.
@@ -154,7 +158,7 @@ Testing Library. Component library (MUI) and routing (React Router) in
 ADR 0011; API types, client and TanStack Query in ADR 0012; Markdown
 rendering (react-markdown) for attachment previews in ADR 0013.
 
-Still open: cache strategy, charting library, Helm chart, release notes, publishing the server image.
+Still open: cache strategy, charting library, Helm chart, release notes.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
 only in code.
 

@@ -123,6 +123,11 @@ refuses to seed a database twice; start from an empty one
 docker build --tag track-record-frontend frontend
 ```
 
+CI publishes it for `linux/amd64` and `linux/arm64` as
+`ghcr.io/<owner>/track-record-frontend`
+([ADR 0014](../docs/adr/0014-server-and-frontend-images.md)). The app is
+built once on the build machine's platform; only the nginx stage differs.
+
 nginx on port 8080 serves the app and proxies `/ui/api` to
 `TR_UI_API_UPSTREAM` (default `http://server:8081`). The upstream host must
 resolve when nginx starts.

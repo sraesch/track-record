@@ -2,7 +2,8 @@
 # docs/adr/0007-image-publishing.md.
 #
 # Each check job runs the same command a developer runs locally. Add a job here
-# when a new part of the system gets tests (Rust backend, frontend).
+# when a new part of the system gets tests. Images are published by the
+# reusable workflow publish-image.yml.
 #
 # Actions are pinned to commit hashes because the publish job can write
 # packages. The comment after each hash names its release.
@@ -72,69 +73,46 @@ jobs:
       - name: Build the frontend image
         run: docker build --tag track-record-frontend frontend
 
-  # Pushes ghcr.io/<owner>/track-record-db after all checks passed. Never runs
-  # for pull requests.
+  # Publishing: each image is pushed to ghcr.io/<owner>/<image> for amd64 and
+  # arm64 after its own checks passed, then its old sha- images are deleted
+  # (publish-image.yml). Never runs for pull requests.
   publish-database-image:
     name: Publish database image
     if: github.event_name == 'push'
     needs: [database, database-image]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Only needed once the Dockerfile gets RUN steps; COPY works without it.
-      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      # develop -> develop; main -> main, latest; every push -> sha-<short>;
-      # v1.2.3 -> 1.2.3, 1.2.
-      - id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/track-record-db
-          flavor: latest=false
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix=sha-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-          labels: |
-            org.opencontainers.image.title=track-record-db
-            org.opencontainers.image.description=PostgreSQL 18 with the Track Record schema
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: db
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+    uses: ./.github/workflows/publish-image.yml
+    with:
+      image: track-record-db
+      context: db
+      description: PostgreSQL 18 with the Track Record schema
 
-  # Deletes sha- images beyond the newest 10, unless they carry another tag.
-  # Runs after every publish.
-  cleanup-database-images:
-    name: Clean up old database images
-    needs: publish-database-image
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  publish-server-image:
+    name: Publish server image
+    if: github.event_name == 'push'
+    needs: [backend]
     permissions:
       contents: read
       packages: write
-    # One cleanup at a time, across branches and tags.
-    concurrency:
-      group: ghcr-cleanup-track-record-db
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Delete old sha- images
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER: ${{ github.repository_owner }}
-        run: .github/scripts/cleanup-images.sh "$OWNER" track-record-db 10
+    uses: ./.github/workflows/publish-image.yml
+    with:
+      image: track-record-server
+      # The build embeds db/migrations, so the context is the repository.
+      context: .
+      dockerfile: backend/Dockerfile
+      description: 'Track Record backend: REST API, MCP server and jobs'
+
+  publish-frontend-image:
+    name: Publish frontend image
+    if: github.event_name == 'push'
+    needs: [frontend]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-image.yml
+    with:
+      image: track-record-frontend
+      context: frontend
+      description: Track Record web UI

@@ -69,6 +69,15 @@ The image:
 docker build --file backend/Dockerfile --tag track-record-server .
 ```
 
+For `linux/amd64` and `linux/arm64`, as CI publishes it
+(`ghcr.io/<owner>/track-record-server`, see
+[ADR 0014](../docs/adr/0014-server-and-frontend-images.md)), the build stage
+cross-compiles on the build machine's platform:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 --file backend/Dockerfile .
+```
+
 ## API
 
 Each port serves its own OpenAPI document: `/api/openapi.json` (machine)
