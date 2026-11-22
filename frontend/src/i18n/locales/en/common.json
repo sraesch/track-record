@@ -396,5 +396,75 @@
     "back": "Back to the run",
     "notFound": "There is no attachment {{attachmentId}}. It may have been deleted with its run.",
     "error": "The attachment could not be loaded: {{message}}"
+  },
+  "aliases": {
+    "add": "Add alias",
+    "filters": {
+      "label": "Filter aliases",
+      "dimension": "Dimension",
+      "allDimensions": "All dimensions",
+      "search": "Search",
+      "showRemoved": "Show removed"
+    },
+    "dimension": {
+      "device": "Client device",
+      "devices": "Client devices",
+      "parameter": "Parameter",
+      "parameterNamed": "Parameter {{name}}"
+    },
+    "columns": {
+      "dimension": "Dimension",
+      "source": "From",
+      "target": "To",
+      "version": "Version",
+      "updated": "Changed",
+      "actions": "Actions"
+    },
+    "type": {
+      "string": "Text",
+      "number": "Number",
+      "boolean": "Boolean"
+    },
+    "valueWithType": "{{value}} ({{type}})",
+    "version": "v{{version}}",
+    "removed": "Removed",
+    "resolvesTo": "Results show {{value}} (chained alias)",
+    "notInResults": "Not in results",
+    "notInResultsHint": "No uploaded value matches. The alias takes effect once one is uploaded.",
+    "edit": "Change target",
+    "editNamed": "Change the alias of {{source}}",
+    "remove": "Remove",
+    "removeNamed": "Remove the alias of {{source}}",
+    "restore": "Set again",
+    "restoreNamed": "Set the alias of {{source}} again",
+    "empty": "No aliases yet. Add one to rename or merge client device names or parameter values.",
+    "noMatch": "No aliases match the filters.",
+    "error": "The aliases could not be loaded: {{message}}",
+    "count_one": "{{count}} alias",
+    "count_other": "{{count}} aliases",
+    "dialog": {
+      "addTitle": "Add alias",
+      "editTitle": "Change alias",
+      "restoreTitle": "Set alias again",
+      "kind": "Dimension",
+      "parameterName": "Parameter name",
+      "source": "From",
+      "target": "To",
+      "type": "Type",
+      "sourceHelper": "The value as uploaded.",
+      "targetHelper": "What results show instead. Choose an existing value to merge both.",
+      "invalidNumber": "Not a number",
+      "invalidBoolean": "Enter true or false",
+      "same": "From and To must differ",
+      "replaces": "Replaces the current alias to {{target}}, as a new version.",
+      "unknownSource": "No uploaded value matches {{source}} yet. Check the spelling; the alias also applies to later uploads.",
+      "chain": "{{target}} has an alias itself, so results will show {{final}}.",
+      "typeChange": "The type changes from {{from}} to {{to}}."
+    },
+    "removeDialog": {
+      "title": "Remove alias?",
+      "text": "Results show {{source}} again instead of {{target}}. The alias keeps its history and can be set again.",
+      "confirm": "Remove"
+    }
   }
 }

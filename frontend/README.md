@@ -35,6 +35,9 @@ frontend/
                         tags and annotations, device details,
                         measurements per sample, a chart per series
                         metric, attachments
+  src/aliases/          Aliases (FR-14): list with filters in the URL,
+                        add, change, remove and set again; typed
+                        parameter values
   src/tags/             Tag editor shared by runs and test cases
   src/annotations/      Annotation list and editor shared by runs and
                         test cases
