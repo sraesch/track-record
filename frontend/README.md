@@ -31,9 +31,13 @@ frontend/
   src/runs/detail/      Run detail: overview, tags, annotations, case
                         executions (filters in the URL), attachments,
                         invalidation and deletion
-  src/runs/case/        Case execution: overview, parameters, device
-                        details, measurements per sample, a chart per
-                        series metric, attachments
+  src/runs/case/        Case execution: overview, parameters, test case
+                        tags and annotations, device details,
+                        measurements per sample, a chart per series
+                        metric, attachments
+  src/tags/             Tag editor shared by runs and test cases
+  src/annotations/      Annotation list and editor shared by runs and
+                        test cases
   src/charts/           Charts (ECharts, ADR 0015): lazily loaded <Chart>,
                         colors from the MUI color scheme
   src/attachments/      Attachment previews (dialog and own page): images,

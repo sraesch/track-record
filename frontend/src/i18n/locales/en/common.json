@@ -173,13 +173,7 @@
     },
     "tags": {
       "title": "Tags",
-      "empty": "No tags yet.",
-      "show": "Show runs tagged {{tag}}",
-      "remove": "Remove tag {{tag}}",
-      "removeHint": "Press Delete to remove the tag.",
-      "new": "New tag",
-      "add": "Add tag",
-      "error": "The tags could not be changed: {{message}}"
+      "show": "Show runs tagged {{tag}}"
     },
     "annotations": {
       "title": "Annotations"
@@ -293,7 +287,6 @@
       "started": "Started",
       "ended": "Ended",
       "assets": "Assets",
-      "tags": "Test case tags",
       "created": "Uploaded",
       "id": "Case execution ID",
       "copyId": "Copy case execution ID"
@@ -301,6 +294,11 @@
     "parameters": {
       "title": "Parameters",
       "empty": "This test case has no parameters."
+    },
+    "tags": {
+      "title": "Test case tags",
+      "description": "Labels on this test case. Every execution of it, in every run, shows them.",
+      "show": "Find case executions tagged {{tag}} in this run"
     },
     "annotations": {
       "title": "Test case annotations",
@@ -338,6 +336,14 @@
       "toCase": "Case execution",
       "toSample": "Repetition {{repetition}}"
     }
+  },
+  "tags": {
+    "empty": "No tags yet.",
+    "remove": "Remove tag {{tag}}",
+    "removeHint": "Press Delete to remove the tag.",
+    "new": "New tag",
+    "add": "Add tag",
+    "error": "The tags could not be changed: {{message}}"
   },
   "annotations": {
     "empty": "No annotations yet.",

@@ -19,7 +19,7 @@ comparisons, series views, export) and the MCP server. The frontend
 for every view, color modes), the run list and the run detail (tags,
 annotations, case executions, attachments with previews, invalidation,
 deletion) and the case execution page (measurements per sample, a chart
-per series metric with a line per sample, device details, test case annotations, attachments); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
+per series metric with a line per sample, device details, test case tags and annotations, attachments); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 
