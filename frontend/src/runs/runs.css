@@ -1,0 +1,46 @@
+/* The run list and the run detail page. Prefix tr-runs-. */
+
+/* Filter bars: fields with their labels above, buttons aligned to the inputs */
+.tr-runs-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); margin-bottom: var(--space-4); }
+.tr-runs-filters-more { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); flex-basis: 100%; }
+.tr-runs-filter { flex: 1 1 160px; min-width: 160px; max-width: 260px; }
+.tr-runs-filter-wide { max-width: 360px; }
+.tr-runs-filter-day { max-width: 190px; }
+.tr-runs-filter-search { flex: 1 1 200px; max-width: 320px; }
+.tr-runs-filter-chip { align-self: center; }
+
+/* Room for a progress bar, so the content below does not jump */
+.tr-runs-progress { height: 2px; margin-bottom: var(--space-2); }
+
+/* Below a list: how many are shown, and a button for more */
+.tr-runs-list-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin: var(--space-3) 0; }
+.tr-runs-list-footer-flush { margin: 0; padding: var(--space-3) var(--space-4); }
+
+/* Rows of invalid runs and superseded case executions */
+.g-table tbody tr.tr-runs-dim { opacity: 0.6; }
+
+/* Text inside a flush section */
+p.tr-runs-note { margin: 0; padding: var(--space-3) var(--space-4) var(--space-4); color: var(--text-secondary); }
+
+/* Case execution filters inside their section */
+.tr-runs-case-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); padding: var(--space-3) var(--space-4); }
+
+/* Test case parts */
+.tr-runs-aliased { text-decoration: underline dotted; text-underline-offset: 3px; }
+.tr-runs-asset { display: block; white-space: nowrap; }
+
+/* Attachments: names break between words, and only inside a word longer than the column */
+.g-table td.tr-runs-file-cell { white-space: normal; overflow-wrap: break-word; min-width: 160px; }
+.tr-runs-file-link { display: inline-flex; align-items: center; gap: var(--space-3); }
+.g-table td.tr-runs-actions-cell { white-space: nowrap; width: 1%; }
+
+/* The run detail page: overview beside tags, annotations and environment where there is room */
+.tr-runs-detail { display: grid; gap: var(--space-4); align-items: start; grid-template-columns: minmax(0, 1fr); }
+.tr-runs-detail-side { display: grid; gap: var(--space-4); min-width: 0; }
+.tr-runs-detail-wide { grid-column: 1 / -1; min-width: 0; }
+@media (min-width: 1200px) {
+  .tr-runs-detail { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+}
+.tr-runs-back { margin-bottom: var(--space-2); margin-left: calc(-1 * var(--space-2)); }
+.tr-runs-notice { margin-bottom: var(--space-4); }
+.tr-runs-notice-error { margin-top: var(--space-2); color: var(--danger); }

@@ -1,7 +1,7 @@
 /**
  * Emulates a screen width for `window.matchMedia` in jsdom. Understands
- * `(min-width:Npx)` and `(max-width:Npx)`, as MUI's breakpoints produce;
- * every other query (e.g. prefers-color-scheme) does not match.
+ * `(min-width:Npx)` and `(max-width:Npx)`, as `useMediaQuery()` gets them
+ * (src/ui); every other query (e.g. prefers-color-scheme) does not match.
  */
 export function setViewportWidth(width: number) {
   window.matchMedia = (query: string): MediaQueryList => {

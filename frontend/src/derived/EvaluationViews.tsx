@@ -1,13 +1,4 @@
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined'
-import Box from '@mui/material/Box'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
+import { CircleAlert } from 'lucide-react'
 import { type ReactNode, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { EvaluateResponse, SampleResult } from '../api/client'
@@ -15,8 +6,9 @@ import { Chart } from '../charts/Chart'
 import { useChartColors } from '../charts/colors'
 import { formatNumber, formatRounded } from '../format'
 import { WarmupChip } from '../runs/case/WarmupChip'
-import { warmupRowSx } from '../runs/case/samples'
 import { type ChartLine, seriesChartOption } from '../runs/case/seriesChart'
+import { Table, Tooltip } from '../ui'
+import './derived.css'
 
 // Values of derived metrics per sample, as the editor's preview and the
 // case execution page show them. A derived metric can have no value, which
@@ -41,24 +33,20 @@ export function SampleValue({ result }: { result: SampleResult }) {
     result.status === 'no_value'
       ? t('derived.status.noValueHint')
       : (result.message ?? '')
+  const error = result.status === 'error'
   return (
-    <Tooltip title={hint} describeChild>
-      <Box
-        component="span"
+    <Tooltip title={hint} describes>
+      <span
+        // Focusable, so the hint also shows for the keyboard.
+        // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
-        sx={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 0.5,
-          fontStyle: 'italic',
-          color: result.status === 'error' ? 'error.main' : 'text.secondary',
-        }}
+        className={
+          error ? 'tr-derived-status tr-derived-error' : 'tr-derived-status'
+        }
       >
-        {result.status === 'error' && (
-          <ErrorOutlineIcon fontSize="inherit" aria-hidden />
-        )}
+        {error && <CircleAlert size={12} aria-hidden />}
         {t(`derived.status.${result.status}`)}
-      </Box>
+      </span>
     </Tooltip>
   )
 }
@@ -79,10 +67,13 @@ export function ScalarTable({
   label,
   samples,
   columns,
+  framed = false,
 }: {
   label: string
   samples: readonly SampleRow[]
   columns: readonly ValueColumn[]
+  /** A border around the table; leave it out inside a flush section. */
+  framed?: boolean
 }) {
   const { t } = useTranslation()
   const rows = useMemo(
@@ -90,64 +81,44 @@ export function ScalarTable({
     [samples],
   )
   return (
-    <TableContainer>
-      <Table size="small" aria-label={label}>
-        <TableHead>
-          <TableRow>
-            <TableCell sx={{ whiteSpace: 'nowrap' }}>
-              {t('caseExecution.repetition')}
-            </TableCell>
-            {columns.map((column) => (
-              <TableCell
-                key={column.key}
-                align="right"
-                sx={{ verticalAlign: 'bottom' }}
-              >
-                <Box
-                  component="span"
-                  sx={{ display: 'block', whiteSpace: 'nowrap' }}
-                >
-                  {column.label}
-                </Box>
-                <Typography
-                  component="span"
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: 'block' }}
-                >
-                  {column.unit || ' '}
-                </Typography>
-              </TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((sample) => (
-            <TableRow
-              key={sample.id}
-              sx={sample.is_warmup ? warmupRowSx : undefined}
-            >
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                {sample.repetition}
-                {sample.is_warmup && <WarmupChip />}
-              </TableCell>
-              {columns.map((column) => {
-                const result = column.results.get(sample.id)
-                return (
-                  <TableCell
-                    key={column.key}
-                    align="right"
-                    sx={{ fontVariantNumeric: 'tabular-nums' }}
-                  >
-                    {result ? <SampleValue result={result} /> : t('common.none')}
-                  </TableCell>
-                )
-              })}
-            </TableRow>
+    <Table framed={framed} aria-label={label}>
+      <thead>
+        <tr>
+          <th className="tr-derived-value-head">
+            {t('caseExecution.repetition')}
+          </th>
+          {columns.map((column) => (
+            <th key={column.key} className="g-r tr-derived-value-head">
+              <span>{column.label}</span>
+              <span className="tr-derived-value-unit">
+                {column.unit || '\u00a0'}
+              </span>
+            </th>
           ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((sample) => (
+          <tr
+            key={sample.id}
+            className={sample.is_warmup ? 'tr-derived-warmup' : undefined}
+          >
+            <td>
+              {sample.repetition}
+              {sample.is_warmup && <WarmupChip />}
+            </td>
+            {columns.map((column) => {
+              const result = column.results.get(sample.id)
+              return (
+                <td key={column.key} className="g-r">
+                  {result ? <SampleValue result={result} /> : t('common.none')}
+                </td>
+              )
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </Table>
   )
 }
 
@@ -174,7 +145,10 @@ export function SeriesResultChart({
   const xDimension = response.x_dimension ?? ''
   const xUnit = response.x_unit ?? ''
   const xName = xUnit
-    ? t('caseExecution.series.xWithUnit', { dimension: xDimension, unit: xUnit })
+    ? t('caseExecution.series.xWithUnit', {
+        dimension: xDimension,
+        unit: xUnit,
+      })
     : xDimension
 
   const option = useMemo(() => {
@@ -216,10 +190,8 @@ export function SeriesResultChart({
   const without = samples.filter((s) => !s.series)
 
   return (
-    <Box component="figure" sx={{ m: 0, minWidth: 0 }}>
-      <Typography component="figcaption" variant="subtitle2" sx={{ mb: 1 }}>
-        {title}
-      </Typography>
+    <figure className="tr-derived-figure">
+      <figcaption className="body-medium">{title}</figcaption>
       {drawn > 0 && (
         <Chart
           option={option}
@@ -232,18 +204,15 @@ export function SeriesResultChart({
         />
       )}
       {without.length > 0 && (
-        <Box
-          component="ul"
-          sx={{ m: 0, mt: 1, pl: 0, listStyle: 'none', display: 'grid', gap: 0.5 }}
-        >
+        <ul className="ui-list tr-derived-without">
           {without.map((sample) => (
-            <Typography component="li" variant="body2" key={sample.sample_id}>
+            <li key={sample.sample_id}>
               {t('derived.sampleWithout', { repetition: sample.repetition })}{' '}
               <SampleValue result={sample} />
-            </Typography>
+            </li>
           ))}
-        </Box>
+        </ul>
       )}
-    </Box>
+    </figure>
   )
 }

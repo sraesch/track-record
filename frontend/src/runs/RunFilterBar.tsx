@@ -1,16 +1,5 @@
-import ExpandLessIcon from '@mui/icons-material/ExpandLess'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import FilterAltOffIcon from '@mui/icons-material/FilterAltOff'
-import Autocomplete from '@mui/material/Autocomplete'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Checkbox from '@mui/material/Checkbox'
-import Chip from '@mui/material/Chip'
-import ListItemText from '@mui/material/ListItemText'
-import MenuItem from '@mui/material/MenuItem'
-import TextField from '@mui/material/TextField'
-import ToggleButton from '@mui/material/ToggleButton'
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
+import { SegmentedControl, TextField } from '@graphite/react'
+import { ChevronDown, ChevronUp, FunnelX } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RunStatus, RunTrigger, Validity } from '../api/client'
@@ -25,8 +14,10 @@ import {
   useSuiteNames,
   useSutTags,
 } from '../api/lookups'
+import { Button, Chip, Combobox, MultiSelect, Select, TagField } from '../ui'
 import {
   cleanParam,
+  cleanParams,
   cleanTags,
   countMoreFilters,
   defaultRunFilters,
@@ -37,13 +28,12 @@ import {
   runTriggers,
   validities,
 } from './runFilters'
+import './runs.css'
 
 type Props = {
   filters: RunFilters
   onChange: (filters: RunFilters) => void
 }
-
-const fieldSx = { minWidth: 160, flex: '1 1 160px', maxWidth: 260 }
 
 /**
  * Filters of the run list (FR-11); every change goes to the URL. The more
@@ -60,11 +50,7 @@ export function RunFilterBar({ filters, onChange }: Props) {
   const set = (patch: Partial<RunFilters>) => onChange({ ...filters, ...patch })
 
   return (
-    <Box
-      component="search"
-      aria-label={t('runs.filters.label')}
-      sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 2 }}
-    >
+    <search aria-label={t('runs.filters.label')} className="tr-runs-filters">
       <OptionFilter
         label={t('runs.filters.suite')}
         options={suites}
@@ -72,60 +58,30 @@ export function RunFilterBar({ filters, onChange }: Props) {
         onChange={(suite) => set({ suite })}
       />
 
-      <TextField
-        select
-        size="small"
-        sx={fieldSx}
+      <MultiSelect<RunStatus>
+        className="tr-runs-filter"
         label={t('runs.filters.status')}
+        options={runStatuses.map((status) => ({
+          value: status,
+          label: t(`runs.status.${status}`),
+        }))}
         value={filters.status}
-        slotProps={{
-          select: {
-            multiple: true,
-            renderValue: (selected) =>
-              (selected as RunStatus[])
-                .map((s) => t(`runs.status.${s}`))
-                .join(', '),
-          },
-        }}
-        onChange={(event) =>
-          set({ status: event.target.value as unknown as RunStatus[] })
-        }
-      >
-        {runStatuses.map((status) => (
-          <MenuItem key={status} value={status}>
-            <Checkbox
-              size="small"
-              checked={filters.status.includes(status)}
-              sx={{ p: 0, mr: 1 }}
-            />
-            <ListItemText primary={t(`runs.status.${status}`)} />
-          </MenuItem>
-        ))}
-      </TextField>
+        onChange={(status) => set({ status })}
+      />
 
-      <TextField
-        select
-        size="small"
-        sx={fieldSx}
+      <Select<RunTrigger | ''>
+        className="tr-runs-filter"
         label={t('runs.filters.trigger')}
+        options={[
+          { value: '', label: t('runs.filters.any') },
+          ...runTriggers.map((trigger) => ({
+            value: trigger,
+            label: t(`runs.trigger.${trigger}`),
+          })),
+        ]}
         value={filters.trigger ?? ''}
-        onChange={(event) =>
-          set({
-            trigger: (event.target.value || undefined) as
-              | RunTrigger
-              | undefined,
-          })
-        }
-      >
-        <MenuItem value="">
-          <em>{t('runs.filters.any')}</em>
-        </MenuItem>
-        {runTriggers.map((trigger) => (
-          <MenuItem key={trigger} value={trigger}>
-            {t(`runs.trigger.${trigger}`)}
-          </MenuItem>
-        ))}
-      </TextField>
+        onChange={(trigger) => set({ trigger: trigger || undefined })}
+      />
 
       <OptionFilter
         label={t('runs.filters.branch')}
@@ -141,33 +97,14 @@ export function RunFilterBar({ filters, onChange }: Props) {
         onChange={(device) => set({ device })}
       />
 
-      <Autocomplete
-        multiple
-        freeSolo
-        size="small"
-        sx={{ ...fieldSx, maxWidth: 360 }}
-        options={[]}
-        value={filters.tags}
-        onChange={(_, value) =>
-          set({
-            tags: cleanTags(value),
-          })
+      <TagField
+        className="tr-runs-filter tr-runs-filter-wide"
+        label={t('runs.filters.tags')}
+        values={filters.tags}
+        onChange={(tags) => set({ tags: cleanTags(tags) })}
+        placeholder={
+          filters.tags.length === 0 ? t('runs.filters.tagsHint') : undefined
         }
-        renderValue={(value, getItemProps) =>
-          value.map((tag, index) => {
-            const { key, ...itemProps } = getItemProps({ index })
-            return <Chip key={key} size="small" label={tag} {...itemProps} />
-          })
-        }
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label={t('runs.filters.tags')}
-            placeholder={
-              filters.tags.length === 0 ? t('runs.filters.tagsHint') : undefined
-            }
-          />
-        )}
       />
 
       <DayField
@@ -183,26 +120,19 @@ export function RunFilterBar({ filters, onChange }: Props) {
         onChange={(to) => set({ to })}
       />
 
-      <ToggleButtonGroup
-        size="small"
-        exclusive
+      <SegmentedControl<Validity>
         aria-label={t('runs.filters.validity')}
+        items={validities.map((validity) => ({
+          value: validity,
+          label: t(`runs.validity.${validity}`),
+        }))}
         value={filters.validity}
-        onChange={(_, value: Validity | null) => {
-          if (value) set({ validity: value })
-        }}
-      >
-        {validities.map((validity) => (
-          <ToggleButton key={validity} value={validity} sx={{ px: 1.5 }}>
-            {t(`runs.validity.${validity}`)}
-          </ToggleButton>
-        ))}
-      </ToggleButtonGroup>
+        onChange={(validity) => set({ validity })}
+      />
 
       <Button
-        size="small"
+        variant="ghost"
         aria-expanded={moreOpen}
-        endIcon={moreOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
         onClick={() => setMoreOpen(!moreOpen)}
       >
         {moreOpen
@@ -210,12 +140,17 @@ export function RunFilterBar({ filters, onChange }: Props) {
           : moreCount > 0
             ? t('runs.filters.moreActive', { count: moreCount })
             : t('runs.filters.more')}
+        {moreOpen ? (
+          <ChevronUp size={14} aria-hidden />
+        ) : (
+          <ChevronDown size={14} aria-hidden />
+        )}
       </Button>
 
       {hasActiveFilters(filters) && (
         <Button
-          size="small"
-          startIcon={<FilterAltOffIcon />}
+          variant="ghost"
+          icon={FunnelX}
           onClick={() => onChange(defaultRunFilters)}
         >
           {t('runs.filters.clear')}
@@ -223,7 +158,7 @@ export function RunFilterBar({ filters, onChange }: Props) {
       )}
 
       {moreOpen && <MoreFilters filters={filters} set={set} />}
-    </Box>
+    </search>
   )
 }
 
@@ -249,9 +184,7 @@ function MoreFilters({
 
   return (
     // A row of its own below the common filters.
-    <Box
-      sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, flexBasis: '100%' }}
-    >
+    <div className="tr-runs-filters-more">
       <OptionFilter
         label={t('runs.filters.commit')}
         options={commits}
@@ -295,12 +228,14 @@ function MoreFilters({
       />
       {filters.environment !== undefined && (
         <Chip
-          sx={{ alignSelf: 'center' }}
-          label={t('runs.filters.environment', { id: filters.environment })}
-          onDelete={() => set({ environment: undefined })}
-        />
+          className="tr-runs-filter-chip"
+          onRemove={() => set({ environment: undefined })}
+          removeLabel={t('runs.filters.removeEnvironment')}
+        >
+          {t('runs.filters.environment', { id: filters.environment })}
+        </Chip>
       )}
-    </Box>
+    </div>
   )
 }
 
@@ -319,46 +254,27 @@ function ParamFilter({ value, onChange }: ParamFilterProps) {
   const [input, setInput] = useState('')
   const [invalid, setInvalid] = useState(false)
   return (
-    <Autocomplete
-      multiple
-      freeSolo
-      size="small"
-      sx={{ ...fieldSx, maxWidth: 360 }}
-      options={[]}
-      value={value}
+    <TagField
+      className="tr-runs-filter tr-runs-filter-wide"
+      label={t('runs.filters.params')}
+      values={value}
       inputValue={input}
-      onInputChange={(_, next) => {
+      onInputChange={(next) => {
         setInput(next)
         setInvalid(false)
       }}
-      onChange={(_, next, reason, details) => {
-        const added = reason === 'createOption' ? details?.option : undefined
-        if (added !== undefined && cleanParam(added) === undefined) {
-          // Keep the text to fix it; MUI has just cleared the input.
-          setInput(added)
-          setInvalid(true)
-          return
-        }
-        const cleaned = next.flatMap((p) => cleanParam(p) ?? [])
-        onChange([...new Set(cleaned)])
+      onAdd={(text) => {
+        if (cleanParam(text) !== undefined) return true
+        // Keep the text to fix it.
+        setInvalid(true)
+        return false
       }}
-      renderValue={(params, getItemProps) =>
-        params.map((param, index) => {
-          const { key, ...itemProps } = getItemProps({ index })
-          return <Chip key={key} size="small" label={param} {...itemProps} />
-        })
+      onChange={(next) => onChange(cleanParams(next))}
+      invalid={invalid}
+      help={invalid ? t('runs.filters.paramsInvalid') : undefined}
+      placeholder={
+        value.length === 0 ? t('runs.filters.paramsHint') : undefined
       }
-      renderInput={(params) => (
-        <TextField
-          {...params}
-          label={t('runs.filters.params')}
-          error={invalid}
-          helperText={invalid ? t('runs.filters.paramsInvalid') : undefined}
-          placeholder={
-            value.length === 0 ? t('runs.filters.paramsHint') : undefined
-          }
-        />
-      )}
     />
   )
 }
@@ -386,17 +302,15 @@ function OptionFilter({
   monospace,
 }: OptionFilterProps) {
   const names = options.data ?? []
-  const font = monospace ? { fontFamily: 'monospace' } : undefined
   return (
-    <Autocomplete
-      size="small"
-      sx={{ ...fieldSx, '& input': font }}
-      slotProps={{ listbox: { sx: font } }}
+    <Combobox<string>
+      className="tr-runs-filter"
+      label={label}
+      mono={monospace}
       options={value && !names.includes(value) ? [value, ...names] : names}
       loading={options.isPending}
       value={value ?? null}
-      onChange={(_, next) => onChange(next ?? undefined)}
-      renderInput={(params) => <TextField {...params} label={label} />}
+      onChange={(next) => onChange(next ?? undefined)}
     />
   )
 }
@@ -425,10 +339,11 @@ function DayField({ label, value, min, max, onChange }: DayFieldProps) {
   return (
     <TextField
       type="date"
-      size="small"
-      sx={{ ...fieldSx, maxWidth: 190 }}
+      className="tr-runs-filter tr-runs-filter-day"
       label={label}
       value={draft}
+      min={min}
+      max={max}
       onChange={(event) => {
         const day = event.target.value
         setDraft(day)
@@ -437,10 +352,6 @@ function DayField({ label, value, min, max, onChange }: DayFieldProps) {
         } else if (isDay(day) && day !== value) onChange(day)
       }}
       onBlur={() => setDraft(value ?? '')}
-      slotProps={{
-        inputLabel: { shrink: true },
-        htmlInput: { min, max },
-      }}
     />
   )
 }

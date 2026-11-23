@@ -1,5 +1,11 @@
+import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
+
+// The Graphite design system is vendored in graphite/ (ADR 0019) and
+// imported as `@graphite/react`, like the package it is built as upstream.
+const graphite = (path: string) =>
+  fileURLToPath(new URL(`./graphite/${path}`, import.meta.url))
 
 // The dev server proxies the UI API to a locally running backend (UI port,
 // TR_UI_ADDR, default 8081). Override with TR_UI_API_URL.
@@ -12,18 +18,34 @@ const markdownPackages =
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: [
+      { find: /^@graphite\/react$/, replacement: graphite('src/index.ts') },
+      {
+        find: /^@graphite\/react\/styles\.css$/,
+        replacement: graphite('styles/graphite.css'),
+      },
+      {
+        find: /^@graphite\/react\/tokens\.css$/,
+        replacement: graphite('styles/tokens.css'),
+      },
+    ],
+  },
   // Outside node_modules, so `npm ci` (test.sh) does not delete the
   // pre-bundled dependencies under a running dev server; it would then
   // fail every module it has not served yet with "Outdated Optimize Dep".
   cacheDir: '.vite',
   build: {
+    // Fonts stay files: inlined into the CSS, every subset (Cyrillic,
+    // Vietnamese, ...) would load, not only those a page's text needs.
+    assetsInlineLimit: (file) => (/\.woff2?$/.test(file) ? false : undefined),
     rolldownOptions: {
       output: {
         // Libraries change rarely; keep them apart from the app code so
         // browsers keep them cached across releases.
         codeSplitting: {
           groups: [
-            { name: 'mui', test: /node_modules[\\/](@mui|@emotion)[\\/]/ },
+            { name: 'icons', test: /node_modules[\\/]lucide-react[\\/]/ },
             // The Markdown renderer is loaded only when a Markdown
             // attachment is opened; in `vendor` it would load with the app.
             // Small helpers it shares with others stay in `vendor`.
@@ -61,7 +83,7 @@ export default defineConfig({
     maxWorkers: '50%',
     // Three times Vitest's default. The heaviest tests render the whole
     // app and need about 1 s of CPU (1.3 s in a full run on an idle
-    // machine), nearly all of it React and MUI rendering, not the tests.
+    // machine, measured with MUI), nearly all of it rendering, not the tests.
     // During load spikes (load average 45-99 on 10 cores) tests ran up to
     // 5-10 times slower than idle, and even 0.5 s tests hit 5 s. Keep tests
     // small instead of raising this further; see enterText().

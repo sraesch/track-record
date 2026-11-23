@@ -1,27 +1,14 @@
-import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Dialog from '@mui/material/Dialog'
-import DialogActions from '@mui/material/DialogActions'
-import DialogContent from '@mui/material/DialogContent'
-import DialogTitle from '@mui/material/DialogTitle'
-import FormControl from '@mui/material/FormControl'
-import FormControlLabel from '@mui/material/FormControlLabel'
-import FormLabel from '@mui/material/FormLabel'
-import InputAdornment from '@mui/material/InputAdornment'
-import Radio from '@mui/material/Radio'
-import RadioGroup from '@mui/material/RadioGroup'
-import TextField from '@mui/material/TextField'
-import Typography from '@mui/material/Typography'
-import { useId, useState } from 'react'
+import { RadioGroup, TextField } from '@graphite/react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ApiToken, CreatedToken, TokenScope } from '../api/client'
 import { formatDateTime } from '../format'
 import { ConfirmDialog } from '../pages/ConfirmDialog'
 import { CopyButton } from '../pages/CopyButton'
-import { codeSx } from '../pages/styles'
+import { Alert, Button, Dialog, Stack, TextArea } from '../ui'
 import { useCreateToken, useRevokeToken } from './queries'
 import { nameInUse, tokenScopes } from './tokenModel'
+import './tokens.css'
 
 type CreateProps = {
   open: boolean
@@ -40,7 +27,6 @@ export function CreateTokenDialog({
   onCreated,
 }: CreateProps) {
   const { t } = useTranslation()
-  const scopeId = useId()
   const [name, setName] = useState('')
   // The least a token can do, unless more is chosen.
   const [scope, setScope] = useState<TokenScope>('read')
@@ -59,47 +45,36 @@ export function CreateTokenDialog({
         create.mutate({ name: name.trim(), scope }, { onSuccess: onCreated })
       }
     >
-      <Box sx={{ display: 'grid', gap: 2, pt: 1 }}>
-        <TextField
-          label={t('tokens.columns.name')}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          helperText={
-            nameInUse(tokens, name)
-              ? t('tokens.create.nameInUse')
-              : t('tokens.create.nameHelp')
-          }
-          autoComplete="off"
-        />
-        <FormControl>
-          <FormLabel id={scopeId}>{t('tokens.columns.scope')}</FormLabel>
-          <RadioGroup
-            aria-labelledby={scopeId}
-            value={scope}
-            onChange={(event) => setScope(event.target.value as TokenScope)}
-          >
-            {tokenScopes.map((value) => (
-              <FormControlLabel
-                key={value}
-                value={value}
-                control={<Radio />}
-                sx={{ alignItems: 'flex-start', mt: 0.5 }}
-                label={
-                  <Box sx={{ pt: 1 }}>
-                    <Typography>{t(`tokens.scope.${value}`)}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t(`tokens.scopeHelp.${value}`)}
-                    </Typography>
-                  </Box>
-                }
-              />
-            ))}
-          </RadioGroup>
-        </FormControl>
-        <Typography variant="body2" color="text.secondary">
-          {t('tokens.create.limits')}
-        </Typography>
-      </Box>
+      <TextField
+        label={t('tokens.columns.name')}
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        help={
+          nameInUse(tokens, name)
+            ? t('tokens.create.nameInUse')
+            : t('tokens.create.nameHelp')
+        }
+        autoComplete="off"
+      />
+      <RadioGroup<TokenScope>
+        label={t('tokens.columns.scope')}
+        showLabel
+        className="tr-tokens-scopes"
+        value={scope}
+        onChange={setScope}
+        options={tokenScopes.map((value) => ({
+          value,
+          label: (
+            <span className="tr-tokens-scope">
+              <span>{t(`tokens.scope.${value}`)}</span>
+              <span className="ui-secondary">
+                {t(`tokens.scopeHelp.${value}`)}
+              </span>
+            </span>
+          ),
+        }))}
+      />
+      <p className="ui-text ui-secondary">{t('tokens.create.limits')}</p>
     </ConfirmDialog>
   )
 }
@@ -124,69 +99,39 @@ export function CreatedTokenDialog({
   onExited,
 }: CreatedProps) {
   const { t } = useTranslation()
-  const titleId = useId()
   return (
+    // Without onClose, Escape and the backdrop do not close it. The secret
+    // is the first field, so it gets the focus, which selects it: ready to
+    // copy with the keyboard, also where the clipboard API is missing.
     <Dialog
       open={open}
-      aria-labelledby={titleId}
-      fullWidth
-      maxWidth="sm"
-      slotProps={{
-        transition: {
-          // The secret gets the focus, which selects it: ready to copy
-          // with the keyboard, also where the clipboard API is missing.
-          onEntered: (node: HTMLElement) =>
-            node.querySelector<HTMLElement>('textarea')?.focus(),
-          onExited,
-        },
-      }}
-    >
-      <DialogTitle id={titleId}>
-        {t('tokens.created.title', { name: token.name })}
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'grid', gap: 2 }}>
-          <Alert severity="warning">{t('tokens.created.once')}</Alert>
-          <TextField
-            label={t('tokens.created.secret')}
-            value={token.secret}
-            multiline
-            fullWidth
-            slotProps={{
-              htmlInput: {
-                readOnly: true,
-                spellCheck: false,
-                sx: codeSx,
-                onFocus: (event: React.FocusEvent<HTMLTextAreaElement>) =>
-                  event.currentTarget.select(),
-              },
-              input: {
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <CopyButton
-                      text={token.secret}
-                      label={t('tokens.created.copy')}
-                    />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-          <Typography variant="body2">
-            {t('tokens.created.usage', {
-              scope: t(`tokens.scope.${token.scope}`),
-            })}{' '}
-            <Box component="code" sx={codeSx}>
-              {t('tokens.created.header')}
-            </Box>
-          </Typography>
-        </Box>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button variant="contained" onClick={onClose}>
+      title={t('tokens.created.title', { name: token.name })}
+      onExited={onExited}
+      actions={
+        <Button variant="primary" onClick={onClose}>
           {t('tokens.created.done')}
         </Button>
-      </DialogActions>
+      }
+    >
+      <Alert tone="warning">{t('tokens.created.once')}</Alert>
+      <Stack row gap={1} align="flex-end">
+        <TextArea
+          label={t('tokens.created.secret')}
+          value={token.secret}
+          readOnly
+          spellCheck={false}
+          rows={2}
+          className="ui-grow ui-mono-input tr-tokens-secret"
+          onFocus={(event) => event.currentTarget.select()}
+        />
+        <CopyButton text={token.secret} label={t('tokens.created.copy')} />
+      </Stack>
+      <p className="ui-text">
+        {t('tokens.created.usage', {
+          scope: t(`tokens.scope.${token.scope}`),
+        })}{' '}
+        <code className="ui-code">{t('tokens.created.header')}</code>
+      </p>
     </Dialog>
   )
 }
@@ -220,16 +165,16 @@ export function RevokeTokenDialog({
       onExited={onExited}
       onConfirm={() => revoke.mutate(token.id, { onSuccess: onClose })}
     >
-      <Box sx={{ display: 'grid', gap: 1.5 }}>
-        <Typography>{t('tokens.revoke.text')}</Typography>
-        <Typography variant="body2" color="text.secondary">
+      <Stack gap={3}>
+        <p className="ui-text">{t('tokens.revoke.text')}</p>
+        <p className="ui-text ui-secondary">
           {token.last_used_at
             ? t('tokens.revoke.lastUsed', {
                 time: formatDateTime(token.last_used_at),
               })
             : t('tokens.revoke.neverUsed')}
-        </Typography>
-      </Box>
+        </p>
+      </Stack>
     </ConfirmDialog>
   )
 }

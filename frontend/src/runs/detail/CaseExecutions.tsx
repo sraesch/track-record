@@ -1,31 +1,21 @@
-import FilterAltOffIcon from '@mui/icons-material/FilterAltOff'
-import SearchIcon from '@mui/icons-material/Search'
-import Autocomplete from '@mui/material/Autocomplete'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Chip from '@mui/material/Chip'
-import FormControlLabel from '@mui/material/FormControlLabel'
-import InputAdornment from '@mui/material/InputAdornment'
-import LinearProgress from '@mui/material/LinearProgress'
-import Link from '@mui/material/Link'
-import Switch from '@mui/material/Switch'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import TextField from '@mui/material/TextField'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
+import { cx, Switch, TextField } from '@graphite/react'
+import { FunnelX } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink } from 'react-router'
 import type { CaseExecutionSummary } from '../../api/client'
 import { formatDuration, formatNumber } from '../../format'
 import { ErrorAlert } from '../../pages/ErrorAlert'
 import { Section } from '../../pages/Section'
 import { useRowLink } from '../../pages/useRowLink'
+import {
+  Button,
+  Chip,
+  Combobox,
+  ProgressBar,
+  Table,
+  TextLink,
+  Tooltip,
+} from '../../ui'
 import {
   type CaseFilters,
   filterCaseExecutions,
@@ -33,6 +23,7 @@ import {
 } from './caseFilters'
 import { caseExecutionPath } from '../paths'
 import { Aliased, AssetList, Parameters } from '../TestCaseParts'
+import '../runs.css'
 
 /** Rows shown at first and added by "Show more". */
 export const casePageSize = 100
@@ -80,28 +71,20 @@ export function CaseExecutions({ runId, query, filters, onChange }: Props) {
       flush
       actions={
         query.data && (
-          <Typography variant="body2" color="text.secondary">
+          <span className="ui-secondary">
             {hasActiveCaseFilters(filters)
               ? t('runDetail.cases.matching', {
                   count: shown.length,
                   total: formatNumber(all.length),
                 })
               : t('runDetail.cases.count', { count: all.length })}
-          </Typography>
+          </span>
         )
       }
     >
-      <Box
-        component="search"
+      <search
         aria-label={t('runDetail.cases.filters')}
-        sx={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: 1.5,
-          px: 2,
-          pb: 1.5,
-        }}
+        className="tr-runs-case-filters"
       >
         <NameFilter
           label={t('runDetail.cases.scenario')}
@@ -116,9 +99,9 @@ export function CaseExecutions({ runId, query, filters, onChange }: Props) {
           onChange={(device) => set({ device })}
         />
         <TextField
-          size="small"
           type="search"
-          sx={{ flex: '1 1 200px', maxWidth: 320 }}
+          icon="search"
+          className="tr-runs-filter-search"
           label={t('runDetail.cases.search')}
           placeholder={t('runDetail.cases.searchHint')}
           value={filters.search ?? ''}
@@ -126,30 +109,16 @@ export function CaseExecutions({ runId, query, filters, onChange }: Props) {
           onChange={(event) =>
             set({ search: event.target.value || undefined }, true)
           }
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            },
-          }}
         />
-        <FormControlLabel
-          control={
-            <Switch
-              size="small"
-              checked={filters.superseded}
-              onChange={(event) => set({ superseded: event.target.checked })}
-            />
-          }
+        <Switch
           label={t('runDetail.cases.showSuperseded')}
+          checked={filters.superseded}
+          onCheckedChange={(superseded) => set({ superseded })}
         />
         {hasActiveCaseFilters(filters) && (
           <Button
-            size="small"
-            startIcon={<FilterAltOffIcon />}
+            variant="ghost"
+            icon={FunnelX}
             onClick={() =>
               set({ scenario: undefined, device: undefined, search: undefined })
             }
@@ -157,57 +126,45 @@ export function CaseExecutions({ runId, query, filters, onChange }: Props) {
             {t('runDetail.cases.clear')}
           </Button>
         )}
-      </Box>
+      </search>
 
-      <Box sx={{ height: 4 }}>
-        {query.isFetching && (
-          <LinearProgress aria-label={t('common.loading')} />
-        )}
-      </Box>
+      <div className="tr-runs-progress">
+        {query.isFetching && <ProgressBar label={t('common.loading')} />}
+      </div>
 
       {query.error && (
         <ErrorAlert
           message={t('runDetail.cases.error', { message: query.error.message })}
           onRetry={() => query.refetch()}
-          sx={{ mx: 2, my: 1.5 }}
+          style={{ margin: 'var(--space-3) var(--space-4)' }}
         />
       )}
 
       {query.data &&
         (shown.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+          <p className="tr-runs-note">
             {all.length === 0
               ? t('runDetail.cases.empty')
               : t('runDetail.cases.noMatch')}
-          </Typography>
+          </p>
         ) : (
           <>
             <CaseTable runId={runId} caseExecutions={shown.slice(0, limit)} />
             {shown.length > limit && (
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 2,
-                  px: 2,
-                  py: 1.5,
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">
+              <div className="tr-runs-list-footer tr-runs-list-footer-flush">
+                <p className="ui-text ui-secondary">
                   {t('runDetail.cases.shown', {
                     count: limit,
                     total: formatNumber(shown.length),
                   })}
-                </Typography>
+                </p>
                 <Button
-                  variant="outlined"
-                  size="small"
+                  size="sm"
                   onClick={() => setLimit(limit + casePageSize)}
                 >
                   {t('runDetail.cases.showMore')}
                 </Button>
-              </Box>
+              </div>
             )}
           </>
         ))}
@@ -227,13 +184,14 @@ type NameFilterProps = {
 /** Picks one name; a name from the URL is offered even if no row has it. */
 function NameFilter({ label, options, value, onChange }: NameFilterProps) {
   return (
-    <Autocomplete
-      size="small"
-      sx={{ flex: '1 1 180px', maxWidth: 260 }}
-      options={value && !options.includes(value) ? [value, ...options] : options}
+    <Combobox<string>
+      className="tr-runs-filter"
+      label={label}
+      options={
+        value && !options.includes(value) ? [value, ...options] : options
+      }
       value={value ?? null}
-      onChange={(_, next) => onChange(next ?? undefined)}
-      renderInput={(params) => <TextField {...params} label={label} />}
+      onChange={(next) => onChange(next ?? undefined)}
     />
   )
 }
@@ -248,87 +206,75 @@ function CaseTable({
   const { t } = useTranslation()
   const rowLink = useRowLink()
   return (
-    <TableContainer>
-      <Table size="small" aria-label={t('runDetail.cases.title')}>
-        <TableHead>
-          <TableRow>
-            <TableCell>{t('runDetail.cases.scenario')}</TableCell>
-            <TableCell>{t('runDetail.cases.parameters')}</TableCell>
-            <TableCell>{t('runDetail.cases.assets')}</TableCell>
-            <TableCell>{t('runDetail.cases.device')}</TableCell>
-            <TableCell align="right">{t('runDetail.cases.samples')}</TableCell>
-            <TableCell>{t('runDetail.cases.duration')}</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {caseExecutions.map((ce) => {
-            const href = caseExecutionPath(runId, ce.id)
-            const superseded = Boolean(ce.superseded_by)
-            return (
-              <TableRow
-                key={ce.id}
-                hover
-                onClick={rowLink(href)}
-                sx={{ cursor: 'pointer', opacity: superseded ? 0.6 : 1 }}
-              >
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  <Link component={RouterLink} to={href} underline="hover">
-                    {ce.test_case.scenario}
-                  </Link>{' '}
-                  <Typography component="span" variant="body2" color="text.secondary">
-                    {t('runs.version', { version: ce.test_case.scenario_version })}
-                  </Typography>
-                  {superseded && (
-                    <Tooltip
-                      describeChild
-                      title={t('runDetail.cases.supersededHint')}
+    <Table aria-label={t('runDetail.cases.title')}>
+      <thead>
+        <tr>
+          <th>{t('runDetail.cases.scenario')}</th>
+          <th>{t('runDetail.cases.parameters')}</th>
+          <th>{t('runDetail.cases.assets')}</th>
+          <th>{t('runDetail.cases.device')}</th>
+          <th className="g-r">{t('runDetail.cases.samples')}</th>
+          <th>{t('runDetail.cases.duration')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {caseExecutions.map((ce) => {
+          const href = caseExecutionPath(runId, ce.id)
+          const superseded = Boolean(ce.superseded_by)
+          return (
+            <tr
+              key={ce.id}
+              className={cx('ui-row-link', superseded && 'tr-runs-dim')}
+              onClick={rowLink(href)}
+            >
+              <td>
+                <TextLink to={href}>{ce.test_case.scenario}</TextLink>{' '}
+                <span className="ui-secondary">
+                  {t('runs.version', {
+                    version: ce.test_case.scenario_version,
+                  })}
+                </span>
+                {superseded && (
+                  <Tooltip title={t('runDetail.cases.supersededHint')}>
+                    <Chip outlined style={{ marginLeft: 'var(--space-2)' }}>
+                      {t('runDetail.cases.superseded')}
+                    </Chip>
+                  </Tooltip>
+                )}
+                {ce.supersedes_id && (
+                  <Tooltip title={t('runDetail.cases.correctionHint')}>
+                    <Chip
+                      outlined
+                      tone="info"
+                      style={{ marginLeft: 'var(--space-2)' }}
                     >
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={t('runDetail.cases.superseded')}
-                        sx={{ ml: 1 }}
-                      />
-                    </Tooltip>
-                  )}
-                  {ce.supersedes_id && (
-                    <Tooltip
-                      describeChild
-                      title={t('runDetail.cases.correctionHint')}
-                    >
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        color="info"
-                        label={t('runDetail.cases.correction')}
-                        sx={{ ml: 1 }}
-                      />
-                    </Tooltip>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Parameters testCase={ce.test_case} />
-                </TableCell>
-                <TableCell>
-                  <AssetList assets={ce.test_case.assets} />
-                </TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  <Aliased
-                    shown={ce.client_device.resolved_name}
-                    uploaded={ce.client_device.name}
-                  />
-                </TableCell>
-                <TableCell align="right">{formatNumber(ce.sample_count)}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  {ce.started_at && ce.ended_at
-                    ? formatDuration(ce.started_at, ce.ended_at)
-                    : t('common.none')}
-                </TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+                      {t('runDetail.cases.correction')}
+                    </Chip>
+                  </Tooltip>
+                )}
+              </td>
+              <td className="ui-wrap-cell">
+                <Parameters testCase={ce.test_case} />
+              </td>
+              <td>
+                <AssetList assets={ce.test_case.assets} />
+              </td>
+              <td>
+                <Aliased
+                  shown={ce.client_device.resolved_name}
+                  uploaded={ce.client_device.name}
+                />
+              </td>
+              <td className="g-r">{formatNumber(ce.sample_count)}</td>
+              <td>
+                {ce.started_at && ce.ended_at
+                  ? formatDuration(ce.started_at, ce.ended_at)
+                  : t('common.none')}
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </Table>
   )
 }

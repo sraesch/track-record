@@ -58,7 +58,7 @@ describe('App shell', () => {
     ).toBeInTheDocument()
     expect(
       within(sideMenu()).getByRole('link', { name: 'Runs' }),
-    ).toHaveClass('Mui-selected')
+    ).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'All runs' })).toHaveAttribute(
       'href',
       '/runs',
@@ -73,22 +73,22 @@ describe('App shell', () => {
     expect(screen.getByText('There is no page at /nope.')).toBeInTheDocument()
   })
 
-  it('hides and shows the docked menu on wide screens', async () => {
+  it('collapses the docked menu to icons on wide screens', async () => {
     const user = userEvent.setup()
     renderAt('/runs')
-    const toggle = screen.getByRole('button', { name: 'Close navigation' })
+    const toggle = screen.getByRole('button', { name: 'Collapse navigation' })
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     await user.click(toggle)
-    const reopen = screen.getByRole('button', { name: 'Open navigation' })
-    expect(reopen).toHaveAttribute('aria-expanded', 'false')
-    // A hidden menu is out of the accessibility tree.
-    await waitFor(() =>
-      expect(
-        screen.queryByRole('navigation', { name: 'Main navigation' }),
-      ).not.toBeInTheDocument(),
-    )
-    await user.click(reopen)
-    expect(await screen.findByRole('navigation')).toBeVisible()
+    const expand = screen.getByRole('button', { name: 'Expand navigation' })
+    expect(expand).toHaveAttribute('aria-expanded', 'false')
+    // The rail keeps every link, named by its title.
+    expect(
+      within(sideMenu()).getByRole('link', { name: 'Trends' }),
+    ).toBeVisible()
+    await user.click(expand)
+    expect(
+      screen.getByRole('button', { name: 'Collapse navigation' }),
+    ).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('opens the menu over the page on narrow screens and closes it after navigating', async () => {
@@ -114,12 +114,15 @@ describe('App shell', () => {
     const user = userEvent.setup()
     renderAt('/runs')
     await user.click(screen.getByRole('button', { name: 'Color mode' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Dark' }))
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Dark' }))
     await waitFor(() =>
-      expect(document.documentElement).toHaveAttribute(
-        'data-mui-color-scheme',
-        'dark',
-      ),
+      expect(document.documentElement).toHaveAttribute('data-theme', 'dark'),
     )
+    // The choice is kept for the next visit.
+    expect(localStorage.getItem('track-record.color-mode')).toBe('dark')
+    await user.click(screen.getByRole('button', { name: 'Color mode' }))
+    expect(
+      screen.getByRole('menuitemcheckbox', { name: 'Dark' }),
+    ).toHaveAttribute('aria-checked', 'true')
   })
 })

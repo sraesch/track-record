@@ -35,9 +35,7 @@ const noContent = () => new Response(null, { status: 204 })
 
 const section = (name: string) => screen.findByRole('region', { name })
 const caseRows = async () =>
-  within(
-    await screen.findByRole('table', { name: 'Case executions' }),
-  )
+  within(await screen.findByRole('table', { name: 'Case executions' }))
     .getAllByRole('row')
     .slice(1)
 
@@ -249,7 +247,9 @@ describe('Run detail', () => {
     ).toBeInTheDocument()
     expect(tagSection.getByRole('textbox', { name: 'New tag' })).toHaveValue('')
 
-    await user.click(tagSection.getByTitle('Remove tag nightly'))
+    await user.click(
+      tagSection.getByRole('button', { name: 'Remove tag nightly' }),
+    )
     await waitFor(() =>
       expect(
         tagSection.queryByRole('button', { name: 'Show runs tagged nightly' }),
@@ -339,7 +339,9 @@ describe('Run detail', () => {
       'Lab moved to a new rack',
     )
     await user.click(notes.getByRole('button', { name: 'Add annotation' }))
-    expect(await notes.findByText('Lab moved to a new rack')).toBeInTheDocument()
+    expect(
+      await notes.findByText('Lab moved to a new rack'),
+    ).toBeInTheDocument()
     expect(bodies).toEqual([{ body: 'Lab moved to a new rack', run_id: runId }])
   })
 
@@ -407,7 +409,9 @@ describe('Run detail', () => {
     })
     renderApp(`/runs/${runId}`)
 
-    await user.click(await screen.findByRole('button', { name: 'Mark invalid' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Mark invalid' }),
+    )
     const dialog = await screen.findByRole('dialog', {
       name: 'Mark this run invalid?',
     })
@@ -447,7 +451,9 @@ describe('Run detail', () => {
     })
     renderApp(`/runs/${runId}`)
 
-    await user.click(await screen.findByRole('button', { name: 'Mark invalid' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Mark invalid' }),
+    )
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByRole('textbox'), 'x{Enter}')
     expect(

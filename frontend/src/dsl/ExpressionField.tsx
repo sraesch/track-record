@@ -1,10 +1,7 @@
-import Box from '@mui/material/Box'
-import Skeleton from '@mui/material/Skeleton'
-import TextField from '@mui/material/TextField'
-import Typography from '@mui/material/Typography'
 import { lazy, Suspense, useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ErrorBoundary } from '../pages/ErrorBoundary'
+import { Skeleton } from '../ui'
 import type { DslEditorProps } from './DslEditor'
 import type { DslNames, DslProblem } from './syntax'
 
@@ -13,6 +10,9 @@ import type { DslNames, DslProblem } from './syntax'
 const DslEditor = lazy(() =>
   import('./DslEditor').then((module) => ({ default: module.DslEditor })),
 )
+
+/** Height of the editor with three lines, for its placeholder. */
+const editorHeight = 70
 
 type Props = {
   label: string
@@ -28,9 +28,10 @@ type Props = {
 }
 
 /**
- * A DSL expression with a visible label (FR-17a). If the editor cannot be
- * loaded (e.g. after a release replaced its chunk), a plain text field
- * takes its place, so the expression can still be edited.
+ * A DSL expression with a visible label (FR-17a), laid out like a Graphite
+ * field. If the editor cannot be loaded (e.g. after a release replaced its
+ * chunk), a plain text area takes its place, so the expression can still
+ * be edited.
  */
 export function ExpressionField({
   label,
@@ -63,58 +64,41 @@ export function ExpressionField({
   }
 
   return (
-    <Box sx={{ minWidth: 0 }}>
-      <Typography
-        id={labelId}
-        component="div"
-        variant="body2"
-        color={invalid ? 'error' : 'text.secondary'}
-        sx={{ mb: 0.5 }}
-      >
+    <div className="g-field">
+      <div id={labelId} className="g-label">
         {label}
-      </Typography>
+      </div>
       <ErrorBoundary
         fallback={() => (
-          <TextField
-            multiline
-            fullWidth
-            minRows={3}
-            value={value}
-            error={invalid}
-            onChange={(event) => onChange(event.target.value)}
-            slotProps={{
-              htmlInput: {
-                'aria-labelledby': labelId,
-                'aria-describedby': describedByIds,
-                spellCheck: false,
-                sx: { fontFamily: 'monospace' },
-              },
-            }}
-          />
+          <span
+            className="g-input ui-textarea ui-mono-input"
+            {...(invalid ? { 'data-invalid': '' } : {})}
+          >
+            <textarea
+              rows={3}
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              aria-labelledby={labelId}
+              aria-describedby={describedByIds}
+              aria-invalid={invalid || undefined}
+              spellCheck={false}
+            />
+          </span>
         )}
       >
         <Suspense
           fallback={
-            <Skeleton
-              variant="rounded"
-              height={86}
-              aria-label={t('common.loading')}
-            />
+            <Skeleton height={editorHeight} label={t('common.loading')} />
           }
         >
           <DslEditor {...editorProps} />
         </Suspense>
       </ErrorBoundary>
       {helperText && (
-        <Typography
-          id={helperId}
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: 'block', mt: 0.5, mx: 1.75 }}
-        >
+        <span id={helperId} className="g-help">
           {helperText}
-        </Typography>
+        </span>
       )}
-    </Box>
+    </div>
   )
 }

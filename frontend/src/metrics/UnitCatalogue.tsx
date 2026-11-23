@@ -1,16 +1,9 @@
-import Box from '@mui/material/Box'
-import Chip from '@mui/material/Chip'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink } from 'react-router'
 import { formatNumber } from '../format'
 import { Section } from '../pages/Section'
+import { Chip, ChipLink, Table } from '../ui'
 import { metricsViewToParams, type QuantityGroup } from './metricModel'
+import './metrics.css'
 
 type Props = {
   groups: readonly QuantityGroup[]
@@ -20,16 +13,6 @@ type Props = {
   usedBy: ReadonlyMap<string, string[]>
 }
 
-// Sections clip their content; a table wider than a phone scrolls instead.
-const scroll = { overflowX: 'auto' } as const
-
-const grid = {
-  display: 'grid',
-  gap: 2,
-  gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 440px), 1fr))',
-  alignItems: 'start',
-}
-
 /**
  * The predefined units (FR-13a), one section per quantity. Values convert
  * between the units of one quantity through its base unit.
@@ -37,38 +20,32 @@ const grid = {
 export function UnitCatalogue({ groups, custom, usedBy }: Props) {
   const { t } = useTranslation()
   return (
-    <Box sx={grid}>
+    <div className="tr-metrics-units">
       {custom.length > 0 && (
         <Section title={t('metrics.units.customTitle')} flush>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ px: 2, pb: 1 }}
-          >
+          <p className="ui-text ui-secondary small tr-metrics-units-text">
             {t('metrics.units.customText')}
-          </Typography>
-          <Box sx={scroll}>
-            <Table size="small" aria-label={t('metrics.units.customTitle')}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>{t('metrics.units.columns.symbol')}</TableCell>
-                  <TableCell>{t('metrics.units.columns.usedBy')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {custom.map((unit) => (
-                  <TableRow key={unit.symbol}>
-                    <TableCell>
-                      <Symbol symbol={unit.symbol} />
-                    </TableCell>
-                    <TableCell>
-                      <MetricLinks names={unit.metrics} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Box>
+          </p>
+          <Table aria-label={t('metrics.units.customTitle')}>
+            <thead>
+              <tr>
+                <th>{t('metrics.units.columns.symbol')}</th>
+                <th>{t('metrics.units.columns.usedBy')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {custom.map((unit) => (
+                <tr key={unit.symbol}>
+                  <td>
+                    <Symbol symbol={unit.symbol} />
+                  </td>
+                  <td className="ui-wrap-cell">
+                    <MetricLinks names={unit.metrics} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
         </Section>
       )}
 
@@ -79,79 +56,61 @@ export function UnitCatalogue({ groups, custom, usedBy }: Props) {
           flush
           actions={
             group.base && (
-              <Typography variant="body2" color="text.secondary">
+              <span className="ui-secondary small">
                 {t('metrics.units.baseUnit', {
                   unit: group.base.symbol || t('metrics.unit.dimensionless'),
                 })}
-              </Typography>
+              </span>
             )
           }
         >
-          <Box sx={scroll}>
-            <Table size="small" aria-label={capitalize(group.quantity)}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>{t('metrics.units.columns.symbol')}</TableCell>
-                  <TableCell>{t('metrics.units.columns.name')}</TableCell>
-                  <TableCell align="right">
-                    {t('metrics.units.columns.inBase')}
-                  </TableCell>
-                  <TableCell>{t('metrics.units.columns.usedBy')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {group.units.map((unit) => (
-                  <TableRow key={unit.symbol}>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                      <Symbol symbol={unit.symbol} />
-                    </TableCell>
-                    <TableCell>{unit.name}</TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        whiteSpace: 'nowrap',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      {unit === group.base ? (
-                        <Chip
-                          size="small"
-                          variant="outlined"
-                          label={t('metrics.units.base')}
-                        />
-                      ) : group.base ? (
-                        t('common.valueWithUnit', {
-                          value: formatNumber(unit.to_base),
-                          unit: group.base.symbol,
-                        }).trim()
-                      ) : (
-                        formatNumber(unit.to_base)
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <MetricLinks names={usedBy.get(unit.symbol) ?? []} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Box>
+          <Table aria-label={capitalize(group.quantity)}>
+            <thead>
+              <tr>
+                <th>{t('metrics.units.columns.symbol')}</th>
+                <th>{t('metrics.units.columns.name')}</th>
+                <th className="g-r">{t('metrics.units.columns.inBase')}</th>
+                <th>{t('metrics.units.columns.usedBy')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {group.units.map((unit) => (
+                <tr key={unit.symbol}>
+                  <td>
+                    <Symbol symbol={unit.symbol} />
+                  </td>
+                  <td className="ui-wrap-cell">{unit.name}</td>
+                  <td className="g-r">
+                    {unit === group.base ? (
+                      <Chip outlined>{t('metrics.units.base')}</Chip>
+                    ) : group.base ? (
+                      t('common.valueWithUnit', {
+                        value: formatNumber(unit.to_base),
+                        unit: group.base.symbol,
+                      }).trim()
+                    ) : (
+                      formatNumber(unit.to_base)
+                    )}
+                  </td>
+                  <td className="ui-wrap-cell">
+                    <MetricLinks names={usedBy.get(unit.symbol) ?? []} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
         </Section>
       ))}
-    </Box>
+    </div>
   )
 }
 
 function Symbol({ symbol }: { symbol: string }) {
   const { t } = useTranslation()
   return symbol === '' ? (
-    <Typography component="span" variant="body2" color="text.secondary">
-      {t('metrics.unit.dimensionless')}
-    </Typography>
+    <span className="ui-secondary">{t('metrics.unit.dimensionless')}</span>
   ) : (
-    <Box component="code" sx={{ fontFamily: 'monospace' }}>
-      {symbol}
-    </Box>
+    <code className="ui-code">{symbol}</code>
   )
 }
 
@@ -159,26 +118,20 @@ function Symbol({ symbol }: { symbol: string }) {
 function MetricLinks({ names }: { names: readonly string[] }) {
   const { t } = useTranslation()
   if (names.length === 0) {
-    return (
-      <Typography component="span" variant="body2" color="text.secondary">
-        {t('common.none')}
-      </Typography>
-    )
+    return <span className="ui-secondary">{t('common.none')}</span>
   }
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+    <span className="tr-metrics-links">
       {names.map((name) => (
-        <Chip
+        <ChipLink
           key={name}
-          size="small"
-          clickable
-          component={RouterLink}
           to={`/metrics?${metricsViewToParams({ tab: 'metrics', search: name })}`}
-          label={name}
           aria-label={t('metrics.units.showMetric', { name })}
-        />
+        >
+          {name}
+        </ChipLink>
       ))}
-    </Box>
+    </span>
   )
 }
 

@@ -1,12 +1,7 @@
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-import Alert from '@mui/material/Alert'
-import AlertTitle from '@mui/material/AlertTitle'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import LinearProgress from '@mui/material/LinearProgress'
+import { ArrowLeft } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, Navigate, useLocation, useParams } from 'react-router'
+import { Navigate, useLocation, useParams } from 'react-router'
 import {
   type AttachmentMeta,
   type CaseExecutionDetail,
@@ -19,6 +14,7 @@ import { CaseDerivedMetrics } from '../../derived/CaseDerivedMetrics'
 import { EmptyState } from '../../pages/EmptyState'
 import { ErrorAlert } from '../../pages/ErrorAlert'
 import { PageHeader } from '../../pages/PageHeader'
+import { Alert, LinkButton, ProgressBar } from '../../ui'
 import { JsonDetails } from '../detail/JsonDetails'
 import { RunAttachments } from '../detail/RunAttachments'
 import { caseExecutionPath, runPath } from '../paths'
@@ -29,6 +25,7 @@ import { CaseParameters } from './CaseParameters'
 import { CaseTags } from './CaseTags'
 import { SampleMeasurements } from './SampleMeasurements'
 import { SampleSeries } from './SampleSeries'
+import './case.css'
 
 /**
  * One case execution (FR-21: /runs/:runId/cases/:caseExecutionId): what
@@ -48,15 +45,15 @@ export function CaseExecutionPage() {
   )
 
   const back = (
-    <Button
-      component={Link}
+    <LinkButton
       to={runPath(runId)}
-      size="small"
-      startIcon={<ArrowBackIcon />}
-      sx={{ mb: 1, ml: -1 }}
+      variant="ghost"
+      size="sm"
+      icon={ArrowLeft}
+      style={backStyle}
     >
       {t('caseExecution.back')}
-    </Button>
+    </LinkButton>
   )
 
   if (!caseExecution.data) {
@@ -64,7 +61,7 @@ export function CaseExecutionPage() {
       <>
         <PageHeader title={t('caseExecution.titleLoading')} before={back} />
         {caseExecution.isPending ? (
-          <LinearProgress aria-label={t('common.loading')} />
+          <ProgressBar />
         ) : isNotFound(caseExecution.error) ? (
           <EmptyState>
             {t('caseExecution.notFound', { caseExecutionId })}
@@ -113,7 +110,7 @@ export function CaseExecutionPage() {
                 })
           }
           onRetry={() => caseExecution.refetch()}
-          sx={{ mb: 2 }}
+          style={{ marginBottom: 'var(--space-4)' }}
         />
       )}
       <CaseExecutionView caseExecution={ce} run={run.data} />
@@ -122,6 +119,15 @@ export function CaseExecutionPage() {
 }
 
 const noAttachments: AttachmentMeta[] = []
+
+/** Notices above the page's sections. */
+const noticeStyle = { marginBottom: 'var(--space-4)' }
+
+/** The back link sits flush with the title below it. */
+const backStyle = {
+  marginBottom: 'var(--space-2)',
+  marginLeft: 'calc(-1 * var(--space-2))',
+}
 
 function CaseExecutionView({
   caseExecution: ce,
@@ -148,12 +154,15 @@ function CaseExecutionView({
   return (
     <>
       {run && !run.is_valid && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          <AlertTitle>
-            {run.invalid_reason
+        <Alert
+          tone="warning"
+          style={noticeStyle}
+          title={
+            run.invalid_reason
               ? t('runDetail.validate.reason', { reason: run.invalid_reason })
-              : t('runDetail.validate.noReason')}
-          </AlertTitle>
+              : t('runDetail.validate.noReason')
+          }
+        >
           {t('caseExecution.invalidRun')}
         </Alert>
       )}
@@ -175,19 +184,9 @@ function CaseExecutionView({
           to={caseExecutionPath(ce.run_id, ce.supersedes_id)}
         />
       )}
-      <Box
-        sx={{
-          display: 'grid',
-          gap: 2,
-          alignItems: 'start',
-          gridTemplateColumns: {
-            xs: 'minmax(0, 1fr)',
-            lg: 'minmax(0, 2fr) minmax(0, 1fr)',
-          },
-        }}
-      >
+      <div className="tr-case-grid">
         <CaseOverview caseExecution={ce} run={run} />
-        <Box sx={{ display: 'grid', gap: 2, minWidth: 0 }}>
+        <div className="tr-case-column">
           <CaseParameters testCase={ce.test_case} />
           <CaseTags caseExecution={ce} />
           <CaseAnnotations testCaseId={ce.test_case.id} />
@@ -196,18 +195,18 @@ function CaseExecutionView({
             emptyText={t('caseExecution.device.empty')}
             details={ce.device_details}
           />
-        </Box>
-        <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
+        </div>
+        <div className="tr-case-wide">
           <SampleMeasurements samples={ce.samples} />
-        </Box>
-        <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
+        </div>
+        <div className="tr-case-wide">
           <CaseDerivedMetrics
             caseExecution={ce}
             live={run?.status === 'running'}
           />
-        </Box>
+        </div>
         {run && (
-          <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
+          <div className="tr-case-wide">
             <RunAttachments
               attachments={attachments}
               attachedTo={(attachment) => {
@@ -220,12 +219,12 @@ function CaseExecutionView({
               }}
               previewHref={preview.previewHref}
             />
-          </Box>
+          </div>
         )}
-        <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
+        <div className="tr-case-wide">
           <SampleSeries runId={ce.run_id} samples={ce.samples} />
-        </Box>
-      </Box>
+        </div>
+      </div>
       <AttachmentPreview
         attachment={preview.previewed}
         onClose={preview.closePreview}
@@ -250,15 +249,16 @@ function Notice({
 }) {
   return (
     <Alert
-      severity={severity}
-      sx={{ mb: 2 }}
+      tone={severity}
+      role={severity === 'info' ? 'status' : 'alert'}
+      style={noticeStyle}
+      title={title}
       action={
-        <Button color="inherit" size="small" component={Link} to={to}>
+        <LinkButton variant="ghost" size="sm" to={to}>
           {action}
-        </Button>
+        </LinkButton>
       }
     >
-      <AlertTitle>{title}</AlertTitle>
       {text}
     </Alert>
   )

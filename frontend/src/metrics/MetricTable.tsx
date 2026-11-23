@@ -1,26 +1,16 @@
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
-import DeleteIcon from '@mui/icons-material/DeleteOutlined'
-import RenameIcon from '@mui/icons-material/DriveFileRenameOutline'
-import EditIcon from '@mui/icons-material/EditOutlined'
-import ListAltIcon from '@mui/icons-material/ListAlt'
-import Box from '@mui/material/Box'
-import IconButton from '@mui/material/IconButton'
-import Paper from '@mui/material/Paper'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
+import {
+  ArrowDown,
+  ArrowUp,
+  ListChecks,
+  Pencil,
+  PencilLine,
+  Trash2,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink } from 'react-router'
 import type { Metric, MetricDirection, Unit } from '../api/client'
-import { formatDateTime, formatTimestamp } from '../format'
-import { visuallyHidden } from '../pages/visuallyHidden'
+import { Time } from '../pages/Time'
+import { IconButton, IconLinkButton, Table, VisuallyHidden } from '../ui'
 import { type MetricAction, MetricDialog } from './MetricDialogs'
 import { UnitLabel } from './UnitLabel'
 
@@ -53,114 +43,75 @@ export function MetricTable({ rows, metrics, units, catalogue }: Props) {
 
   return (
     <>
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small" aria-label={t('metrics.tableLabel')}>
-          <TableHead>
-            <TableRow>
-              <TableCell>{t('metrics.columns.name')}</TableCell>
-              <TableCell>{t('metrics.columns.unit')}</TableCell>
-              <TableCell>{t('metrics.columns.valueType')}</TableCell>
-              <TableCell>{t('metrics.columns.direction')}</TableCell>
-              <TableCell>{t('metrics.columns.description')}</TableCell>
-              <TableCell>{t('metrics.columns.changed')}</TableCell>
-              <TableCell align="right">
-                <Box component="span" sx={visuallyHidden}>
-                  {t('metrics.columns.actions')}
-                </Box>
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rows.map((metric) => (
-              <TableRow key={metric.id}>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  <Box
-                    component="code"
-                    sx={{ fontFamily: 'monospace', fontWeight: 500 }}
-                  >
-                    {metric.name}
-                  </Box>
-                </TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  <UnitLabel symbol={metric.unit} catalogue={catalogue} />
-                </TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  {t(`metrics.valueType.${metric.value_type}`)}
-                </TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  <Direction direction={metric.direction} />
-                </TableCell>
-                <TableCell sx={{ minWidth: 200 }}>
-                  {metric.description || (
-                    <Typography
-                      component="span"
-                      variant="body2"
-                      color="text.secondary"
-                    >
-                      {t('common.none')}
-                    </Typography>
-                  )}
-                </TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  <Tooltip
-                    describeChild
-                    title={formatTimestamp(metric.updated_at)}
-                  >
-                    <time dateTime={metric.updated_at}>
-                      {formatDateTime(metric.updated_at)}
-                    </time>
-                  </Tooltip>
-                </TableCell>
-                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                  <Tooltip title={t('metrics.runs')}>
-                    <IconButton
-                      size="small"
-                      component={RouterLink}
-                      to={`/runs?${new URLSearchParams({ metric: metric.name })}`}
-                      aria-label={t('metrics.runsNamed', { name: metric.name })}
-                    >
-                      <ListAltIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={t('metrics.edit.action')}>
-                    <IconButton
-                      size="small"
-                      onClick={() => start('edit', metric)}
-                      aria-label={t('metrics.edit.named', {
-                        name: metric.name,
-                      })}
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={t('metrics.rename.action')}>
-                    <IconButton
-                      size="small"
-                      onClick={() => start('rename', metric)}
-                      aria-label={t('metrics.rename.named', {
-                        name: metric.name,
-                      })}
-                    >
-                      <RenameIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={t('metrics.delete.action')}>
-                    <IconButton
-                      size="small"
-                      onClick={() => start('delete', metric)}
-                      aria-label={t('metrics.delete.named', {
-                        name: metric.name,
-                      })}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <Table framed aria-label={t('metrics.tableLabel')}>
+        <thead>
+          <tr>
+            <th>{t('metrics.columns.name')}</th>
+            <th>{t('metrics.columns.unit')}</th>
+            <th>{t('metrics.columns.valueType')}</th>
+            <th>{t('metrics.columns.direction')}</th>
+            <th>{t('metrics.columns.description')}</th>
+            <th>{t('metrics.columns.changed')}</th>
+            <th className="g-r">
+              <VisuallyHidden>{t('metrics.columns.actions')}</VisuallyHidden>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((metric) => (
+            <tr key={metric.id}>
+              <td>
+                <code className="mono body-medium">{metric.name}</code>
+              </td>
+              <td>
+                <UnitLabel symbol={metric.unit} catalogue={catalogue} />
+              </td>
+              <td>{t(`metrics.valueType.${metric.value_type}`)}</td>
+              <td>
+                <Direction direction={metric.direction} />
+              </td>
+              <td className="ui-wrap-cell tr-metrics-description">
+                {metric.description || (
+                  <span className="ui-secondary">{t('common.none')}</span>
+                )}
+              </td>
+              <td>
+                <Time iso={metric.updated_at} />
+              </td>
+              <td className="g-r">
+                <IconLinkButton
+                  size="sm"
+                  icon={ListChecks}
+                  to={`/runs?${new URLSearchParams({ metric: metric.name })}`}
+                  label={t('metrics.runsNamed', { name: metric.name })}
+                  tooltip={t('metrics.runs')}
+                />
+                <IconButton
+                  size="sm"
+                  icon={Pencil}
+                  onClick={() => start('edit', metric)}
+                  label={t('metrics.edit.named', { name: metric.name })}
+                  tooltip={t('metrics.edit.action')}
+                />
+                <IconButton
+                  size="sm"
+                  icon={PencilLine}
+                  onClick={() => start('rename', metric)}
+                  label={t('metrics.rename.named', { name: metric.name })}
+                  tooltip={t('metrics.rename.action')}
+                />
+                <IconButton
+                  size="sm"
+                  icon={Trash2}
+                  onClick={() => start('delete', metric)}
+                  label={t('metrics.delete.named', { name: metric.name })}
+                  tooltip={t('metrics.delete.action')}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
       {dialog && (
         <MetricDialog
           action={dialog.action}
@@ -178,12 +129,11 @@ export function MetricTable({ rows, metrics, units, catalogue }: Props) {
 
 function Direction({ direction }: { direction: MetricDirection }) {
   const { t } = useTranslation()
-  const Icon =
-    direction === 'higher_is_better' ? ArrowUpwardIcon : ArrowDownwardIcon
+  const Icon = direction === 'higher_is_better' ? ArrowUp : ArrowDown
   return (
-    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-      <Icon fontSize="small" sx={{ color: 'text.secondary' }} />
+    <span className="ui-inline-row">
+      <Icon size={14} className="ui-secondary" aria-hidden />
       {t(`metrics.direction.${direction}`)}
-    </Box>
+    </span>
   )
 }

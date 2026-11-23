@@ -1,16 +1,10 @@
-import Alert from '@mui/material/Alert'
-import Autocomplete from '@mui/material/Autocomplete'
-import Box from '@mui/material/Box'
-import LinearProgress from '@mui/material/LinearProgress'
-import Paper from '@mui/material/Paper'
-import TextField from '@mui/material/TextField'
-import Typography from '@mui/material/Typography'
 import type { TFunction } from 'i18next'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CaseExecutionSummary, RunSummary } from '../api/client'
 import { formatDateTime, formatJsonValue } from '../format'
 import { useCaseExecutions, useRun, useRunList } from '../runs/queries'
+import { Alert, Combobox, ProgressBar, Surface } from '../ui'
 import {
   type DerivedView,
   resultsBySample,
@@ -18,6 +12,7 @@ import {
 } from './derivedModel'
 import { ScalarTable, SeriesResultChart } from './EvaluationViews'
 import { useEvaluation } from './queries'
+import './derived.css'
 
 /** Points per series result; about one per pixel of a wide chart. */
 export const previewPoints = 1000
@@ -76,106 +71,80 @@ export function EvaluationPreview({ view, setView, expression, unit }: Props) {
       branch: r.sut_version.branch ?? r.sut_version.commit.slice(0, 8),
     })
 
+  const note = (text: string) => <p className="ui-text ui-secondary">{text}</p>
+
   return (
-    <Paper variant="outlined" sx={{ p: 2, minWidth: 0 }}>
-      <Typography variant="subtitle2" component="h3">
-        {t('derived.preview.title')}
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-        {t('derived.preview.help')}
-      </Typography>
-      <Box
-        sx={{
-          display: 'grid',
-          gap: 2,
-          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-          mb: 1.5,
-        }}
-      >
-        <Autocomplete
-          size="small"
+    <Surface className="tr-derived-preview">
+      <h3 className="body-medium ui-heading">{t('derived.preview.title')}</h3>
+      <p className="ui-text ui-secondary">{t('derived.preview.help')}</p>
+      <div className="tr-derived-pickers">
+        <Combobox
+          label={t('derived.preview.run')}
           options={runOptions}
           loading={runs.isPending}
           value={run}
           getOptionLabel={runLabel}
-          isOptionEqualToValue={(a, b) => a.id === b.id}
-          onChange={(_, next) =>
+          getOptionKey={(r) => r.id}
+          onChange={(next) =>
             setView({ ...view, run: next?.id, caseExecution: undefined })
           }
-          renderInput={(params) => (
-            <TextField {...params} label={t('derived.preview.run')} />
-          )}
         />
-        <Autocomplete
-          size="small"
+        <Combobox
+          label={t('derived.preview.caseExecution')}
           options={caseOptions}
           loading={cases.isFetching}
           disabled={!view.run}
           value={caseExecution}
           getOptionLabel={(c) => caseLabel(c, t)}
-          isOptionEqualToValue={(a, b) => a.id === b.id}
-          onChange={(_, next) =>
-            setView({ ...view, caseExecution: next?.id })
-          }
-          renderInput={(params) => (
-            <TextField {...params} label={t('derived.preview.caseExecution')} />
-          )}
+          getOptionKey={(c) => c.id}
+          onChange={(next) => setView({ ...view, caseExecution: next?.id })}
         />
-      </Box>
+      </div>
 
-      <Box sx={{ height: 4, mb: 1 }}>
-        {request && evaluation.isFetching && (
-          <LinearProgress aria-label={t('common.loading')} />
-        )}
-      </Box>
+      <div className="tr-derived-progress">
+        {request && evaluation.isFetching && <ProgressBar />}
+      </div>
 
       {!caseExecution ? (
-        <Typography variant="body2" color="text.secondary">
-          {t('derived.preview.choose')}
-        </Typography>
+        note(t('derived.preview.choose'))
       ) : !expression ? (
-        <Typography variant="body2" color="text.secondary">
-          {t('derived.preview.needsValid')}
-        </Typography>
+        note(t('derived.preview.needsValid'))
       ) : evaluation.isError ? (
-        <Alert severity="error">
+        <Alert tone="error">
           {t('derived.preview.error', { message: evaluation.error.message })}
         </Alert>
       ) : !response ? null : response.samples.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
-          {t('derived.preview.noSamples')}
-        </Typography>
+        note(t('derived.preview.noSamples'))
       ) : response.kind === 'series' ? (
-        <SeriesResultChart title={t('derived.preview.result')} response={response} />
+        <SeriesResultChart
+          title={t('derived.preview.result')}
+          response={response}
+        />
       ) : (
-        <Box sx={{ mx: -2 }}>
-          <ScalarTable
-            label={t('derived.preview.result')}
-            samples={response.samples.map((s) => ({
-              id: s.sample_id,
-              repetition: s.repetition,
-              is_warmup: s.is_warmup,
-            }))}
-            columns={[
-              {
-                key: 'result',
-                label: t('derived.preview.value'),
-                unit: response.unit,
-                results: resultsBySample(response),
-              },
-            ]}
-          />
-        </Box>
+        <ScalarTable
+          framed
+          label={t('derived.preview.result')}
+          samples={response.samples.map((s) => ({
+            id: s.sample_id,
+            repetition: s.repetition,
+            is_warmup: s.is_warmup,
+          }))}
+          columns={[
+            {
+              key: 'result',
+              label: t('derived.preview.value'),
+              unit: response.unit,
+              results: resultsBySample(response),
+            },
+          ]}
+        />
       )}
-    </Paper>
+    </Surface>
   )
 }
 
 /** A case execution as the picker names it: scenario, device, parameters. */
-function caseLabel(
-  c: CaseExecutionSummary,
-  t: TFunction,
-): string {
+function caseLabel(c: CaseExecutionSummary, t: TFunction): string {
   const parameters = Object.entries(c.test_case.resolved_parameters)
     .map(([name, value]) => `${name}=${formatJsonValue(value)}`)
     .join(', ')

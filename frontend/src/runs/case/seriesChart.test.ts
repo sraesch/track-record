@@ -9,6 +9,7 @@ const colors: ChartColors = {
   text: '#000',
   secondaryText: '#555',
   divider: '#ddd',
+  axis: '#bbb',
   surface: '#fff',
   lines: ['#c1', '#c2', '#c3'],
 }
@@ -62,12 +63,31 @@ describe('groupSeries', () => {
         group.lines.map((l) => [l.sample.repetition, l.colorIndex]),
       ]),
     ).toEqual([
-      ['fps', 'time', [[0, 0], [1, 1], [2, 2]]],
+      [
+        'fps',
+        'time',
+        [
+          [0, 0],
+          [1, 1],
+          [2, 2],
+        ],
+      ],
       // A sample keeps its color in every chart.
-      ['memory', 'time', [[0, 0], [2, 2]]],
+      [
+        'memory',
+        'time',
+        [
+          [0, 0],
+          [2, 2],
+        ],
+      ],
       ['memory', 'uptime', [[1, 1]]],
     ])
-    expect(groups[0]).toMatchObject({ unit: 'fps', xDimension: 'time', xUnit: 's' })
+    expect(groups[0]).toMatchObject({
+      unit: 'fps',
+      xDimension: 'time',
+      xUnit: 's',
+    })
   })
 })
 

@@ -1,14 +1,11 @@
-import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import LinearProgress from '@mui/material/LinearProgress'
-import Typography from '@mui/material/Typography'
+import { cx } from '@graphite/react'
 import { lazy, Suspense, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AttachmentMeta } from '../api/client'
 import { formatBytes } from '../format'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { ErrorBoundary } from '../pages/ErrorBoundary'
+import { Alert, Button, ProgressBar } from '../ui'
 import { JsonView } from './JsonView'
 import {
   type AttachmentKind,
@@ -18,6 +15,7 @@ import {
 } from './kind'
 import { useAttachmentText } from './queries'
 import { TextView } from './TextView'
+import './attachments.css'
 
 // The Markdown renderer is large and rarely needed: it is loaded when the
 // first Markdown attachment is opened (own chunk, see vite.config.ts).
@@ -45,11 +43,7 @@ export function AttachmentView({ attachment, fit }: Props) {
   const { t } = useTranslation()
   const kind = attachmentKind(attachment)
   if (!kind) {
-    return (
-      <Typography color="text.secondary">
-        {t('attachments.noPreview')}
-      </Typography>
-    )
+    return <p className="ui-text ui-secondary">{t('attachments.noPreview')}</p>
   }
   return (
     <ErrorBoundary
@@ -70,11 +64,11 @@ function PreviewFailed({ error }: { error: Error }) {
   const { t } = useTranslation()
   return (
     <Alert
-      severity="error"
+      tone="error"
       action={
         <Button
-          color="inherit"
-          size="small"
+          variant="ghost"
+          size="sm"
           onClick={() => window.location.reload()}
         >
           {t('attachments.reload')}
@@ -109,28 +103,21 @@ function ImageView({
   const { t } = useTranslation()
   const [failed, setFailed] = useState(false)
   if (failed) {
-    return <Alert severity="warning">{t('attachments.imageError')}</Alert>
+    return <Alert tone="warning">{t('attachments.imageError')}</Alert>
   }
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-      <Box
-        component="img"
+    <div className="tr-attachments-image-frame">
+      {/* A checkerboard shows where the image is transparent (attachments.css). */}
+      <img
+        className={cx(
+          'tr-attachments-image',
+          fit === 'dialog' && 'tr-attachments-image-dialog',
+        )}
         src={attachmentContentUrl(attachment.id)}
         alt={attachment.file_name}
         onError={() => setFailed(true)}
-        sx={{
-          display: 'block',
-          maxWidth: '100%',
-          maxHeight: fit === 'dialog' ? 'calc(100vh - 220px)' : undefined,
-          objectFit: 'contain',
-          // A checkerboard shows where the image is transparent.
-          backgroundColor: 'action.hover',
-          backgroundImage:
-            'conic-gradient(rgba(127,127,127,0.12) 25%, transparent 0 50%, rgba(127,127,127,0.12) 0 75%, transparent 0)',
-          backgroundSize: '16px 16px',
-        }}
       />
-    </Box>
+    </div>
   )
 }
 
@@ -149,7 +136,7 @@ function TextPreview({
 
   if (tooLarge) {
     return (
-      <Alert severity="info">
+      <Alert tone="info">
         {t('attachments.tooLarge', {
           size: formatBytes(attachment.size_bytes),
           limit: formatBytes(maxTextPreviewBytes),
@@ -158,7 +145,7 @@ function TextPreview({
     )
   }
   if (content.isPending) {
-    return <LinearProgress aria-label={t('common.loading')} />
+    return <ProgressBar />
   }
   if (content.isError) {
     return (
@@ -170,18 +157,16 @@ function TextPreview({
   }
   const text = content.data ?? ''
   if (text.trim() === '') {
-    return (
-      <Typography color="text.secondary">{t('attachments.empty')}</Typography>
-    )
+    return <p className="ui-text ui-secondary">{t('attachments.empty')}</p>
   }
   if (kind === 'markdown') {
     return (
       // On a wide page, keep Markdown lines short enough to read.
-      <Box sx={fit === 'page' ? { maxWidth: '80ch' } : undefined}>
-        <Suspense fallback={<LinearProgress aria-label={t('common.loading')} />}>
+      <div className={fit === 'page' ? 'tr-attachments-readable' : undefined}>
+        <Suspense fallback={<ProgressBar />}>
           <MarkdownView text={text} />
         </Suspense>
-      </Box>
+      </div>
     )
   }
   if (kind === 'json') return <JsonView text={text} />

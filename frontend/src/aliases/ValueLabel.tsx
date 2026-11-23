@@ -1,7 +1,6 @@
-import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
 import { type AliasValue, typeOf, valueText } from './aliasModel'
+import './aliases.css'
 
 /** An alias value in the table: the value, and its type if `typed`. */
 export function ValueLabel({
@@ -13,18 +12,13 @@ export function ValueLabel({
 }) {
   const { t } = useTranslation()
   return (
-    <Box
-      component="span"
-      sx={{ display: 'inline-flex', gap: 0.75, alignItems: 'baseline' }}
-    >
-      <Box component="span" sx={{ fontWeight: 500, whiteSpace: 'nowrap' }}>
-        {valueText(value)}
-      </Box>
+    <span className="tr-aliases-value">
+      <span className="body-medium ui-nowrap">{valueText(value)}</span>
       {typed && (
-        <Typography component="span" variant="caption" color="text.secondary">
+        <span className="small ui-secondary">
           {t(`aliases.type.${typeOf(value)}`)}
-        </Typography>
+        </span>
       )}
-    </Box>
+    </span>
   )
 }

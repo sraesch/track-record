@@ -1,21 +1,12 @@
-import Alert from '@mui/material/Alert'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Alert } from '../ui'
 import { jsonTokens, prettyJson } from './jsonTokens'
 import { CodeBlock } from './TextView'
+import './attachments.css'
 
 /** Larger texts are shown without highlighting, to keep the page fast. */
 const maxHighlightedChars = 250_000
-
-/** Token colors from the theme, so they follow the color mode. */
-const tokenSx = {
-  '& [data-token="key"]': { color: 'primary.main' },
-  '& [data-token="string"]': { color: 'success.main' },
-  '& [data-token="number"]': { color: 'warning.main' },
-  '& [data-token="boolean"]': { color: 'secondary.main' },
-  '& [data-token="null"]': { color: 'text.secondary' },
-  '& [data-token="other"]': { color: 'error.main' },
-} as const
 
 /**
  * A JSON attachment, pretty-printed and highlighted. Invalid JSON is shown
@@ -32,11 +23,13 @@ export function JsonView({ text }: { text: string }) {
   return (
     <>
       {pretty === undefined && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
+        <Alert tone="warning" style={{ marginBottom: 'var(--space-4)' }}>
           {t('attachments.invalidJson')}
         </Alert>
       )}
-      <CodeBlock sx={tokenSx}>
+      {/* Token colors from Graphite's tokens (attachments.css), so they
+          follow the color mode. */}
+      <CodeBlock className="tr-attachments-json">
         {tokens
           ? tokens.map((token, index) =>
               token.type === 'whitespace' || token.type === 'punctuation' ? (

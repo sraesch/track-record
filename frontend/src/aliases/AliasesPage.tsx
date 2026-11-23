@@ -1,36 +1,24 @@
-import AddIcon from '@mui/icons-material/Add'
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
-import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
-import RestoreIcon from '@mui/icons-material/Restore'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Chip from '@mui/material/Chip'
-import FormControlLabel from '@mui/material/FormControlLabel'
-import IconButton from '@mui/material/IconButton'
-import LinearProgress from '@mui/material/LinearProgress'
-import MenuItem from '@mui/material/MenuItem'
-import Paper from '@mui/material/Paper'
-import Switch from '@mui/material/Switch'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import TextField from '@mui/material/TextField'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
+import { Switch } from '@graphite/react'
+import { ArrowRight, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
-import { formatDateTime, formatTimestamp } from '../format'
 import { ConfirmDialog } from '../pages/ConfirmDialog'
 import { EmptyState } from '../pages/EmptyState'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { PageHeader } from '../pages/PageHeader'
 import { SearchField } from '../pages/SearchField'
-import { visuallyHidden } from '../pages/visuallyHidden'
+import { Time } from '../pages/Time'
+import {
+  Button,
+  Chip,
+  IconButton,
+  ProgressBar,
+  Select,
+  Table,
+  Tooltip,
+  VisuallyHidden,
+} from '../ui'
 import { AliasDialog, type AliasDialogMode } from './AliasDialog'
 import {
   type AliasFilters,
@@ -47,6 +35,7 @@ import {
 import { isKnown, useAliases, useKnownValues, useSetAlias } from './queries'
 import { useValueLabel } from './useValueLabel'
 import { ValueLabel } from './ValueLabel'
+import './aliases.css'
 
 /**
  * Aliases (FR-14): rename or merge client device names and parameter
@@ -97,8 +86,8 @@ export function AliasesPage() {
         description={t('pages.aliases.description')}
         actions={
           <Button
-            variant="contained"
-            startIcon={<AddIcon />}
+            variant="primary"
+            icon={Plus}
             onClick={() => openDialog({ kind: 'add' })}
           >
             {t('aliases.add')}
@@ -106,65 +95,41 @@ export function AliasesPage() {
         }
       />
 
-      <Box
-        component="search"
+      <search
         aria-label={t('aliases.filters.label')}
-        sx={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 1.5,
-          mb: 2,
-          alignItems: 'center',
-        }}
+        className="tr-aliases-filters"
       >
-        <TextField
-          select
-          size="small"
-          sx={{ minWidth: 200 }}
+        <Select
+          className="tr-aliases-dimension"
           label={t('aliases.filters.dimension')}
           value={filters.dimension ?? ''}
-          onChange={(event) =>
-            setFilters({
-              ...filters,
-              dimension: event.target.value || undefined,
-            })
+          onChange={(dimension) =>
+            setFilters({ ...filters, dimension: dimension || undefined })
           }
-        >
-          <MenuItem value="">
-            <em>{t('aliases.filters.allDimensions')}</em>
-          </MenuItem>
-          <MenuItem value={deviceDimension}>
-            {t('aliases.dimension.devices')}
-          </MenuItem>
-          {dimensions.map((name) => (
-            <MenuItem key={name} value={parameterDimension(name)}>
-              {t('aliases.dimension.parameterNamed', { name })}
-            </MenuItem>
-          ))}
-        </TextField>
+          options={[
+            { value: '', label: t('aliases.filters.allDimensions') },
+            { value: deviceDimension, label: t('aliases.dimension.devices') },
+            ...dimensions.map((name) => ({
+              value: parameterDimension(name),
+              label: t('aliases.dimension.parameterNamed', { name }),
+            })),
+          ]}
+        />
         <SearchField
           label={t('aliases.filters.search')}
           value={filters.search ?? ''}
           onChange={(search) => setFilters({ ...filters, search }, true)}
         />
-        <FormControlLabel
-          control={
-            <Switch
-              checked={filters.removed}
-              onChange={(event) =>
-                setFilters({ ...filters, removed: event.target.checked })
-              }
-            />
-          }
+        <Switch
           label={t('aliases.filters.showRemoved')}
+          checked={filters.removed}
+          onCheckedChange={(removed) => setFilters({ ...filters, removed })}
         />
-      </Box>
+      </search>
 
-      <Box sx={{ height: 4, mb: 1 }}>
-        {aliases.isFetching && (
-          <LinearProgress aria-label={t('common.loading')} />
-        )}
-      </Box>
+      <div className="tr-aliases-progress">
+        {aliases.isFetching && <ProgressBar />}
+      </div>
 
       {aliases.isError && !aliases.data ? (
         <ErrorAlert
@@ -186,9 +151,9 @@ export function AliasesPage() {
             onEdit={(row) => openDialog({ kind: 'edit', row })}
             onRemove={setRemoving}
           />
-          <Typography variant="body2" color="text.secondary" sx={{ my: 1.5 }}>
+          <p className="ui-text ui-secondary small tr-aliases-count">
             {t('aliases.count', { count: shown.length })}
-          </Typography>
+          </p>
         </>
       )}
 
@@ -221,143 +186,115 @@ function AliasTable({ rows, all, isKnown, onEdit, onRemove }: TableProps) {
   const { t } = useTranslation()
   const label = useValueLabel()
   return (
-    <TableContainer component={Paper} variant="outlined">
-      <Table size="small" aria-label={t('nav.items.aliases')}>
-        <TableHead>
-          <TableRow>
-            <TableCell>{t('aliases.columns.dimension')}</TableCell>
-            <TableCell>{t('aliases.columns.source')}</TableCell>
-            <TableCell padding="none" />
-            <TableCell>{t('aliases.columns.target')}</TableCell>
-            <TableCell>{t('aliases.columns.version')}</TableCell>
-            <TableCell>{t('aliases.columns.updated')}</TableCell>
-            <TableCell align="right">
-              <Box component="span" sx={visuallyHidden}>
-                {t('aliases.columns.actions')}
-              </Box>
-            </TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((row) => {
-            const dimension = parseDimension(row.dimension)
-            const typed = dimension?.kind === 'parameter'
-            const removed = row.target === undefined
-            const final =
-              row.target === undefined
-                ? undefined
-                : resolve(all, row.dimension, row.source)
-            const source = label(row.source, typed)
-            return (
-              <TableRow key={row.id} sx={{ opacity: removed ? 0.6 : 1 }}>
-                <TableCell>
-                  {dimension?.kind === 'parameter' ? (
-                    <>
-                      {t('aliases.dimension.parameter')}{' '}
-                      <Box component="code" sx={{ fontFamily: 'monospace' }}>
-                        {dimension.name}
-                      </Box>
-                    </>
-                  ) : dimension?.kind === 'device' ? (
-                    t('aliases.dimension.device')
-                  ) : (
-                    row.dimension
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      gap: 1,
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <ValueLabel value={row.source} typed={typed} />
-                    {!removed && !isKnown(row) && (
-                      <Tooltip title={t('aliases.notInResultsHint')}>
-                        <Chip
-                          size="small"
-                          variant="outlined"
-                          color="warning"
-                          label={t('aliases.notInResults')}
-                        />
-                      </Tooltip>
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell padding="none" sx={{ color: 'text.secondary' }}>
-                  <ArrowForwardIcon
-                    fontSize="small"
-                    sx={{ verticalAlign: 'middle' }}
-                  />
-                </TableCell>
-                <TableCell>
-                  {row.target === undefined ? (
-                    <Chip size="small" label={t('aliases.removed')} />
-                  ) : (
-                    <Box>
-                      <ValueLabel value={row.target} typed={typed} />
-                      {final !== undefined && !sameValue(final, row.target) && (
-                        <Typography variant="body2" color="text.secondary">
-                          {t('aliases.resolvesTo', {
-                            value: label(final, typed),
-                          })}
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {t('aliases.version', { version: row.version })}
-                </TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  <Tooltip describeChild title={formatTimestamp(row.updatedAt)}>
-                    <time dateTime={row.updatedAt}>
-                      {formatDateTime(row.updatedAt)}
-                    </time>
-                  </Tooltip>
-                </TableCell>
-                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                  {removed ? (
-                    <Tooltip title={t('aliases.restore')}>
-                      <IconButton
-                        size="small"
-                        aria-label={t('aliases.restoreNamed', { source })}
-                        onClick={() => onEdit(row)}
-                      >
-                        <RestoreIcon fontSize="small" />
-                      </IconButton>
+    <Table framed aria-label={t('nav.items.aliases')}>
+      <thead>
+        <tr>
+          <th>{t('aliases.columns.dimension')}</th>
+          <th>{t('aliases.columns.source')}</th>
+          <th className="tr-aliases-arrow" aria-hidden />
+          <th>{t('aliases.columns.target')}</th>
+          <th>{t('aliases.columns.version')}</th>
+          <th>{t('aliases.columns.updated')}</th>
+          <th className="g-r">
+            <VisuallyHidden>{t('aliases.columns.actions')}</VisuallyHidden>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => {
+          const dimension = parseDimension(row.dimension)
+          const typed = dimension?.kind === 'parameter'
+          const removed = row.target === undefined
+          const final =
+            row.target === undefined
+              ? undefined
+              : resolve(all, row.dimension, row.source)
+          const source = label(row.source, typed)
+          return (
+            <tr
+              key={row.id}
+              className={removed ? 'tr-aliases-removed' : undefined}
+            >
+              <td>
+                {dimension?.kind === 'parameter' ? (
+                  <>
+                    {t('aliases.dimension.parameter')}{' '}
+                    <code className="ui-code">{dimension.name}</code>
+                  </>
+                ) : dimension?.kind === 'device' ? (
+                  t('aliases.dimension.device')
+                ) : (
+                  row.dimension
+                )}
+              </td>
+              <td>
+                <span className="tr-aliases-source">
+                  <ValueLabel value={row.source} typed={typed} />
+                  {!removed && !isKnown(row) && (
+                    <Tooltip title={t('aliases.notInResultsHint')}>
+                      <Chip tone="warning" outlined>
+                        {t('aliases.notInResults')}
+                      </Chip>
                     </Tooltip>
-                  ) : (
-                    <>
-                      <Tooltip title={t('aliases.edit')}>
-                        <IconButton
-                          size="small"
-                          aria-label={t('aliases.editNamed', { source })}
-                          onClick={() => onEdit(row)}
-                        >
-                          <EditOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title={t('aliases.remove')}>
-                        <IconButton
-                          size="small"
-                          aria-label={t('aliases.removeNamed', { source })}
-                          onClick={() => onRemove(row)}
-                        >
-                          <DeleteOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </>
                   )}
-                </TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+                </span>
+              </td>
+              <td className="tr-aliases-arrow">
+                <ArrowRight size={14} className="ui-secondary" aria-hidden />
+              </td>
+              <td>
+                {row.target === undefined ? (
+                  <Chip>{t('aliases.removed')}</Chip>
+                ) : (
+                  <div>
+                    <ValueLabel value={row.target} typed={typed} />
+                    {final !== undefined && !sameValue(final, row.target) && (
+                      <p className="ui-text ui-secondary small">
+                        {t('aliases.resolvesTo', {
+                          value: label(final, typed),
+                        })}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </td>
+              <td>{t('aliases.version', { version: row.version })}</td>
+              <td>
+                <Time iso={row.updatedAt} />
+              </td>
+              <td className="g-r">
+                {removed ? (
+                  <IconButton
+                    size="sm"
+                    icon={RotateCcw}
+                    label={t('aliases.restoreNamed', { source })}
+                    tooltip={t('aliases.restore')}
+                    onClick={() => onEdit(row)}
+                  />
+                ) : (
+                  <>
+                    <IconButton
+                      size="sm"
+                      icon={Pencil}
+                      label={t('aliases.editNamed', { source })}
+                      tooltip={t('aliases.edit')}
+                      onClick={() => onEdit(row)}
+                    />
+                    <IconButton
+                      size="sm"
+                      icon={Trash2}
+                      label={t('aliases.removeNamed', { source })}
+                      tooltip={t('aliases.remove')}
+                      onClick={() => onRemove(row)}
+                    />
+                  </>
+                )}
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </Table>
   )
 }
 
@@ -397,12 +334,12 @@ function RemoveAliasDialog({
       }}
     >
       {shown?.target !== undefined && (
-        <Typography>
+        <p className="ui-text">
           {t('aliases.removeDialog.text', {
             source: label(shown.source, typed),
             target: label(shown.target, typed),
           })}
-        </Typography>
+        </p>
       )}
     </ConfirmDialog>
   )

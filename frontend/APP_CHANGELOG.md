@@ -44,6 +44,9 @@ results and helps you analyze them.
 
 - Every page has its own link, filters included, so you can share exactly
   what you see.
+- A new, denser look made for working with lots of data, in a dark and a
+  light theme.
 - Light and dark mode, following your system or set by you.
-- Works on narrow screens: the menu slides in over the page.
+- The side menu can be collapsed to a rail of icons. On narrow screens it
+  slides in over the page.
 - This page: open **About** in the app bar to see what's new.

@@ -1,11 +1,8 @@
-import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import LinearProgress from '@mui/material/LinearProgress'
 import { lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ErrorBoundary } from '../pages/ErrorBoundary'
 import { PageHeader } from '../pages/PageHeader'
+import { Alert, Button, ProgressBar } from '../ui'
 
 // The changelog comes with the Markdown renderer, which is large and has its
 // own chunk (vite.config.ts): both are loaded when this page is opened.
@@ -18,17 +15,20 @@ export function AboutPage() {
   const { t } = useTranslation()
   return (
     <>
-      <PageHeader title={t('about.title')} description={t('about.description')} />
+      <PageHeader
+        title={t('about.title')}
+        description={t('about.description')}
+      />
       {/* Short lines are easier to read on a wide screen. */}
-      <Box sx={{ maxWidth: '80ch' }}>
+      <div style={{ maxWidth: '80ch' }}>
         <ErrorBoundary
           fallback={() => (
             <Alert
-              severity="error"
+              tone="error"
               action={
                 <Button
-                  color="inherit"
-                  size="small"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => window.location.reload()}
                 >
                   {t('about.reload')}
@@ -39,13 +39,11 @@ export function AboutPage() {
             </Alert>
           )}
         >
-          <Suspense
-            fallback={<LinearProgress aria-label={t('common.loading')} />}
-          >
+          <Suspense fallback={<ProgressBar />}>
             <Changelog />
           </Suspense>
         </ErrorBoundary>
-      </Box>
+      </div>
     </>
   )
 }

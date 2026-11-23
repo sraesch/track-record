@@ -1,6 +1,5 @@
-import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
 import { Fragment, type ReactNode } from 'react'
+import './pages.css'
 
 export type Fact = {
   label: string
@@ -15,42 +14,15 @@ export type Fact = {
  */
 export function Facts({ items }: { items: readonly Fact[] }) {
   return (
-    <Box sx={{ containerType: 'inline-size' }}>
-      <Box
-        component="dl"
-        sx={{
-          m: 0,
-          display: 'grid',
-          gridTemplateColumns: 'max-content minmax(0, 1fr)',
-          columnGap: 2,
-          rowGap: 1,
-          alignItems: 'baseline',
-          '@container (min-width: 640px)': {
-            gridTemplateColumns:
-              'max-content minmax(0, 1fr) max-content minmax(0, 1fr)',
-            columnGap: 3,
-          },
-        }}
-      >
+    <div className="tr-facts">
+      <dl>
         {items.map(({ label, value, code }) => (
           <Fragment key={label}>
-            <Typography
-              component="dt"
-              variant="body2"
-              color="text.secondary"
-              sx={code ? { fontFamily: 'monospace' } : undefined}
-            >
-              {label}
-            </Typography>
-            <Box
-              component="dd"
-              sx={{ m: 0, minWidth: 0, overflowWrap: 'anywhere' }}
-            >
-              {value}
-            </Box>
+            <dt className={code ? 'tr-facts-code' : undefined}>{label}</dt>
+            <dd>{value}</dd>
           </Fragment>
         ))}
-      </Box>
-    </Box>
+      </dl>
+    </div>
   )
 }

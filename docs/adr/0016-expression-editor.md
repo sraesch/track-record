@@ -1,6 +1,7 @@
 # ADR 0016: Expression editor for the derived metric DSL
 
-**Status:** proposed · **Date:** 2026-11-22
+**Status:** proposed · **Date:** 2026-11-22 · colors from Graphite's CSS
+variables since [ADR 0019](0019-graphite-design-system.md)
 
 ## Context
 

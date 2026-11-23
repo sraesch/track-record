@@ -6,6 +6,8 @@
     "label": "Main navigation",
     "open": "Open navigation",
     "close": "Close navigation",
+    "collapse": "Collapse navigation",
+    "expand": "Expand navigation",
     "home": "Track Record home",
     "sections": {
       "analysis": "Analysis",
@@ -88,7 +90,8 @@
     "save": "Save",
     "delete": "Delete",
     "copied": "Copied",
-    "valueWithUnit": "{{value}} {{unit}}"
+    "valueWithUnit": "{{value}} {{unit}}",
+    "close": "Close"
   },
   "duration": {
     "hours": "{{h}} h {{m}} min",
@@ -153,6 +156,7 @@
       "paramsHint": "Type name=value and press Enter",
       "paramsInvalid": "Use name=value, e.g. size=10 or mode=\"fast\"",
       "environment": "Shared environment {{id}}",
+      "removeEnvironment": "Remove the shared environment filter",
       "clear": "Clear filters"
     },
     "shown_one": "{{count}} run shown",
@@ -879,5 +883,12 @@
       "neverUsed": "It has never been used.",
       "confirm": "Revoke"
     }
+  },
+  "ui": {
+    "open": "Open",
+    "close": "Close",
+    "loading": "Loading…",
+    "noOptions": "No options",
+    "remove": "Remove {{item}}"
   }
 }

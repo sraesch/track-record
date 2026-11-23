@@ -1,0 +1,22 @@
+/* Aliases page: filters, the alias table and the alias dialog. */
+.tr-aliases-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); margin-bottom: var(--space-4); }
+.tr-aliases-filters > .g-switch { align-self: center; min-height: var(--control-md); }
+.tr-aliases-dimension { min-width: 200px; }
+/* Keeps its height, so the content does not jump while loading. */
+.tr-aliases-progress { height: 2px; margin-bottom: var(--space-2); }
+.tr-aliases-count { margin: var(--space-3) 0; }
+
+.g-table .tr-aliases-arrow { width: 14px; padding: 0; }
+.tr-aliases-arrow svg { vertical-align: middle; }
+.g-table tbody tr.tr-aliases-removed td { opacity: 0.6; }
+.tr-aliases-source { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.tr-aliases-value { display: inline-flex; align-items: baseline; gap: var(--space-1); }
+
+/* Alias dialog */
+.tr-aliases-kind { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-4); }
+.tr-aliases-kind > fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.tr-aliases-kind > fieldset:disabled .g-seg { opacity: 0.6; }
+.tr-aliases-kind > fieldset:disabled .g-seg button { cursor: default; }
+.tr-aliases-name { flex: 1 1 200px; }
+.tr-aliases-field { display: flex; align-items: flex-start; gap: var(--space-3); }
+.tr-aliases-type { width: 130px; flex: none; }

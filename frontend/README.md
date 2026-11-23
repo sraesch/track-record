@@ -1,9 +1,10 @@
 # Frontend
 
 Web UI for Track Record: TypeScript (strict), React, Vite, Vitest and
-react-i18next, with MUI components and React Router. Setup decisions are in
-[ADR 0010](../docs/adr/0010-frontend-scaffold.md), the shell (app bar, side
-menu, routing) in [ADR 0011](../docs/adr/0011-ui-shell.md).
+react-i18next, with the Graphite design system and React Router. Setup
+decisions are in [ADR 0010](../docs/adr/0010-frontend-scaffold.md), routing in
+[ADR 0011](../docs/adr/0011-ui-shell.md), the design system, icons and fonts
+in [ADR 0019](../docs/adr/0019-graphite-design-system.md).
 
 ## Adding a view
 
@@ -19,11 +20,15 @@ menu, routing) in [ADR 0011](../docs/adr/0011-ui-shell.md).
 frontend/
   index.html            Vite entry
   src/main.tsx          Bootstraps React, i18n and the router
-  src/App.tsx           Theme and router providers
+  graphite/             The Graphite design system (vendored, imported as
+                        @graphite/react; local changes in its README)
+  src/App.tsx           Color mode, icon and router providers
   src/routes.tsx        All routes (React Router)
   src/navigation.ts     Side menu entries; routes are built from them
-  src/theme.ts          MUI theme: light and dark color schemes
-  src/layout/           App bar, side menu, color mode menu
+  src/ui/               What the app adds to Graphite: dialog, alert,
+                        select and comboboxes, tooltip, buttons with
+                        Lucide icons, chips, table, progress, color mode
+  src/layout/           Title bar, side menu, color mode menu
   src/pages/            Shared page parts: header, sections, dialogs, search
                         field, placeholders
   src/api/              API client; schema.d.ts is generated (do not edit)
@@ -63,7 +68,7 @@ frontend/
   src/annotations/      Annotation list and editor shared by runs and
                         test cases
   src/charts/           Charts (ECharts, ADR 0015): lazily loaded <Chart>,
-                        colors from the MUI color scheme
+                        colors from Graphite's chart tokens
   src/attachments/      Attachment previews (dialog and own page): images,
                         Markdown, JSON, text
   src/format.ts         Dates, durations and commits for display

@@ -1,19 +1,17 @@
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-import DownloadIcon from '@mui/icons-material/Download'
-import Button from '@mui/material/Button'
-import LinearProgress from '@mui/material/LinearProgress'
-import Paper from '@mui/material/Paper'
+import { ArrowLeft, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link, Navigate, useParams } from 'react-router'
+import { Navigate, useParams } from 'react-router'
 import { isNotFound } from '../api/client'
 import { formatBytes } from '../format'
 import { EmptyState } from '../pages/EmptyState'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { PageHeader } from '../pages/PageHeader'
 import { attachmentPath, runPath } from '../runs/paths'
+import { AnchorButton, LinkButton, ProgressBar, Surface } from '../ui'
 import { AttachmentView } from './AttachmentView'
 import { attachmentContentUrl, mediaType } from './kind'
 import { useAttachment } from './queries'
+import './attachments.css'
 
 /**
  * One attachment on its own page (FR-21:
@@ -26,15 +24,18 @@ export function AttachmentPage() {
   const attachment = useAttachment(attachmentId)
 
   const back = (
-    <Button
-      component={Link}
+    <LinkButton
       to={runPath(runId)}
-      size="small"
-      startIcon={<ArrowBackIcon />}
-      sx={{ mb: 1, ml: -1 }}
+      variant="ghost"
+      size="sm"
+      icon={ArrowLeft}
+      style={{
+        marginBottom: 'var(--space-2)',
+        marginLeft: 'calc(-1 * var(--space-2))',
+      }}
     >
       {t('attachmentPage.back')}
-    </Button>
+    </LinkButton>
   )
 
   if (!attachment.data) {
@@ -42,7 +43,7 @@ export function AttachmentPage() {
       <>
         <PageHeader title={t('attachmentPage.titleLoading')} before={back} />
         {attachment.isPending ? (
-          <LinearProgress aria-label={t('common.loading')} />
+          <ProgressBar />
         ) : isNotFound(attachment.error) ? (
           <EmptyState>
             {t('attachmentPage.notFound', { attachmentId })}
@@ -75,21 +76,18 @@ export function AttachmentPage() {
         })}
         before={back}
         actions={
-          <Button
+          <AnchorButton
+            icon={Download}
             href={attachmentContentUrl(meta.id)}
             download={meta.file_name}
-            size="small"
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            sx={{ whiteSpace: 'nowrap' }}
           >
             {t('attachments.download')}
-          </Button>
+          </AnchorButton>
         }
       />
-      <Paper variant="outlined" sx={{ p: 2, minWidth: 0 }}>
+      <Surface className="tr-attachments-page">
         <AttachmentView attachment={meta} fit="page" />
-      </Paper>
+      </Surface>
     </>
   )
 }

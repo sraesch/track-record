@@ -1,18 +1,12 @@
-import Box from '@mui/material/Box'
-import Chip from '@mui/material/Chip'
-import Link from '@mui/material/Link'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink } from 'react-router'
 import type { RunDetail } from '../../api/client'
 import { formatDuration, formatNumber, shortCommit } from '../../format'
 import { CopyButton } from '../../pages/CopyButton'
 import { type Fact, Facts } from '../../pages/Facts'
 import { Section } from '../../pages/Section'
 import { Time } from '../../pages/Time'
-import { codeSx, inlineRow } from '../../pages/styles'
 import { suiteVersionHref } from '../../suites/paths'
+import { Chip, Stack, TextLink, Tooltip } from '../../ui'
 import { InvalidChip, RunStatusChip } from '../RunStatusChip'
 
 /** What a run is: status, times, suite and SUT version. */
@@ -23,11 +17,11 @@ export function RunOverview({ run }: { run: RunDetail }) {
   const ended = run.ended_at ? (
     <>
       <Time iso={run.ended_at} />{' '}
-      <Typography component="span" variant="body2" color="text.secondary">
+      <span className="ui-secondary">
         {t('runDetail.overview.durationOf', {
           duration: formatDuration(run.started_at, run.ended_at),
         })}
-      </Typography>
+      </span>
     </>
   ) : run.status === 'running' ? (
     t('runs.stillRunning')
@@ -39,10 +33,10 @@ export function RunOverview({ run }: { run: RunDetail }) {
     {
       label: t('runDetail.overview.status'),
       value: (
-        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+        <Stack row wrap gap={1}>
           <RunStatusChip status={run.status} />
           {!run.is_valid && <InvalidChip reason={run.invalid_reason} />}
-        </Box>
+        </Stack>
       ),
     },
     {
@@ -58,16 +52,12 @@ export function RunOverview({ run }: { run: RunDetail }) {
       label: t('runDetail.overview.suite'),
       value: (
         <>
-          <Link
-            component={RouterLink}
-            to={suiteVersionHref(run.suite.name, run.suite.version)}
-            underline="hover"
-          >
+          <TextLink to={suiteVersionHref(run.suite.name, run.suite.version)}>
             {run.suite.name}
-          </Link>{' '}
-          <Typography component="span" variant="body2" color="text.secondary">
+          </TextLink>{' '}
+          <span className="ui-secondary">
             {t('runs.version', { version: run.suite.version })}
-          </Typography>
+          </span>
         </>
       ),
     },
@@ -78,17 +68,15 @@ export function RunOverview({ run }: { run: RunDetail }) {
     {
       label: t('runDetail.overview.commit'),
       value: (
-        <Box component="span" sx={inlineRow}>
-          <Tooltip describeChild title={sut.commit}>
-            <Typography component="code" variant="body2" sx={codeSx}>
-              {shortCommit(sut.commit)}
-            </Typography>
+        <span className="ui-inline-row">
+          <Tooltip title={sut.commit}>
+            <code className="ui-code">{shortCommit(sut.commit)}</code>
           </Tooltip>
           <CopyButton
             text={sut.commit}
             label={t('runDetail.overview.copyCommit')}
           />
-        </Box>
+        </span>
       ),
     },
     {
@@ -97,11 +85,7 @@ export function RunOverview({ run }: { run: RunDetail }) {
     },
     {
       label: t('runDetail.overview.releaseTag'),
-      value: sut.tag ? (
-        <Chip size="small" variant="outlined" label={sut.tag} />
-      ) : (
-        t('common.none')
-      ),
+      value: sut.tag ? <Chip outlined>{sut.tag}</Chip> : t('common.none'),
     },
     {
       label: t('runDetail.overview.buildConfig'),
@@ -118,12 +102,10 @@ export function RunOverview({ run }: { run: RunDetail }) {
     {
       label: t('runDetail.overview.runId'),
       value: (
-        <Box component="span" sx={inlineRow}>
-          <Typography component="code" variant="body2" sx={codeSx}>
-            {run.id}
-          </Typography>
+        <span className="ui-inline-row">
+          <code className="ui-code">{run.id}</code>
           <CopyButton text={run.id} label={t('runDetail.overview.copyRunId')} />
-        </Box>
+        </span>
       ),
     },
   ]

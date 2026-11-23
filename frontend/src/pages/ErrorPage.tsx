@@ -1,5 +1,3 @@
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
 import { useTranslation } from 'react-i18next'
 import { useRouteError } from 'react-router'
 import { homePath } from '../navigation'
@@ -11,15 +9,19 @@ export function ErrorPage() {
   const error = useRouteError()
   if (import.meta.env.DEV) console.error(error)
   return (
-    <Box sx={{ p: 3 }}>
+    <div style={{ padding: 'var(--space-6)' }}>
       <PageHeader
         title={t('pages.error.title')}
         description={t('pages.error.description')}
       />
       {/* A full page load: the app state may be broken. */}
-      <Button href={homePath} variant="contained">
+      <a
+        href={homePath}
+        className="g-btn g-btn-primary"
+        style={{ textDecoration: 'none' }}
+      >
         {t('pages.error.home')}
-      </Button>
-    </Box>
+      </a>
+    </div>
   )
 }

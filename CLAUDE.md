@@ -15,8 +15,8 @@ design notes when a change implements or affects one.
 ingestion, retrieval, tags/annotations, aliases, tokens, the UI-only
 operations, the derived metric DSL and analysis (aggregates, trends,
 comparisons, series views, export) and the MCP server. The frontend
-([frontend/](frontend/README.md)) has the shell (app bar, side menu, routes
-for every view, color modes), the run list and the run detail (tags,
+([frontend/](frontend/README.md)) is built on the Graphite design system and
+has the shell (title bar, side menu, routes for every view, color modes), the run list and the run detail (tags,
 annotations, case executions, attachments with previews, invalidation,
 deletion) and the case execution page (measurements per sample, a chart
 per series metric with a line per sample, device details, test case tags and annotations, derived metric values,
@@ -105,10 +105,19 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
 - Tests sit next to the code as `*.test.ts(x)` (Vitest, jsdom, Testing
   Library). Vitest globals are off: import `describe`/`it`/`expect`.
 - The UI only calls the UI port (`/ui/api`), with relative URLs.
-- MUI components and React Router ([ADR 0011](docs/adr/0011-ui-shell.md)).
-  Views are listed once in `src/navigation.ts` (side menu and routes);
-  pages start with `<PageHeader>`. Import icons per file
-  (`@mui/icons-material/ShowChart`). View state lives in the URL (FR-21).
+- Components are the **Graphite** design system
+  ([ADR 0019](docs/adr/0019-graphite-design-system.md)), vendored in
+  `frontend/graphite/` and imported as `@graphite/react`; keep local
+  changes to it few and listed in `graphite/README.md`. What the app adds
+  (dialogs, alerts, comboboxes, tooltips, buttons with icons, chips,
+  tables, ...) is in `src/ui/` on Graphite's tokens and `g-` classes; use
+  those, not Graphite's inline `Select`/`Menu`/`Tooltip`, where a table or
+  dialog could clip the popup. Styling: Graphite's type classes and tokens,
+  `ui-` helper classes (`src/ui/ui.css`) and a plain CSS file per area with
+  `tr-<area>-` classes; no CSS-in-JS. Icons are `lucide-react`, imported by
+  name. React Router ([ADR 0011](docs/adr/0011-ui-shell.md)): views are
+  listed once in `src/navigation.ts` (side menu and routes); pages start
+  with `<PageHeader>`. View state lives in the URL (FR-21).
 - API access ([ADR 0012](docs/adr/0012-frontend-data-access.md)): types
   generated from `backend/openapi/ui.json` into `src/api/schema.d.ts`
   (`npm run generate:api`; `test.sh` fails when stale), `openapi-fetch`
@@ -128,8 +137,8 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
 - Charts are Apache ECharts ([ADR 0015](docs/adr/0015-charting-library.md)),
   tree-shaken in `src/charts/echarts.ts` and loaded lazily through
   `<Chart>` (`src/charts/Chart.tsx`, own chunk). Build options in pure,
-  unit-tested functions with colors from `useChartColors()` (resolved MUI
-  color scheme), every chart gets a translated `label` for screen readers.
+  unit-tested functions with colors from `useChartColors()` (Graphite's
+  chart tokens for the resolved theme), every chart gets a translated `label` for screen readers.
   Series points come downsampled from the server (`max_points`) through
   TanStack Query (`useSeriesPoints`). Tests replace the canvas chart with
   `src/test/fakeChart.tsx`, which lists the lines.
@@ -201,8 +210,8 @@ Backend crates are decided in ADR 0008: axum, sqlx (runtime queries),
 utoipa (OpenAPI from code), rmcp for MCP; workspace in `backend/`.
 
 Frontend tooling is decided in ADR 0010: npm, oxlint, Vitest with jsdom and
-Testing Library. Component library (MUI) and routing (React Router) in
-ADR 0011; API types, client and TanStack Query in ADR 0012; Markdown
+Testing Library. Routing (React Router) in ADR 0011; the Graphite design
+system, Lucide icons and bundled Geist fonts in ADR 0019 (replacing MUI); API types, client and TanStack Query in ADR 0012; Markdown
 rendering (react-markdown) for attachment previews in ADR 0013; charting
 library (Apache ECharts) in ADR 0015; expression editor (CodeMirror 6) in
 ADR 0016.

@@ -1,9 +1,6 @@
-import Box from '@mui/material/Box'
-import Chip from '@mui/material/Chip'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
 import type { Unit } from '../api/client'
+import { Chip, Tooltip } from '../ui'
 
 type Props = {
   symbol: string
@@ -20,19 +17,14 @@ export function UnitLabel({ symbol, catalogue }: Props) {
   const unit = catalogue?.get(symbol)
   const text =
     symbol === '' ? (
-      <Typography component="span" variant="body2" color="text.secondary">
-        {t('metrics.unit.dimensionless')}
-      </Typography>
+      <span className="ui-secondary">{t('metrics.unit.dimensionless')}</span>
     ) : (
-      <Box component="code" sx={{ fontFamily: 'monospace' }}>
-        {symbol}
-      </Box>
+      <code className="ui-code">{symbol}</code>
     )
 
   if (unit) {
     return (
       <Tooltip
-        describeChild
         title={t('metrics.unit.known', {
           name: unit.name,
           quantity: unit.quantity,
@@ -43,18 +35,15 @@ export function UnitLabel({ symbol, catalogue }: Props) {
     )
   }
   return (
-    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
+    <span className="ui-inline-row" style={{ gap: 'var(--space-2)' }}>
       {text}
       {catalogue && (
         <Tooltip title={t('metrics.unit.customHint')}>
-          <Chip
-            size="small"
-            variant="outlined"
-            color="warning"
-            label={t('metrics.unit.custom')}
-          />
+          <Chip tone="warning" outlined>
+            {t('metrics.unit.custom')}
+          </Chip>
         </Tooltip>
       )}
-    </Box>
+    </span>
   )
 }

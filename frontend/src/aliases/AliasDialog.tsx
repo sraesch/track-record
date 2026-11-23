@@ -1,14 +1,8 @@
-import Alert from '@mui/material/Alert'
-import Autocomplete from '@mui/material/Autocomplete'
-import Box from '@mui/material/Box'
-import MenuItem from '@mui/material/MenuItem'
-import Stack from '@mui/material/Stack'
-import TextField from '@mui/material/TextField'
-import ToggleButton from '@mui/material/ToggleButton'
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
+import { SegmentedControl } from '@graphite/react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfirmDialog } from '../pages/ConfirmDialog'
+import { Alert, Select, SuggestField } from '../ui'
 import {
   type AliasRow,
   type AliasValue,
@@ -26,6 +20,7 @@ import {
 } from './aliasModel'
 import { type KnownValues, useSetAlias } from './queries'
 import { useValueLabel } from './useValueLabel'
+import './aliases.css'
 
 /** What the dialog does: add a new alias, or change one that exists. */
 export type AliasDialogMode =
@@ -192,16 +187,18 @@ export function AliasDialog({ open, mode, rows, known, onClose }: Props) {
         )
       }}
     >
-      <Stack spacing={2.5} sx={{ pt: 1 }}>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <ToggleButtonGroup
-            exclusive
-            size="small"
-            disabled={editing !== undefined}
+      <div className="tr-aliases-kind">
+        {/* The fieldset disables the buttons: the dimension stays when editing. */}
+        <fieldset disabled={editing !== undefined}>
+          <SegmentedControl<'device' | 'parameter'>
             aria-label={t('aliases.dialog.kind')}
+            items={[
+              { value: 'device', label: t('aliases.dimension.device') },
+              { value: 'parameter', label: t('aliases.dimension.parameter') },
+            ]}
             value={kind}
-            onChange={(_, value: 'device' | 'parameter' | null) => {
-              if (!value) return
+            onChange={(value) => {
+              if (value === kind) return
               switchedKind.current = true
               setKind(value)
               // Device names are text.
@@ -211,68 +208,55 @@ export function AliasDialog({ open, mode, rows, known, onClose }: Props) {
                 setTargetTypeChosen(false)
               }
             }}
-          >
-            <ToggleButton value="device">
-              {t('aliases.dimension.device')}
-            </ToggleButton>
-            <ToggleButton value="parameter">
-              {t('aliases.dimension.parameter')}
-            </ToggleButton>
-          </ToggleButtonGroup>
-          {isParameter && (
-            <Autocomplete
-              freeSolo
-              size="small"
-              sx={{ flex: '1 1 200px' }}
-              disabled={editing !== undefined}
-              options={known?.parameterNames ?? []}
-              inputValue={parameterName}
-              onInputChange={(_, value) => setParameterName(value)}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  required
-                  inputRef={parameterNameRef}
-                  label={t('aliases.dialog.parameterName')}
-                />
-              )}
-            />
-          )}
-        </Box>
+          />
+        </fieldset>
+        {isParameter && (
+          <SuggestField
+            className="tr-aliases-name"
+            label={t('aliases.dialog.parameterName')}
+            required
+            mono
+            disabled={editing !== undefined}
+            inputRef={parameterNameRef}
+            options={known?.parameterNames ?? []}
+            value={parameterName}
+            onChange={setParameterName}
+          />
+        )}
+      </div>
 
-        <ValueField
-          label={t('aliases.dialog.source')}
-          helperText={t('aliases.dialog.sourceHelper')}
-          field={source}
-          typed={isParameter}
-          disabled={editing !== undefined}
-          options={knownValues}
-          onChange={(next) => {
-            setSource(next)
-            if (!targetTypeChosen) setTarget((s) => ({ ...s, type: next.type }))
-          }}
-        />
-        <ValueField
-          label={t('aliases.dialog.target')}
-          helperText={
-            same ? t('aliases.dialog.same') : t('aliases.dialog.targetHelper')
-          }
-          error={same}
-          field={target}
-          typed={isParameter}
-          options={knownTargets}
-          onChange={(next) => {
-            if (next.type !== target.type) setTargetTypeChosen(true)
-            setTarget(next)
-          }}
-        />
+      <ValueField
+        label={t('aliases.dialog.source')}
+        helperText={t('aliases.dialog.sourceHelper')}
+        field={source}
+        typed={isParameter}
+        disabled={editing !== undefined}
+        options={knownValues}
+        onChange={(next) => {
+          setSource(next)
+          if (!targetTypeChosen) setTarget((s) => ({ ...s, type: next.type }))
+        }}
+      />
+      <ValueField
+        label={t('aliases.dialog.target')}
+        helperText={
+          same ? t('aliases.dialog.same') : t('aliases.dialog.targetHelper')
+        }
+        error={same}
+        field={target}
+        typed={isParameter}
+        options={knownTargets}
+        onChange={(next) => {
+          if (next.type !== target.type) setTargetTypeChosen(true)
+          setTarget(next)
+        }}
+      />
 
-        {notes.map((note) => (
-          <Alert key={note} severity="info">
-            {note}
-          </Alert>
-        ))}
-      </Stack>
+      {notes.map((note) => (
+        <Alert key={note} tone="info">
+          {note}
+        </Alert>
+      ))}
     </ConfirmDialog>
   )
 }
@@ -331,73 +315,41 @@ function ValueField({
     : helperText
 
   return (
-    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
-      <Autocomplete
-        freeSolo
-        size="small"
-        sx={{ flex: 1 }}
+    <div className="tr-aliases-field">
+      <SuggestField<AliasValue>
+        className="ui-grow"
+        label={label}
+        required
         disabled={disabled}
-        options={options as AliasValue[]}
-        getOptionLabel={(option) =>
-          typeof option === 'string' ? option : valueText(option)
+        help={shownHelper}
+        invalid={error || invalid}
+        options={options}
+        getOptionLabel={valueText}
+        getOptionKey={valueKey}
+        renderOption={(option) => valueLabel(option, typed)}
+        // Free text arrives through onChange, a picked value with its type
+        // through onSelect (after onChange). Device names are strings too:
+        // only a picked option brings its type; typed text keeps the
+        // chosen one.
+        value={field.text}
+        onChange={(text) => onChange({ ...field, text })}
+        onSelect={(option) =>
+          onChange({ text: valueText(option), type: typeOf(option) })
         }
-        getOptionKey={(option) =>
-          typeof option === 'string' ? `s:${option}` : valueKey(option)
-        }
-        renderOption={({ key, ...props }, option) => (
-          <li key={key} {...props}>
-            {valueLabel(option, typed)}
-          </li>
-        )}
-        // Free text arrives through onInputChange, a picked value with its
-        // type through onChange.
-        value={null}
-        inputValue={field.text}
-        onInputChange={(_, text, reason) => {
-          if (reason === 'input' || reason === 'clear')
-            onChange({ ...field, text })
-        }}
-        onChange={(_, option, reason) => {
-          // Device names are strings too: only a picked option brings its
-          // type; text confirmed with Enter keeps the chosen one.
-          if (reason === 'selectOption' && option !== null)
-            onChange({ text: valueText(option), type: typeOf(option) })
-        }}
-        filterOptions={(all, state) => {
-          const text = state.inputValue.trim().toLowerCase()
-          return text
-            ? all.filter((o) => valueText(o).toLowerCase().includes(text))
-            : all
-        }}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            required
-            label={label}
-            error={error || invalid}
-            helperText={shownHelper}
-          />
-        )}
       />
       {typed && (
-        <TextField
-          select
-          size="small"
-          sx={{ width: 130 }}
+        <Select<ValueType>
+          className="tr-aliases-type"
           disabled={disabled}
           label={t('aliases.dialog.type')}
+          options={valueTypes.map((type) => ({
+            value: type,
+            label: t(`aliases.type.${type}`),
+          }))}
           value={field.type}
-          onChange={(event) =>
-            onChange({ ...field, type: event.target.value as ValueType })
-          }
-        >
-          {valueTypes.map((type) => (
-            <MenuItem key={type} value={type}>
-              {t(`aliases.type.${type}`)}
-            </MenuItem>
-          ))}
-        </TextField>
+          onChange={(type) => onChange({ ...field, type })}
+        />
       )}
-    </Box>
+    </div>
   )
 }

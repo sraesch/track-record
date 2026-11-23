@@ -1,7 +1,7 @@
-import Button from '@mui/material/Button'
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation } from 'react-router'
+import { useLocation } from 'react-router'
 import { homePath } from '../navigation'
+import { LinkButton } from '../ui'
 import { PageHeader } from './PageHeader'
 
 export function NotFoundPage() {
@@ -13,9 +13,9 @@ export function NotFoundPage() {
         title={t('pages.notFound.title')}
         description={t('pages.notFound.description', { path: pathname })}
       />
-      <Button component={Link} to={homePath} variant="contained">
+      <LinkButton to={homePath} variant="primary">
         {t('pages.notFound.home')}
-      </Button>
+      </LinkButton>
     </>
   )
 }

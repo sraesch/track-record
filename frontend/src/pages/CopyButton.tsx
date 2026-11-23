@@ -1,9 +1,7 @@
-import CheckIcon from '@mui/icons-material/Check'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import IconButton from '@mui/material/IconButton'
-import Tooltip from '@mui/material/Tooltip'
+import { Check, Copy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { IconButton } from '../ui'
 
 type Props = {
   text: string
@@ -26,22 +24,15 @@ export function CopyButton({ text, label }: Props) {
   if (!navigator.clipboard) return null
 
   return (
-    <Tooltip title={copied ? t('common.copied') : label}>
-      <IconButton
-        size="small"
-        aria-label={label}
-        onClick={async () => {
-          await navigator.clipboard.writeText(text)
-          setCopied(true)
-        }}
-        sx={{ my: -0.5 }}
-      >
-        {copied ? (
-          <CheckIcon fontSize="inherit" color="success" />
-        ) : (
-          <ContentCopyIcon fontSize="inherit" />
-        )}
-      </IconButton>
-    </Tooltip>
+    <IconButton
+      size="sm"
+      icon={copied ? Check : Copy}
+      label={label}
+      tooltip={copied ? t('common.copied') : label}
+      onClick={async () => {
+        await navigator.clipboard.writeText(text)
+        setCopied(true)
+      }}
+    />
   )
 }

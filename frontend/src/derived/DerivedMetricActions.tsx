@@ -1,15 +1,11 @@
-import DeleteIcon from '@mui/icons-material/DeleteOutlined'
-import RenameIcon from '@mui/icons-material/DriveFileRenameOutline'
-import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import TextField from '@mui/material/TextField'
-import Typography from '@mui/material/Typography'
+import { TextField } from '@graphite/react'
+import { PencilLine, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { DerivedMetric } from '../api/client'
 import { derivedReference, isValidDerivedName } from '../dsl/syntax'
 import { ConfirmDialog } from '../pages/ConfirmDialog'
+import { Alert, Button } from '../ui'
 import type { SavedState } from './DerivedMetricDetail'
 import {
   type DerivedView,
@@ -17,6 +13,7 @@ import {
   type SetDerivedView,
 } from './derivedModel'
 import { useDeleteDerivedMetric, useRenameDerivedMetric } from './queries'
+import './derived.css'
 
 type Props = {
   metric: DerivedMetric
@@ -35,11 +32,7 @@ export function DerivedMetricActions(props: Props) {
   )
 }
 
-const code = (text: string) => (
-  <Box component="code" sx={{ fontFamily: 'monospace' }}>
-    {text}
-  </Box>
-)
+const code = (text: string) => <code className="ui-code">{text}</code>
 
 function RenameAction({ metric, metrics, view, setView }: Props) {
   const { t } = useTranslation()
@@ -66,9 +59,8 @@ function RenameAction({ metric, metrics, view, setView }: Props) {
   return (
     <>
       <Button
-        size="small"
-        variant="outlined"
-        startIcon={<RenameIcon />}
+        size="sm"
+        icon={PencilLine}
         onClick={() => {
           setNewName(metric.name)
           setOpen(true)
@@ -108,27 +100,24 @@ function RenameAction({ metric, metrics, view, setView }: Props) {
           )
         }
       >
-        <Box sx={{ display: 'grid', gap: 2, pt: 1 }}>
-          <TextField
-            label={t('derived.rename.newName')}
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            error={error !== undefined}
-            helperText={error ?? t('derived.rename.help')}
-            slotProps={{
-              htmlInput: { spellCheck: false, sx: { fontFamily: 'monospace' } },
-            }}
-          />
-          {users.length > 0 && (
-            <Typography variant="body2">
-              {t('derived.rename.users', { count: users.length })}{' '}
-              {code(users.join(', '))}
-            </Typography>
-          )}
-          <Alert severity="warning">
-            {t('derived.rename.views')} {code(derivedReference(metric.name))}
-          </Alert>
-        </Box>
+        <TextField
+          label={t('derived.rename.newName')}
+          value={newName}
+          onChange={(event) => setNewName(event.target.value)}
+          error={error}
+          help={t('derived.rename.help')}
+          spellCheck={false}
+          className="ui-mono-input"
+        />
+        {users.length > 0 && (
+          <p className="ui-text">
+            {t('derived.rename.users', { count: users.length })}{' '}
+            {code(users.join(', '))}
+          </p>
+        )}
+        <Alert tone="warning">
+          {t('derived.rename.views')} {code(derivedReference(metric.name))}
+        </Alert>
       </ConfirmDialog>
     </>
   )
@@ -146,10 +135,9 @@ function DeleteAction({ metric, metrics, view, setView }: Props) {
   return (
     <>
       <Button
-        size="small"
-        variant="outlined"
-        color="error"
-        startIcon={<DeleteIcon />}
+        size="sm"
+        icon={Trash2}
+        className="tr-derived-delete"
         onClick={() => setOpen(true)}
       >
         {t('derived.delete.action')}
@@ -182,12 +170,12 @@ function DeleteAction({ metric, metrics, view, setView }: Props) {
         }
       >
         {users.length > 0 ? (
-          <Alert severity="info">
+          <Alert tone="info">
             {t('derived.delete.inUse', { count: users.length })}{' '}
             {code(users.join(', '))}
           </Alert>
         ) : (
-          <Typography variant="body2">{t('derived.delete.text')}</Typography>
+          <p className="ui-text">{t('derived.delete.text')}</p>
         )}
       </ConfirmDialog>
     </>

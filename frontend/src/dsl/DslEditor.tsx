@@ -23,7 +23,6 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from '@codemirror/view'
-import Box from '@mui/material/Box'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import {
   complete,
@@ -58,70 +57,80 @@ export type DslEditorProps = {
   functionInfo: (name: DslFunctionName) => string
 }
 
-const monospace =
-  'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace'
-
-const color = (name: string) => `var(--mui-palette-${name})`
-
-// Colors of the MUI theme as CSS variables (src/theme.ts), so the editor
-// follows the color scheme without being rebuilt.
+// Graphite's tokens as CSS variables (graphite/styles/tokens.css), so the
+// editor follows the color scheme without being rebuilt. It looks like a
+// Graphite input (g-input): same background, border, radius and focus ring.
 const theme = EditorView.theme({
   '&': {
-    fontSize: '0.875rem',
-    color: color('text-primary'),
-    backgroundColor: 'transparent',
-    border: `1px solid rgba(${color('common-onBackgroundChannel')} / 0.23)`,
-    borderRadius: '8px',
+    fontSize: '13px',
+    color: 'var(--text-primary)',
+    backgroundColor: 'var(--bg-100)',
+    border: '1px solid var(--border-control)',
+    borderRadius: 'var(--radius-sm)',
   },
-  '&:hover': { borderColor: color('text-primary') },
+  '&:hover': { borderColor: 'var(--text-muted)' },
   '&.cm-focused': {
-    outline: 'none',
-    borderColor: color('primary-main'),
-    boxShadow: `inset 0 0 0 1px ${color('primary-main')}`,
+    outline: '2px solid var(--focus-ring)',
+    outlineOffset: '1px',
+    borderColor: 'var(--accent)',
   },
   '&.dsl-invalid, &.dsl-invalid.cm-focused': {
-    borderColor: color('error-main'),
+    borderColor: 'var(--danger)',
   },
-  '.cm-scroller': { fontFamily: monospace, lineHeight: 1.6 },
+  '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '20px' },
   '.cm-content': {
-    padding: '10px 0',
-    minHeight: '4.8em',
-    caretColor: color('text-primary'),
+    padding: '4px 0',
+    // Three lines.
+    minHeight: '68px',
+    caretColor: 'var(--text-primary)',
   },
-  '.cm-line': { padding: '0 14px' },
-  '.cm-cursor, .cm-dropCursor': { borderLeftColor: color('text-primary') },
+  '.cm-line': { padding: '0 var(--space-2)' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--text-primary)' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground':
-    { backgroundColor: `rgba(${color('primary-mainChannel')} / 0.24)` },
+    { backgroundColor: 'color-mix(in srgb, var(--accent) 28%, transparent)' },
   '.cm-tooltip': {
-    backgroundColor: color('background-paper'),
-    color: color('text-primary'),
-    border: `1px solid ${color('divider')}`,
-    borderRadius: '4px',
+    backgroundColor: 'var(--bg-300)',
+    color: 'var(--text-primary)',
+    border: 'none',
+    borderRadius: 'var(--radius-md)',
+    boxShadow: 'var(--shadow-popover)',
+    fontFamily: 'var(--font-sans)',
+    fontSize: '13px',
   },
-  '.cm-tooltip.cm-tooltip-autocomplete > ul': { fontFamily: monospace },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul': {
+    fontFamily: 'var(--font-mono)',
+    padding: 'var(--space-1)',
+  },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul > li': {
+    padding: '2px var(--space-2)',
+    borderRadius: 'var(--radius-sm)',
+    lineHeight: '20px',
+  },
   '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': {
-    backgroundColor: `rgba(${color('primary-mainChannel')} / 0.16)`,
-    color: color('text-primary'),
+    backgroundColor: 'var(--bg-400)',
+    color: 'var(--text-primary)',
   },
   '.cm-completionDetail': {
-    color: color('text-secondary'),
+    color: 'var(--text-secondary)',
     fontStyle: 'normal',
     marginLeft: '1em',
   },
   '.cm-completionInfo': {
     fontFamily: 'inherit',
+    fontSize: '12px',
+    lineHeight: '16px',
     maxWidth: '320px',
-    padding: '4px 8px',
+    padding: 'var(--space-1) var(--space-2)',
   },
-  '.dsl-number': { color: color('info-main') },
-  '.dsl-unit': { color: color('success-main') },
-  '.dsl-keyword': { color: color('primary-main'), fontWeight: 600 },
-  '.dsl-function': { color: color('secondary-main') },
-  '.dsl-argument': { color: color('text-secondary'), fontStyle: 'italic' },
-  '.dsl-operator': { color: color('text-secondary') },
-  '.dsl-invalid': { color: color('error-main') },
+  '.dsl-number': { color: 'var(--info)' },
+  '.dsl-unit': { color: 'var(--success)' },
+  '.dsl-keyword': { color: 'var(--accent-text)', fontWeight: 600 },
+  '.dsl-function': { color: 'var(--chart-7)' },
+  '.dsl-argument': { color: 'var(--text-secondary)', fontStyle: 'italic' },
+  '.dsl-operator': { color: 'var(--text-secondary)' },
+  '.dsl-invalid': { color: 'var(--danger)' },
   '.dsl-problem': {
-    textDecoration: `underline wavy ${color('error-main')}`,
+    textDecoration: 'underline wavy var(--danger)',
     textUnderlineOffset: '3px',
     textDecorationSkipInk: 'none',
   },
@@ -251,18 +260,16 @@ export function DslEditor(props: DslEditorProps) {
       if (!result) return null
       return {
         from: result.from,
-        options: result.options.map(
-          (option): Completion => ({
-            label: option.label,
-            apply: option.apply,
-            type: completionTypes[option.kind],
-            detail: kindLabel(option.kind),
-            info:
-              option.kind === 'function' && isFunction(option.label)
-                ? `${dslFunctions.find((f) => f.name === option.label)?.signature ?? ''}\n${functionInfo(option.label)}`
-                : undefined,
-          }),
-        ),
+        options: result.options.map((option): Completion => ({
+          label: option.label,
+          apply: option.apply,
+          type: completionTypes[option.kind],
+          detail: kindLabel(option.kind),
+          info:
+            option.kind === 'function' && isFunction(option.label)
+              ? `${dslFunctions.find((f) => f.name === option.label)?.signature ?? ''}\n${functionInfo(option.label)}`
+              : undefined,
+        })),
         validFor: /^[\w ]*$/,
       }
     }
@@ -326,5 +333,5 @@ export function DslEditor(props: DslEditorProps) {
     })
   }, [labelledBy, describedBy, invalid])
 
-  return <Box ref={host} sx={{ minWidth: 0 }} />
+  return <div ref={host} style={{ minWidth: 0 }} />
 }
