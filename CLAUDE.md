@@ -216,7 +216,15 @@ rendering (react-markdown) for attachment previews in ADR 0013; charting
 library (Apache ECharts) in ADR 0015; expression editor (CodeMirror 6) in
 ADR 0016.
 
-Still open: cache strategy, Helm chart, release notes.
+Releases ([ADR 0020](docs/adr/0020-release-process.md)): `develop` is merged
+`--no-ff` into `main` and tagged `vX.Y.Z`; the version is set in the backend
+crates, the frontend package and the OpenAPI documents, and both changelogs
+are finalized in a `Prepare X.Y.Z release` commit. The steps are the
+`release` skill (`.claude/skills/release/SKILL.md`); keep it in step with
+the version files and workflows. `frontend/APP_CHANGELOG.md` keeps a
+`## Unreleased` section until then, so tests must not depend on its headings.
+
+Still open: cache strategy, Helm chart.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
 only in code.
 

@@ -169,6 +169,10 @@ Nothing has been released yet. This is everything on `develop` so far.
   without buffering, so streamed results pass through (NFR-7) (#9).
 - `deploy/local/` runs the whole stack on Docker Desktop Kubernetes for
   trying the UI (#9). This is not the Helm chart.
+- A release process: `develop` is merged into `main` and tagged `vX.Y.Z`,
+  and a GitHub Release carries the matching section of this file
+  ([ADR 0020](docs/adr/0020-release-process.md)). The steps are the Claude
+  Code skill `release` in `.claude/skills/release/`.
 
 ### Changed
 

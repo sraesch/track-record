@@ -58,7 +58,9 @@ GitHub.
 - If a delete fails halfway, an index may be gone while some of its children
   remain as untagged versions. They are harmless and can be deleted by hand.
 - A release is a git tag `v*` pushed to the commit to release. Release notes
-  and a changelog are not decided yet.
+  and a changelog are not decided yet. (Since
+  [ADR 0020](0020-release-process.md): the tag goes on a release merge into
+  `main`, and the notes come from `CHANGELOG.md`.)
 - The image built for publishing is not byte-identical to the one the image
   checks tested (different builder, two platforms). Both come from the same
   commit and Dockerfile.
@@ -72,6 +74,7 @@ GitHub.
 
 ## Left for later ADRs
 
-Helm chart and its publishing, release notes. The backend and frontend
+Helm chart and its publishing, release notes (decided in
+[ADR 0020](0020-release-process.md)). The backend and frontend
 images are published the same way since
 [ADR 0014](0014-server-and-frontend-images.md).
