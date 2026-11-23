@@ -53,8 +53,8 @@ export function seriesChartOption({
   const axis = {
     type: 'value' as const,
     scale: true,
-    axisLine: { lineStyle: { color: colors.divider } },
-    axisTick: { lineStyle: { color: colors.divider } },
+    axisLine: { lineStyle: { color: colors.axis } },
+    axisTick: { lineStyle: { color: colors.axis } },
     splitLine: { lineStyle: { color: colors.divider } },
     axisLabel: { color: colors.secondaryText, formatter: formatTick },
     nameTextStyle: { color: colors.secondaryText },

@@ -1,10 +1,5 @@
-import Alert from '@mui/material/Alert'
-import Autocomplete from '@mui/material/Autocomplete'
-import Box from '@mui/material/Box'
-import MenuItem from '@mui/material/MenuItem'
-import TextField from '@mui/material/TextField'
-import Typography from '@mui/material/Typography'
-import { useState } from 'react'
+import { TextField } from '@graphite/react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   Metric,
@@ -14,6 +9,7 @@ import type {
 } from '../api/client'
 import { quoteName } from '../dsl/syntax'
 import { ConfirmDialog } from '../pages/ConfirmDialog'
+import { Alert, Select, SuggestField, TextArea } from '../ui'
 import { deleteBlocker, isValidMetricName } from './metricModel'
 import { useDeleteMetric, useRenameMetric, useSaveMetric } from './queries'
 
@@ -51,11 +47,7 @@ export function MetricDialog(props: Props) {
 const valueTypes: MetricValueType[] = ['float', 'integer', 'boolean']
 const directions: MetricDirection[] = ['higher_is_better', 'lower_is_better']
 
-const code = (text: string) => (
-  <Box component="code" sx={{ fontFamily: 'monospace' }}>
-    {text}
-  </Box>
-)
+const code = (text: string) => <code className="ui-code">{text}</code>
 
 function EditDialog({ metric, units, open, onClose, onExited }: Props) {
   const { t } = useTranslation()
@@ -65,6 +57,7 @@ function EditDialog({ metric, units, open, onClose, onExited }: Props) {
   const [description, setDescription] = useState(metric.description)
   const save = useSaveMetric()
 
+  const unitSymbols = useMemo(() => units.map((u) => u.symbol), [units])
   const newUnit = unit.trim()
   const unitChanged = newUnit !== metric.unit
   const reinterprets =
@@ -94,66 +87,48 @@ function EditDialog({ metric, units, open, onClose, onExited }: Props) {
         )
       }
     >
-      <Box sx={{ display: 'grid', gap: 2, pt: 1 }}>
-        <Typography variant="body2">{t('metrics.edit.text')}</Typography>
-        <Autocomplete
-          freeSolo
-          options={units.map((u) => u.symbol)}
-          inputValue={unit}
-          onInputChange={(_, value) => setUnit(value)}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label={t('metrics.columns.unit')}
-              helperText={t('metrics.edit.unitHelp')}
-            />
-          )}
-        />
-        <TextField
-          select
-          label={t('metrics.columns.valueType')}
-          value={valueType}
-          onChange={(event) =>
-            setValueType(event.target.value as MetricValueType)
-          }
-        >
-          {valueTypes.map((type) => (
-            <MenuItem key={type} value={type}>
-              {t(`metrics.valueType.${type}`)}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label={t('metrics.columns.direction')}
-          value={direction}
-          onChange={(event) =>
-            setDirection(event.target.value as MetricDirection)
-          }
-        >
-          {directions.map((d) => (
-            <MenuItem key={d} value={d}>
-              {t(`metrics.direction.${d}`)}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          label={t('metrics.columns.description')}
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          multiline
-          minRows={2}
-        />
-        {reinterprets && (
-          <Alert severity="warning">{t('metrics.edit.reinterprets')}</Alert>
-        )}
-        {unitChanged && metric.used_by.length > 0 && (
-          <Alert severity="info">
-            {t('metrics.edit.users', { count: metric.used_by.length })}{' '}
-            {code(metric.used_by.join(', '))}
-          </Alert>
-        )}
-      </Box>
+      <p className="ui-text">{t('metrics.edit.text')}</p>
+      <SuggestField
+        label={t('metrics.columns.unit')}
+        help={t('metrics.edit.unitHelp')}
+        mono
+        options={unitSymbols}
+        value={unit}
+        onChange={setUnit}
+      />
+      <Select
+        label={t('metrics.columns.valueType')}
+        options={valueTypes.map((type) => ({
+          value: type,
+          label: t(`metrics.valueType.${type}`),
+        }))}
+        value={valueType}
+        onChange={setValueType}
+      />
+      <Select
+        label={t('metrics.columns.direction')}
+        options={directions.map((d) => ({
+          value: d,
+          label: t(`metrics.direction.${d}`),
+        }))}
+        value={direction}
+        onChange={setDirection}
+      />
+      <TextArea
+        label={t('metrics.columns.description')}
+        value={description}
+        onChange={(event) => setDescription(event.target.value)}
+        rows={2}
+      />
+      {reinterprets && (
+        <Alert tone="warning">{t('metrics.edit.reinterprets')}</Alert>
+      )}
+      {unitChanged && metric.used_by.length > 0 && (
+        <Alert tone="info">
+          {t('metrics.edit.users', { count: metric.used_by.length })}{' '}
+          {code(metric.used_by.join(', '))}
+        </Alert>
+      )}
     </ConfirmDialog>
   )
 }
@@ -188,30 +163,28 @@ function RenameDialog({ metric, metrics, open, onClose, onExited }: Props) {
         rename.mutate({ name: metric.name, newName }, { onSuccess: onClose })
       }
     >
-      <Box sx={{ display: 'grid', gap: 2, pt: 1 }}>
-        <TextField
-          label={t('metrics.rename.newName')}
-          value={newName}
-          onChange={(event) => setNewName(event.target.value)}
-          error={error !== undefined}
-          helperText={error ?? t('metrics.rename.help')}
-          slotProps={{
-            htmlInput: { spellCheck: false, sx: { fontFamily: 'monospace' } },
-          }}
-        />
-        {metric.used_by.length > 0 && (
-          <Typography variant="body2">
-            {t('metrics.rename.users', { count: metric.used_by.length })}{' '}
-            {code(metric.used_by.join(', '))}
-          </Typography>
-        )}
-        <Alert severity="warning">
-          {t('metrics.rename.harness')} {code(metric.name)}
-        </Alert>
-        <Alert severity="warning">
-          {t('metrics.rename.views')} {code(quoteName(metric.name))}
-        </Alert>
-      </Box>
+      <TextField
+        label={t('metrics.rename.newName')}
+        className="ui-mono-input"
+        value={newName}
+        onChange={(event) => setNewName(event.target.value)}
+        error={error}
+        help={error === undefined ? t('metrics.rename.help') : undefined}
+        spellCheck={false}
+        autoComplete="off"
+      />
+      {metric.used_by.length > 0 && (
+        <p className="ui-text">
+          {t('metrics.rename.users', { count: metric.used_by.length })}{' '}
+          {code(metric.used_by.join(', '))}
+        </p>
+      )}
+      <Alert tone="warning">
+        {t('metrics.rename.harness')} {code(metric.name)}
+      </Alert>
+      <Alert tone="warning">
+        {t('metrics.rename.views')} {code(quoteName(metric.name))}
+      </Alert>
     </ConfirmDialog>
   )
 }
@@ -235,14 +208,14 @@ function DeleteDialog({ metric, open, onClose, onExited }: Props) {
       onConfirm={() => remove.mutate(metric.name, { onSuccess: onClose })}
     >
       {blocker === 'results' ? (
-        <Alert severity="info">{t('metrics.delete.hasResults')}</Alert>
+        <Alert tone="info">{t('metrics.delete.hasResults')}</Alert>
       ) : blocker === 'derived' ? (
-        <Alert severity="info">
+        <Alert tone="info">
           {t('metrics.delete.inUse', { count: metric.used_by.length })}{' '}
           {code(metric.used_by.join(', '))}
         </Alert>
       ) : (
-        <Typography variant="body2">{t('metrics.delete.text')}</Typography>
+        <p className="ui-text">{t('metrics.delete.text')}</p>
       )}
     </ConfirmDialog>
   )

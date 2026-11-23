@@ -1,14 +1,11 @@
-import BlockIcon from '@mui/icons-material/Block'
-import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import TextField from '@mui/material/TextField'
-import Typography from '@mui/material/Typography'
+import { TextField } from '@graphite/react'
+import { Ban, Trash } from 'lucide-react'
 import { useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import type { RunDetail } from '../../api/client'
 import { ConfirmDialog } from '../../pages/ConfirmDialog'
+import { Button, Stack, TextArea } from '../../ui'
 import { useDeleteRun, useInvalidateRun } from './mutations'
 
 /**
@@ -21,24 +18,20 @@ export function RunActions({ run }: { run: RunDetail }) {
   const [dialog, setDialog] = useState<'invalidate' | 'delete' | null>(null)
   const close = () => setDialog(null)
   return (
-    <Box
-      sx={{ display: 'flex', gap: 1, '& .MuiButton-root': { whiteSpace: 'nowrap' } }}
-    >
+    <Stack row gap={2}>
       {run.is_valid && (
         <Button
-          variant="outlined"
-          size="small"
-          startIcon={<BlockIcon />}
+          className="ui-nowrap"
+          icon={Ban}
           onClick={() => setDialog('invalidate')}
         >
           {t('runDetail.invalidate.action')}
         </Button>
       )}
       <Button
-        variant="outlined"
-        size="small"
-        color="error"
-        startIcon={<DeleteForeverIcon />}
+        className="ui-nowrap"
+        variant="danger"
+        icon={Trash}
         onClick={() => setDialog('delete')}
       >
         {t('runDetail.delete.action')}
@@ -49,7 +42,7 @@ export function RunActions({ run }: { run: RunDetail }) {
         onClose={close}
       />
       <DeleteDialog runId={run.id} open={dialog === 'delete'} onClose={close} />
-    </Box>
+    </Stack>
   )
 }
 
@@ -71,20 +64,16 @@ function InvalidateDialog({ runId, open, onClose }: DialogProps) {
       canConfirm={reason.trim() !== ''}
       pending={invalidate.isPending}
       error={invalidate.error}
-      onConfirm={() =>
-        invalidate.mutate(reason.trim(), { onSuccess: onClose })
-      }
+      onConfirm={() => invalidate.mutate(reason.trim(), { onSuccess: onClose })}
       onClose={onClose}
       onExited={() => {
         setReason('')
         invalidate.reset()
       }}
     >
-      <Typography sx={{ mb: 2 }}>{t('runDetail.invalidate.text')}</Typography>
-      <TextField
-        fullWidth
-        multiline
-        minRows={2}
+      <p className="ui-text">{t('runDetail.invalidate.text')}</p>
+      <TextArea
+        rows={2}
         label={t('runDetail.invalidate.reason')}
         value={reason}
         onChange={(event) => setReason(event.target.value)}
@@ -125,37 +114,23 @@ function DeleteDialog({ runId, open, onClose }: DialogProps) {
         remove.reset()
       }}
     >
-      <Typography sx={{ mb: 2 }}>{t('runDetail.delete.text')}</Typography>
-      <Typography sx={{ mb: 2 }}>
+      <p className="ui-text">{t('runDetail.delete.text')}</p>
+      <p className="ui-text">
         <Trans
           i18nKey="runDetail.delete.prompt"
           values={{ runId }}
           components={{
-            code: (
-              <Box
-                component="code"
-                sx={{
-                  fontFamily: 'monospace',
-                  fontWeight: 600,
-                  overflowWrap: 'anywhere',
-                }}
-              />
-            ),
+            code: <code className="ui-code" style={{ fontWeight: 600 }} />,
           }}
         />
-      </Typography>
+      </p>
       <TextField
-        fullWidth
+        className="ui-mono-input"
         label={t('runDetail.delete.label')}
         value={confirmation}
         onChange={(event) => setConfirmation(event.target.value)}
-        slotProps={{
-          htmlInput: {
-            autoComplete: 'off',
-            spellCheck: false,
-            sx: { fontFamily: 'monospace' },
-          },
-        }}
+        autoComplete="off"
+        spellCheck={false}
       />
     </ConfirmDialog>
   )

@@ -1,12 +1,5 @@
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlineOutlined'
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined'
-import Alert from '@mui/material/Alert'
-import Autocomplete from '@mui/material/Autocomplete'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import CircularProgress from '@mui/material/CircularProgress'
-import TextField from '@mui/material/TextField'
-import Typography from '@mui/material/Typography'
+import { TextField } from '@graphite/react'
+import { CircleAlert, CircleCheck, LoaderCircle } from 'lucide-react'
 import { useId, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -26,6 +19,7 @@ import { ConfirmDialog } from '../pages/ConfirmDialog'
 import { Facts } from '../pages/Facts'
 import { Section } from '../pages/Section'
 import { useDebouncedValue } from '../pages/useDebouncedValue'
+import { Alert, Button, SuggestField, TextArea } from '../ui'
 import type { SavedState } from './DerivedMetricDetail'
 import {
   type DerivedView,
@@ -35,6 +29,7 @@ import {
 import { EvaluationPreview } from './EvaluationPreview'
 import { FunctionReference } from './FunctionReference'
 import { useSaveDerivedMetric, useValidation } from './queries'
+import './derived.css'
 
 /** Pause in typing after which the expression is checked. */
 export const validationDelay = 400
@@ -73,13 +68,14 @@ export function DerivedMetricEditor({ metric, metrics, view, setView }: Props) {
   const metricName = metric?.name ?? name.trim()
   // "New" never replaces a derived metric: that is what "Edit" is for.
   const exists = isNew && metrics.some((m) => m.name === name.trim())
-  const nameError = !isNew || name === ''
-    ? undefined
-    : !isValidDerivedName(name)
-      ? t('derived.editor.nameInvalid')
-      : exists
-        ? t('derived.editor.nameExists')
-        : undefined
+  const nameError =
+    !isNew || name === ''
+      ? undefined
+      : !isValidDerivedName(name)
+        ? t('derived.editor.nameInvalid')
+        : exists
+          ? t('derived.editor.nameExists')
+          : undefined
   const users = useMemo(
     () => (metric ? derivedUsersDeep(metrics, metric.name) : []),
     [metrics, metric],
@@ -98,7 +94,10 @@ export function DerivedMetricEditor({ metric, metrics, view, setView }: Props) {
     ? {
         expression: checked.expression,
         unit: checked.unit || null,
-        name: checked.name && isValidDerivedName(checked.name) ? checked.name : null,
+        name:
+          checked.name && isValidDerivedName(checked.name)
+            ? checked.name
+            : null,
       }
     : undefined
   const validation = useValidation(request)
@@ -191,17 +190,16 @@ export function DerivedMetricEditor({ metric, metrics, view, setView }: Props) {
           : t('derived.editor.titleChange', { name: metric.name })
       }
     >
-      <Box
-        component="form"
+      <form
         noValidate
+        className="tr-derived-form"
         onSubmit={(event) => {
           event.preventDefault()
           submit()
         }}
-        sx={{ display: 'grid', gap: 2 }}
       >
         {!isNew && (
-          <Alert severity="info">
+          <Alert tone="info">
             {t('derived.editor.changeNote')}
             {users.length > 0 && (
               <>
@@ -220,11 +218,10 @@ export function DerivedMetricEditor({ metric, metrics, view, setView }: Props) {
             value={name}
             onChange={(event) => setName(event.target.value)}
             required
-            error={nameError !== undefined}
-            helperText={nameError ?? t('derived.editor.nameHelp')}
-            slotProps={{
-              htmlInput: { spellCheck: false, sx: { fontFamily: 'monospace' } },
-            }}
+            error={nameError}
+            help={t('derived.editor.nameHelp')}
+            spellCheck={false}
+            className="ui-mono-input"
           />
         )}
 
@@ -249,43 +246,29 @@ export function DerivedMetricEditor({ metric, metrics, view, setView }: Props) {
           expression={expression}
         />
 
-        <Box
-          sx={{
-            display: 'grid',
-            gap: 2,
-            gridTemplateColumns: { xs: '1fr', sm: 'minmax(160px, 1fr) 2fr' },
-          }}
-        >
-          <Autocomplete
-            freeSolo
+        <div className="tr-derived-fields">
+          <SuggestField
+            label={t('derived.editor.unit')}
+            value={unit}
+            onChange={setUnit}
             options={unitOptions}
-            inputValue={unit}
-            onInputChange={(_, value) => setUnit(value)}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label={t('derived.editor.unit')}
-                placeholder={current?.valid ? current.inferred_unit ?? '' : ''}
-                helperText={
-                  current?.valid
-                    ? t('derived.editor.unitHelp', {
-                        unit:
-                          current.inferred_unit ||
-                          t('metrics.unit.dimensionless'),
-                      })
-                    : t('derived.editor.unitHelpPending')
-                }
-              />
-            )}
+            placeholder={current?.valid ? (current.inferred_unit ?? '') : ''}
+            help={
+              current?.valid
+                ? t('derived.editor.unitHelp', {
+                    unit:
+                      current.inferred_unit || t('metrics.unit.dimensionless'),
+                  })
+                : t('derived.editor.unitHelpPending')
+            }
           />
-          <TextField
+          <TextArea
             label={t('derived.editor.description')}
             value={description}
             onChange={(event) => setDescription(event.target.value)}
-            multiline
-            minRows={1}
+            rows={1}
           />
-        </Box>
+        </div>
 
         <FunctionReference />
 
@@ -297,13 +280,14 @@ export function DerivedMetricEditor({ metric, metrics, view, setView }: Props) {
         />
 
         {save.isError && (
-          <Alert severity="error">
+          <Alert tone="error">
             {t('derived.editor.saveError', { message: save.error.message })}
           </Alert>
         )}
 
-        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+        <div className="tr-derived-buttons">
           <Button
+            variant="ghost"
             onClick={() => (dirty ? setDiscarding(true) : close())}
             disabled={save.isPending}
           >
@@ -311,14 +295,14 @@ export function DerivedMetricEditor({ metric, metrics, view, setView }: Props) {
           </Button>
           <Button
             type="submit"
-            variant="contained"
+            variant="primary"
             disabled={!canSave}
             loading={save.isPending}
           >
             {t('derived.editor.save')}
           </Button>
-        </Box>
-      </Box>
+        </div>
+      </form>
 
       <ConfirmDialog
         open={discarding}
@@ -358,79 +342,53 @@ function CheckStatus({
   const { t } = useTranslation()
   if (empty) return null
   return (
-    <Box component="output" id={id} sx={{ display: 'block', minWidth: 0 }}>
+    <output id={id} className="tr-derived-check">
       {error ? (
-        <Alert severity="error">
+        <Alert tone="error">
           {t('derived.editor.checkError', { message: error.message })}
         </Alert>
       ) : checking || !validation ? (
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
-        >
-          <CircularProgress size={14} aria-hidden />
+        <p className="ui-text ui-secondary ui-inline-row">
+          <LoaderCircle size={14} className="ui-spinner" aria-hidden />
           {t('derived.editor.checking')}
-        </Typography>
+        </p>
       ) : !validation.valid ? (
-        <Box>
-          <Typography
-            variant="body2"
-            color="error"
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}
-          >
-            <ErrorOutlineIcon fontSize="small" aria-hidden />
+        <div>
+          <p className="ui-text tr-derived-error ui-inline-row">
+            <CircleAlert size={14} aria-hidden />
             {t('derived.editor.problems', { count: problems.length })}
-          </Typography>
-          <Box component="ul" sx={{ m: 0, pl: 3 }}>
+          </p>
+          <ul className="tr-derived-problems">
             {problems.map((problem, i) => {
               const at = expression.slice(problem.from, problem.to)
               return (
-                <Typography component="li" variant="body2" key={i}>
+                <li key={i}>
                   {problem.message}
                   {at && (
                     <>
                       {' '}
-                      <Box
-                        component="code"
-                        sx={{
-                          fontFamily: 'monospace',
-                          bgcolor: 'action.hover',
-                          px: 0.5,
-                          borderRadius: 0.5,
-                        }}
-                      >
-                        {at}
-                      </Box>
+                      <code className="tr-derived-at">{at}</code>
                     </>
                   )}
-                </Typography>
+                </li>
               )
             })}
-          </Box>
-        </Box>
+          </ul>
+        </div>
       ) : (
-        <Box>
-          <Typography
-            variant="body2"
-            color="success.main"
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}
-          >
-            <CheckCircleOutlineIcon fontSize="small" aria-hidden />
+        <div className="ui-stack" style={{ gap: 'var(--space-2)' }}>
+          <p className="ui-text tr-derived-ok ui-inline-row">
+            <CircleCheck size={14} aria-hidden />
             {t('derived.editor.valid')}
-          </Typography>
+          </p>
           <ValidationFacts validation={validation} />
-        </Box>
+        </div>
       )}
-    </Box>
+    </output>
   )
 }
 
-const code = (text: string) => (
-  <Box component="code" sx={{ fontFamily: 'monospace' }}>
-    {text}
-  </Box>
-)
+const code = (text: string) => <code className="ui-code">{text}</code>
 
 function ValidationFacts({ validation }: { validation: Validation }) {
   const { t } = useTranslation()

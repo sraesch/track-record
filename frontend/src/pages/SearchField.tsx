@@ -1,5 +1,6 @@
-import TextField from '@mui/material/TextField'
+import { TextField } from '@graphite/react'
 import { useState } from 'react'
+import './pages.css'
 
 type Props = {
   label: string
@@ -22,9 +23,9 @@ export function SearchField({ label, value, onChange }: Props) {
   }
   return (
     <TextField
-      size="small"
       type="search"
-      sx={{ minWidth: 200, flex: '0 1 280px' }}
+      icon="search"
+      className="tr-search"
       label={label}
       value={draft}
       onChange={(event) => {

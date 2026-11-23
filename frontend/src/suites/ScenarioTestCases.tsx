@@ -1,20 +1,7 @@
-import CancelIcon from '@mui/icons-material/Cancel'
-import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Chip from '@mui/material/Chip'
-import LinearProgress from '@mui/material/LinearProgress'
-import Link from '@mui/material/Link'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import Typography from '@mui/material/Typography'
+import { cx } from '@graphite/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 import { Annotations } from '../annotations/Annotations'
 import { useTestCaseAnnotations } from '../annotations/queries'
 import type { TestCaseSummary } from '../api/client'
@@ -22,14 +9,22 @@ import { formatNumber } from '../format'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { Section } from '../pages/Section'
 import { useRowLink } from '../pages/useRowLink'
-import {
-  useAddTestCaseTag,
-  useRemoveTestCaseTag,
-} from '../runs/case/mutations'
+import { useAddTestCaseTag, useRemoveTestCaseTag } from '../runs/case/mutations'
 import { AssetList, Parameters } from '../runs/TestCaseParts'
 import { Tags } from '../tags/Tags'
+import {
+  Alert,
+  Button,
+  Chip,
+  ChipLink,
+  ProgressBar,
+  Stack,
+  Table,
+  TextLink,
+} from '../ui'
 import { suitesHref } from './paths'
 import { casesOfVersion, type SuitesView } from './suiteModel'
+import './suites.css'
 
 /** Rows shown at first and added by "Show more". */
 export const testCasePageSize = 100
@@ -75,7 +70,7 @@ export function ScenarioTestCases({ version, view, query }: Props) {
         flush
         actions={
           query.data && (
-            <Typography variant="body2" color="text.secondary">
+            <span className="ui-secondary">
               {view.tag
                 ? t('suites.testCases.tagged', {
                     count: shown.length,
@@ -83,37 +78,29 @@ export function ScenarioTestCases({ version, view, query }: Props) {
                     tag: view.tag,
                   })
                 : t('suites.testCases.count', { count: all.length })}
-            </Typography>
+            </span>
           )
         }
       >
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ px: 2, pb: 1.5, maxWidth: '80ch' }}
-        >
+        <p className="ui-text ui-secondary tr-suites-intro">
           {t('suites.testCases.description')}
-        </Typography>
+        </p>
         {view.tag && (
-          <Box sx={{ px: 2, pb: 1.5 }}>
+          <div className="tr-suites-pad">
             <Chip
-              size="small"
-              color="primary"
-              variant="outlined"
-              label={t('suites.testCases.tagFilter', { tag: view.tag })}
-              onDelete={() => navigate(suitesHref({ ...view, tag: undefined }))}
-              deleteIcon={
-                <CancelIcon titleAccess={t('suites.testCases.clearTag')} />
-              }
-            />
-          </Box>
+              tone="accent"
+              outlined
+              onRemove={() => navigate(suitesHref({ ...view, tag: undefined }))}
+              removeLabel={t('suites.testCases.clearTag')}
+            >
+              {t('suites.testCases.tagFilter', { tag: view.tag })}
+            </Chip>
+          </div>
         )}
 
-        <Box sx={{ height: 4 }}>
-          {query.isFetching && (
-            <LinearProgress aria-label={t('common.loading')} />
-          )}
-        </Box>
+        <div className="tr-suites-progress">
+          {query.isFetching && <ProgressBar />}
+        </div>
 
         {query.error && (
           <ErrorAlert
@@ -121,17 +108,17 @@ export function ScenarioTestCases({ version, view, query }: Props) {
               message: query.error.message,
             })}
             onRetry={() => query.refetch()}
-            sx={{ mx: 2, my: 1.5 }}
+            style={{ margin: 'var(--space-3) var(--space-4)' }}
           />
         )}
 
         {query.data &&
           (shown.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+            <p className="ui-text ui-secondary tr-suites-note">
               {view.tag && all.length > 0
                 ? t('suites.testCases.noneTagged', { tag: view.tag })
                 : t('suites.testCases.empty')}
-            </Typography>
+            </p>
           ) : (
             <>
               <TestCaseTable
@@ -140,30 +127,25 @@ export function ScenarioTestCases({ version, view, query }: Props) {
                 view={view}
               />
               {shown.length > limit && (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 2,
-                    px: 2,
-                    py: 1.5,
-                  }}
+                <Stack
+                  row
+                  gap={4}
+                  justify="space-between"
+                  className="tr-suites-more"
                 >
-                  <Typography variant="body2" color="text.secondary">
+                  <p className="ui-text ui-secondary">
                     {t('suites.testCases.shown', {
                       count: limit,
                       total: formatNumber(shown.length),
                     })}
-                  </Typography>
+                  </p>
                   <Button
-                    variant="outlined"
-                    size="small"
+                    size="sm"
                     onClick={() => setLimit(limit + testCasePageSize)}
                   >
                     {t('suites.testCases.showMore')}
                   </Button>
-                </Box>
+                </Stack>
               )}
             </>
           ))}
@@ -174,7 +156,7 @@ export function ScenarioTestCases({ version, view, query }: Props) {
       ) : (
         view.testCase !== undefined &&
         query.data && (
-          <Alert severity="warning">
+          <Alert tone="warning">
             {t('suites.testCases.notFound', { version, id: view.testCase })}
           </Alert>
         )
@@ -195,75 +177,68 @@ function TestCaseTable({
   const { t } = useTranslation()
   const rowLink = useRowLink()
   return (
-    <TableContainer>
-      <Table size="small" aria-label={t('suites.versions.testCases')}>
-        <TableHead>
-          <TableRow>
-            <TableCell>{t('suites.testCases.columns.testCase')}</TableCell>
-            <TableCell>{t('suites.testCases.columns.parameters')}</TableCell>
-            <TableCell>{t('suites.testCases.columns.assets')}</TableCell>
-            <TableCell>{t('suites.testCases.columns.tags')}</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {testCases.map((tc) => {
-            const current = tc.id === selected?.id
-            const href = suitesHref({
-              ...view,
-              version: tc.scenario_version,
-              testCase: tc.id,
-            })
-            return (
-              <TableRow
-                key={tc.id}
-                hover
-                selected={current}
-                onClick={rowLink(href)}
-                sx={{ cursor: 'pointer' }}
-              >
-                <TableCell>
-                  <Link
-                    component={RouterLink}
-                    to={href}
-                    underline="hover"
-                    aria-label={t('suites.testCases.name', { id: tc.id })}
-                    aria-current={current ? 'true' : undefined}
-                    sx={{ fontWeight: current ? 500 : undefined }}
-                  >
-                    {tc.id}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  <Parameters testCase={tc} />
-                </TableCell>
-                <TableCell>
-                  <AssetList assets={tc.assets} />
-                </TableCell>
-                <TableCell>
-                  {tc.tags.length === 0 ? (
-                    t('common.none')
-                  ) : (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {tc.tags.map((tag) => (
-                        <Chip
-                          key={tag}
-                          size="small"
-                          label={tag}
-                          component={RouterLink}
-                          to={suitesHref({ ...view, tag })}
-                          clickable
-                          aria-label={t('suites.testCases.tags.show', { tag })}
-                        />
-                      ))}
-                    </Box>
-                  )}
-                </TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+    <Table aria-label={t('suites.versions.testCases')}>
+      <thead>
+        <tr>
+          <th>{t('suites.testCases.columns.testCase')}</th>
+          <th>{t('suites.testCases.columns.parameters')}</th>
+          <th>{t('suites.testCases.columns.assets')}</th>
+          <th>{t('suites.testCases.columns.tags')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {testCases.map((tc) => {
+          const current = tc.id === selected?.id
+          const href = suitesHref({
+            ...view,
+            version: tc.scenario_version,
+            testCase: tc.id,
+          })
+          return (
+            <tr
+              key={tc.id}
+              className={cx('ui-row-link', current && 'tr-suites-current')}
+              onClick={rowLink(href)}
+            >
+              <td>
+                <TextLink
+                  to={href}
+                  aria-label={t('suites.testCases.name', { id: tc.id })}
+                  aria-current={current ? 'true' : undefined}
+                  className={cx(current && 'tr-suites-current-link')}
+                >
+                  {tc.id}
+                </TextLink>
+              </td>
+              <td className="ui-wrap-cell">
+                <Parameters testCase={tc} />
+              </td>
+              <td className="ui-wrap-cell">
+                <AssetList assets={tc.assets} />
+              </td>
+              <td className="ui-wrap-cell">
+                {tc.tags.length === 0 ? (
+                  t('common.none')
+                ) : (
+                  <Stack row wrap gap={1}>
+                    {tc.tags.map((tag) => (
+                      // Opens the test cases with the tag.
+                      <ChipLink
+                        key={tag}
+                        to={suitesHref({ ...view, tag })}
+                        aria-label={t('suites.testCases.tags.show', { tag })}
+                      >
+                        {tag}
+                      </ChipLink>
+                    ))}
+                  </Stack>
+                )}
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </Table>
   )
 }
 
@@ -291,10 +266,7 @@ function TestCasePanel({
   }, [])
 
   return (
-    <Box
-      ref={panel}
-      sx={{ display: 'grid', gap: 2, minWidth: 0, scrollMarginBlock: 72 }}
-    >
+    <div ref={panel} className="tr-suites-case">
       <Tags
         title={t('suites.testCases.tags.title', { id })}
         description={t('suites.testCases.tags.description')}
@@ -320,6 +292,6 @@ function TestCasePanel({
             : undefined
         }
       />
-    </Box>
+    </div>
   )
 }

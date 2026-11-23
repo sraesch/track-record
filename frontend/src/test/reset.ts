@@ -11,5 +11,6 @@ export function resetDocument() {
   cleanup()
   vi.unstubAllGlobals()
   localStorage.clear()
-  document.documentElement.removeAttribute('data-mui-color-scheme')
+  document.documentElement.removeAttribute('data-theme')
+  document.documentElement.style.colorScheme = ''
 }

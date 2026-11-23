@@ -20,9 +20,8 @@ export function currentQuery(router: ReturnType<typeof renderApp>) {
   return router.state.location.search.replace(/^\?/, '')
 }
 
-// The first render in a test file is the slowest: MUI writes the styles of
-// the app shell into the document and the JIT compiler has not seen React
-// yet. Render the shell once while the file loads, so that cost (0.2–0.4 s,
+// The first render in a test file is the slowest: the JIT compiler has not
+// seen React yet. Render the shell once while the file loads, so that cost (0.2–0.4 s,
 // several times that on a loaded machine) does not count against the first
 // test's timeout. Requests never answer; the run list stays loading.
 function warmUp() {

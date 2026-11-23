@@ -1,15 +1,5 @@
-import AccountTreeIcon from '@mui/icons-material/AccountTree'
-import Box from '@mui/material/Box'
-import LinearProgress from '@mui/material/LinearProgress'
-import List from '@mui/material/List'
-import ListItemButton from '@mui/material/ListItemButton'
-import ListItemText from '@mui/material/ListItemText'
-import Paper from '@mui/material/Paper'
-import { useTheme } from '@mui/material/styles'
-import Tab from '@mui/material/Tab'
-import Tabs from '@mui/material/Tabs'
-import Typography from '@mui/material/Typography'
-import useMediaQuery from '@mui/material/useMediaQuery'
+import { Tabs } from '@graphite/react'
+import { Network } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link as RouterLink, useSearchParams } from 'react-router'
@@ -18,6 +8,7 @@ import { EmptyState } from '../pages/EmptyState'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { PageHeader } from '../pages/PageHeader'
 import { SearchField } from '../pages/SearchField'
+import { breakpoints, ProgressBar, Surface, useMediaQuery } from '../ui'
 import { DefinitionDetail } from './DefinitionDetail'
 import { suitesHref } from './paths'
 import { useDefinitions } from './queries'
@@ -28,9 +19,9 @@ import {
   type SuitesView,
   suitesViewToParams,
 } from './suiteModel'
+import './suites.css'
 
-const tabId = (tab: SuitesTab) => `suites-tab-${tab}`
-const panelId = (tab: SuitesTab) => `suites-panel-${tab}`
+const idPrefix = 'suites'
 
 /**
  * Suites and scenarios with all their versions (FR-7): the list on the
@@ -54,8 +45,7 @@ export function SuitesPage() {
 
   // Stacked on narrow screens: bring the panel into view when the
   // selection changes, not when the page opens.
-  const theme = useTheme()
-  const stacked = useMediaQuery(theme.breakpoints.down('md'))
+  const stacked = !useMediaQuery(`(min-width:${breakpoints.md}px)`)
   const panel = useRef<HTMLDivElement>(null)
   const shownKey = `${view.tab}|${view.name ?? ''}`
   const firstKey = useRef(shownKey)
@@ -72,45 +62,26 @@ export function SuitesPage() {
         description={t('pages.suites.description')}
       />
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tabs
-          value={view.tab}
-          // A selection belongs to its tab; the search is kept.
-          onChange={(_, tab: SuitesTab) =>
-            setSearchParams(suitesViewToParams({ tab, search: view.search }))
-          }
-          aria-label={t('suites.tabs.label')}
-          variant="scrollable"
-          allowScrollButtonsMobile
-        >
-          <Tab
-            value="suites"
-            label={t('suites.tabs.suites')}
-            id={tabId('suites')}
-            aria-controls={panelId('suites')}
-          />
-          <Tab
-            value="scenarios"
-            label={t('suites.tabs.scenarios')}
-            id={tabId('scenarios')}
-            aria-controls={panelId('scenarios')}
-          />
-        </Tabs>
-      </Box>
+      <Tabs<SuitesTab>
+        className="tr-suites-tabs"
+        items={[
+          { value: 'suites', label: t('suites.tabs.suites') },
+          { value: 'scenarios', label: t('suites.tabs.scenarios') },
+        ]}
+        value={view.tab}
+        // A selection belongs to its tab; the search is kept.
+        onChange={(tab) =>
+          setSearchParams(suitesViewToParams({ tab, search: view.search }))
+        }
+        aria-label={t('suites.tabs.label')}
+        idPrefix={idPrefix}
+      />
 
-      <Box
+      <div
         role="tabpanel"
-        id={panelId(view.tab)}
-        aria-labelledby={tabId(view.tab)}
-        sx={{
-          display: 'grid',
-          gap: 2,
-          alignItems: 'start',
-          gridTemplateColumns: {
-            xs: 'minmax(0, 1fr)',
-            md: 'minmax(220px, 1fr) minmax(0, 3fr)',
-          },
-        }}
+        id={`${idPrefix}-panel-${view.tab}`}
+        aria-labelledby={`${idPrefix}-tab-${view.tab}`}
+        className="tr-suites-layout"
       >
         <DefinitionList
           view={view}
@@ -126,7 +97,7 @@ export function SuitesPage() {
             })
           }
         />
-        <Box ref={panel} sx={{ minWidth: 0, scrollMarginTop: 72 }}>
+        <div ref={panel} className="tr-suites-detail">
           {definitions.isError && !definitions.data ? (
             <ErrorAlert
               message={t(`suites.kind.${view.tab}.error`, {
@@ -146,14 +117,14 @@ export function SuitesPage() {
               {t(`suites.kind.${view.tab}.notFound`, { name: view.name })}
             </EmptyState>
           ) : (
-            <EmptyState icon={<AccountTreeIcon />} dashed>
+            <EmptyState icon={<Network size={24} aria-hidden />} dashed>
               {rows.length === 0
                 ? t(`suites.kind.${view.tab}.empty`)
                 : t(`suites.kind.${view.tab}.selectHint`)}
             </EmptyState>
           )}
-        </Box>
-      </Box>
+        </div>
+      </div>
     </>
   )
 }
@@ -175,78 +146,58 @@ function DefinitionList({
 }) {
   const { t } = useTranslation()
   return (
-    <Paper
-      component="nav"
-      variant="outlined"
+    <Surface
+      as="nav"
       aria-label={t(`suites.kind.${view.tab}.listLabel`)}
-      sx={{ minWidth: 0, overflow: 'hidden' }}
+      className="tr-suites-list"
     >
-      <Box component="search" sx={{ display: 'flex', p: 1.5 }}>
+      <search className="tr-suites-search">
         <SearchField
           label={t(`suites.kind.${view.tab}.search`)}
           value={view.search ?? ''}
           onChange={onSearch}
         />
-      </Box>
-      <Box sx={{ height: 4 }}>
-        {fetching && <LinearProgress aria-label={t('common.loading')} />}
-      </Box>
+      </search>
+      <div className="tr-suites-progress">{fetching && <ProgressBar />}</div>
       {loaded && shown.length === 0 ? (
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ px: 2, py: 2 }}
-        >
+        <p className="ui-text ui-secondary tr-suites-list-note">
           {rows.length === 0
             ? t(`suites.kind.${view.tab}.none`)
             : t(`suites.kind.${view.tab}.noMatch`)}
-        </Typography>
+        </p>
       ) : (
-        <List
-          dense
-          disablePadding
-          sx={{ maxHeight: { md: 'calc(100vh - 330px)' }, overflowY: 'auto' }}
-        >
+        <ul className="ui-list tr-suites-items">
           {shown.map((row) => {
             const current = row.name === view.name
             return (
-              <ListItemButton
-                key={row.id}
-                component={RouterLink}
-                // Selecting keeps the search; the latest version is shown.
-                to={suitesHref({
-                  tab: view.tab,
-                  search: view.search,
-                  name: row.name,
-                })}
-                selected={current}
-                aria-current={current ? 'page' : undefined}
-              >
-                <ListItemText
-                  primary={row.name}
-                  secondary={t('suites.versions.count', {
-                    count: row.versions.length,
+              <li key={row.id}>
+                <RouterLink
+                  className="tr-suites-item"
+                  // Selecting keeps the search; the latest version is shown.
+                  to={suitesHref({
+                    tab: view.tab,
+                    search: view.search,
+                    name: row.name,
                   })}
-                  slotProps={{
-                    primary: {
-                      sx: { fontWeight: 500, overflowWrap: 'anywhere' },
-                    },
-                  }}
-                />
-              </ListItemButton>
+                  aria-current={current ? 'page' : undefined}
+                >
+                  <span className="tr-suites-item-name">{row.name}</span>
+                  <span className="small ui-secondary">
+                    {t('suites.versions.count', {
+                      count: row.versions.length,
+                    })}
+                  </span>
+                </RouterLink>
+              </li>
             )
           })}
-        </List>
+        </ul>
       )}
       {loaded && shown.length > 0 && (
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ px: 2, py: 1, borderTop: 1, borderColor: 'divider' }}
-        >
+        <p className="ui-text small ui-secondary tr-suites-list-count">
           {t(`suites.kind.${view.tab}.count`, { count: shown.length })}
-        </Typography>
+        </p>
       )}
-    </Paper>
+    </Surface>
   )
 }

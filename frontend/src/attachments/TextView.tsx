@@ -1,36 +1,16 @@
-import Box from '@mui/material/Box'
-import type { SxProps, Theme } from '@mui/material/styles'
+import { cx } from '@graphite/react'
 import type { ReactNode } from 'react'
+import './attachments.css'
 
 /** Preformatted text in a monospace block; long lines wrap. */
 export function CodeBlock({
   children,
-  sx,
+  className,
 }: {
   children: ReactNode
-  sx?: SxProps<Theme>
+  className?: string
 }) {
-  return (
-    <Box
-      component="pre"
-      sx={[
-        {
-          m: 0,
-          p: 2,
-          borderRadius: 1,
-          bgcolor: 'action.hover',
-          fontFamily: 'monospace',
-          fontSize: '0.8125rem',
-          lineHeight: 1.6,
-          whiteSpace: 'pre-wrap',
-          overflowWrap: 'anywhere',
-        },
-        ...(Array.isArray(sx) ? sx : [sx]),
-      ]}
-    >
-      {children}
-    </Box>
-  )
+  return <pre className={cx('tr-attachments-code', className)}>{children}</pre>
 }
 
 /** A text attachment (a log, CSV, …) as uploaded. */

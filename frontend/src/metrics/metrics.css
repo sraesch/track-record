@@ -1,0 +1,11 @@
+/* Metrics page: metric definitions and the unit catalogue. */
+.tr-metrics-tabs { margin-bottom: var(--space-4); }
+.tr-metrics-search { display: flex; margin-bottom: var(--space-4); }
+/* Keeps its height, so the content does not jump while loading. */
+.tr-metrics-progress { height: 2px; margin-bottom: var(--space-2); }
+.tr-metrics-count { margin: var(--space-3) 0; }
+.g-table td.tr-metrics-description { min-width: 200px; }
+
+/* Unit catalogue: one section per quantity, side by side where there is room. */
+.tr-metrics-units { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); align-items: start; }
+.tr-metrics-units-text { padding: var(--space-2) var(--space-4); }

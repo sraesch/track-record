@@ -1,7 +1,6 @@
-import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import './pages.css'
 
 type Props = {
   title: string
@@ -16,30 +15,16 @@ type Props = {
 export function PageHeader({ title, description, before, actions }: Props) {
   const { t } = useTranslation()
   return (
-    <Box sx={{ mb: 3 }}>
+    <div className="tr-page-header">
       {/* React puts it into <head>: "<title> · Track Record". */}
       <title>{`${title} · ${t('app.name')}`}</title>
       {before}
       {/* Actions move below a title that leaves them no room. */}
-      <Box
-        sx={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          columnGap: 2,
-          rowGap: 1,
-        }}
-      >
-        <Typography variant="h5" component="h1" sx={{ flexGrow: 1 }}>
-          {title}
-        </Typography>
+      <div className="tr-page-title-row">
+        <h1 className="title-1 ui-heading ui-grow">{title}</h1>
         {actions}
-      </Box>
-      {description && (
-        <Typography color="text.secondary" sx={{ mt: 0.5, maxWidth: '72ch' }}>
-          {description}
-        </Typography>
-      )}
-    </Box>
+      </div>
+      {description && <p className="tr-page-description">{description}</p>}
+    </div>
   )
 }

@@ -1,4 +1,3 @@
-import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
 import type { TestCaseSummary } from '../../api/client'
 import { Facts } from '../../pages/Facts'
@@ -16,9 +15,9 @@ export function CaseParameters({ testCase }: { testCase: TestCaseSummary }) {
   return (
     <Section title={t('caseExecution.parameters.title')}>
       {values.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
+        <p className="ui-text ui-secondary">
           {t('caseExecution.parameters.empty')}
-        </Typography>
+        </p>
       ) : (
         <Facts
           items={values.map(({ name, label, uploaded }) => ({

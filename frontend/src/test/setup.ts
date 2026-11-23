@@ -19,7 +19,7 @@ vi.mock('../charts/EChart', () => import('./fakeChart'))
 // text area instead.
 vi.mock('../dsl/DslEditor', () => import('./fakeDslEditor'))
 
-// jsdom has no matchMedia; MUI's useMediaQuery needs it. Tests run on a wide
+// jsdom has no matchMedia; useMediaQuery() (src/ui) needs it. Tests run on a wide
 // screen unless they call setViewportWidth().
 beforeEach(() => {
   setViewportWidth(1280)

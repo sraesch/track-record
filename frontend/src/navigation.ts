@@ -1,13 +1,15 @@
-import type { SvgIconComponent } from '@mui/icons-material'
-import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
-import FunctionsIcon from '@mui/icons-material/Functions'
-import KeyIcon from '@mui/icons-material/Key'
-import LabelIcon from '@mui/icons-material/Label'
-import ListAltIcon from '@mui/icons-material/ListAlt'
-import ShowChartIcon from '@mui/icons-material/ShowChart'
-import SpeedIcon from '@mui/icons-material/Speed'
-import StackedLineChartIcon from '@mui/icons-material/StackedLineChart'
-import AccountTreeIcon from '@mui/icons-material/AccountTree'
+import {
+  ArrowLeftRight,
+  ChartLine,
+  ChartSpline,
+  Gauge,
+  KeyRound,
+  ListChecks,
+  type LucideIcon,
+  Network,
+  Sigma,
+  Tag,
+} from 'lucide-react'
 
 // The side menu: one entry per top-level view of the web UI (requirements,
 // section 4). Routes (routes.tsx) are built from the same list, so menu and
@@ -16,7 +18,7 @@ import AccountTreeIcon from '@mui/icons-material/AccountTree'
 type NavItem = {
   id: NavItemId
   path: string
-  icon: SvgIconComponent
+  icon: LucideIcon
 }
 
 type NavSection = {
@@ -39,24 +41,24 @@ export const navSections: readonly NavSection[] = [
   {
     id: 'analysis',
     items: [
-      { id: 'runs', path: '/runs', icon: ListAltIcon },
-      { id: 'compare', path: '/compare', icon: CompareArrowsIcon },
-      { id: 'trends', path: '/trends', icon: ShowChartIcon },
-      { id: 'series', path: '/series', icon: StackedLineChartIcon },
+      { id: 'runs', path: '/runs', icon: ListChecks },
+      { id: 'compare', path: '/compare', icon: ArrowLeftRight },
+      { id: 'trends', path: '/trends', icon: ChartLine },
+      { id: 'series', path: '/series', icon: ChartSpline },
     ],
   },
   {
     id: 'definitions',
     items: [
-      { id: 'suites', path: '/suites', icon: AccountTreeIcon },
-      { id: 'metrics', path: '/metrics', icon: SpeedIcon },
-      { id: 'derivedMetrics', path: '/derived-metrics', icon: FunctionsIcon },
-      { id: 'aliases', path: '/aliases', icon: LabelIcon },
+      { id: 'suites', path: '/suites', icon: Network },
+      { id: 'metrics', path: '/metrics', icon: Gauge },
+      { id: 'derivedMetrics', path: '/derived-metrics', icon: Sigma },
+      { id: 'aliases', path: '/aliases', icon: Tag },
     ],
   },
   {
     id: 'administration',
-    items: [{ id: 'tokens', path: '/tokens', icon: KeyIcon }],
+    items: [{ id: 'tokens', path: '/tokens', icon: KeyRound }],
   },
 ]
 
@@ -66,3 +68,6 @@ export const navItems: readonly NavItem[] = navSections.flatMap(
 
 /** Where `/` leads. */
 export const homePath = '/runs'
+
+/** The About page, opened from the app bar rather than the side menu. */
+export const aboutPath = '/about'

@@ -1,0 +1,26 @@
+/* The case execution page (runs/case). */
+
+/* Overview and details side by side where there is room. */
+.tr-case-grid { display: grid; gap: var(--space-4); align-items: start; grid-template-columns: minmax(0, 1fr); }
+.tr-case-column { display: grid; gap: var(--space-4); min-width: 0; }
+.tr-case-wide { grid-column: 1 / -1; min-width: 0; }
+@media (min-width: 1200px) {
+  .tr-case-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+}
+
+/* Text in a flush section, where the table would be. */
+.tr-case-flush-text { padding: var(--space-3) var(--space-4) var(--space-4); }
+
+/* Measurement columns: the metric, its unit below. */
+.tr-case-metric-head { vertical-align: bottom; padding-top: var(--space-1); padding-bottom: var(--space-1); }
+.tr-case-metric-head > span { display: block; }
+.tr-case-metric-unit { font-weight: 400; color: var(--text-muted); }
+
+/* The cells of a warmup sample's row are dimmed. */
+.g-table tr.tr-case-warmup-row td { color: var(--text-secondary); }
+.tr-case-warmup { margin-left: var(--space-2); }
+
+/* A chart per series metric */
+.tr-case-charts { display: grid; gap: var(--space-6); padding: var(--space-3) var(--space-4) var(--space-4); }
+.tr-case-chart { margin: 0; min-width: 0; }
+.tr-case-chart > figcaption { margin-bottom: var(--space-2); }

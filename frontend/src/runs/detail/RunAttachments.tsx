@@ -1,19 +1,7 @@
-import DownloadIcon from '@mui/icons-material/Download'
-import OpenInNewIcon from '@mui/icons-material/OpenInNew'
-import Box from '@mui/material/Box'
-import IconButton from '@mui/material/IconButton'
-import Link from '@mui/material/Link'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
-import { useTranslation } from 'react-i18next'
+import { Download, ExternalLink } from 'lucide-react'
 import type { MouseEvent, ReactNode } from 'react'
-import { Link as RouterLink, useNavigate } from 'react-router'
+import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router'
 import type { AttachmentMeta, CaseExecutionSummary } from '../../api/client'
 import { AttachmentThumbnail } from '../../attachments/AttachmentThumbnail'
 import {
@@ -21,10 +9,18 @@ import {
   attachmentKind,
   mediaType,
 } from '../../attachments/kind'
-import { formatBytes, formatDateTime, formatTimestamp } from '../../format'
+import { formatBytes } from '../../format'
 import { Section } from '../../pages/Section'
-import { visuallyHidden } from '../../pages/visuallyHidden'
+import { Time } from '../../pages/Time'
+import {
+  IconAnchorButton,
+  IconLinkButton,
+  Table,
+  TextLink,
+  VisuallyHidden,
+} from '../../ui'
 import { attachmentPath, caseExecutionPath } from '../paths'
+import '../runs.css'
 
 type Props = {
   attachments: readonly AttachmentMeta[]
@@ -49,96 +45,73 @@ export function RunAttachments({
   return (
     <Section title={t('runDetail.attachments.title')} flush>
       {attachments.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" sx={{ px: 2, pb: 2 }}>
-          {t('runDetail.attachments.empty')}
-        </Typography>
+        <p className="tr-runs-note">{t('runDetail.attachments.empty')}</p>
       ) : (
-        <TableContainer>
-          <Table size="small" aria-label={t('runDetail.attachments.title')}>
-            <TableHead sx={{ '& th': { whiteSpace: 'nowrap' } }}>
-              <TableRow>
-                <TableCell>{t('runDetail.attachments.file')}</TableCell>
-                <TableCell>{t('runDetail.attachments.attachedTo')}</TableCell>
-                <TableCell>{t('runDetail.attachments.type')}</TableCell>
-                <TableCell align="right">
-                  {t('runDetail.attachments.size')}
-                </TableCell>
-                <TableCell>{t('runDetail.attachments.uploaded')}</TableCell>
-                <TableCell padding="checkbox">
-                  <Box component="span" sx={visuallyHidden}>
-                    {t('runDetail.attachments.actions')}
-                  </Box>
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {attachments.map((attachment) => (
-                <TableRow key={attachment.id}>
-                  {/* Names break between words, and only inside a word
-                      longer than the column. */}
-                  <TableCell sx={{ overflowWrap: 'break-word', minWidth: 160 }}>
-                    <FileName
-                      attachment={attachment}
-                      previewHref={previewHref(attachment.id)}
+        <Table aria-label={t('runDetail.attachments.title')}>
+          <thead>
+            <tr>
+              <th>{t('runDetail.attachments.file')}</th>
+              <th>{t('runDetail.attachments.attachedTo')}</th>
+              <th>{t('runDetail.attachments.type')}</th>
+              <th className="g-r">{t('runDetail.attachments.size')}</th>
+              <th>{t('runDetail.attachments.uploaded')}</th>
+              <th>
+                <VisuallyHidden>
+                  {t('runDetail.attachments.actions')}
+                </VisuallyHidden>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {attachments.map((attachment) => (
+              <tr key={attachment.id}>
+                {/* Names break between words, and only inside a word
+                    longer than the column. */}
+                <td className="tr-runs-file-cell">
+                  <FileName
+                    attachment={attachment}
+                    previewHref={previewHref(attachment.id)}
+                  />
+                </td>
+                <td>{attachedTo(attachment)}</td>
+                <td>
+                  <code className="ui-code">
+                    {mediaType(attachment.content_type)}
+                  </code>
+                </td>
+                <td className="g-r">{formatBytes(attachment.size_bytes)}</td>
+                <td>
+                  <Time iso={attachment.created_at} />
+                </td>
+                <td className="tr-runs-actions-cell">
+                  {attachmentKind(attachment) && (
+                    <IconLinkButton
+                      size="sm"
+                      icon={ExternalLink}
+                      to={attachmentPath(attachment.run_id, attachment.id)}
+                      target="_blank"
+                      rel="noopener"
+                      label={t('runDetail.attachments.openInNewTab', {
+                        file: attachment.file_name,
+                      })}
+                      tooltip={t('attachments.openInNewTab')}
                     />
-                  </TableCell>
-                  <TableCell>{attachedTo(attachment)}</TableCell>
-                  <TableCell>
-                    <Typography
-                      component="code"
-                      variant="body2"
-                      sx={{ fontFamily: 'monospace' }}
-                    >
-                      {mediaType(attachment.content_type)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                    {formatBytes(attachment.size_bytes)}
-                  </TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                    <Tooltip
-                      describeChild
-                      title={formatTimestamp(attachment.created_at)}
-                    >
-                      <time dateTime={attachment.created_at}>
-                        {formatDateTime(attachment.created_at)}
-                      </time>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell padding="checkbox" sx={{ whiteSpace: 'nowrap' }}>
-                    {attachmentKind(attachment) && (
-                      <Tooltip title={t('attachments.openInNewTab')}>
-                        <IconButton
-                          href={attachmentPath(attachment.run_id, attachment.id)}
-                          target="_blank"
-                          rel="noopener"
-                          size="small"
-                          aria-label={t('runDetail.attachments.openInNewTab', {
-                            file: attachment.file_name,
-                          })}
-                        >
-                          <OpenInNewIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    <Tooltip title={t('attachments.download')}>
-                      <IconButton
-                        href={attachmentContentUrl(attachment.id)}
-                        download={attachment.file_name}
-                        size="small"
-                        aria-label={t('runDetail.attachments.download', {
-                          file: attachment.file_name,
-                        })}
-                      >
-                        <DownloadIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                  )}
+                  <IconAnchorButton
+                    size="sm"
+                    icon={Download}
+                    href={attachmentContentUrl(attachment.id)}
+                    download={attachment.file_name}
+                    label={t('runDetail.attachments.download', {
+                      file: attachment.file_name,
+                    })}
+                    tooltip={t('attachments.download')}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
       )}
     </Section>
   )
@@ -163,8 +136,8 @@ function FileName({
   const kind = attachmentKind(attachment)
   if (!kind) return attachment.file_name
   return (
-    <Link
-      component={RouterLink}
+    <TextLink
+      className="tr-runs-file-link"
       to={attachmentPath(attachment.run_id, attachment.id)}
       onClick={(event: MouseEvent) => {
         const modified =
@@ -173,15 +146,13 @@ function FileName({
         event.preventDefault()
         navigate(previewHref, { state: { preview: true } })
       }}
-      underline="hover"
       aria-label={t('runDetail.attachments.open', {
         file: attachment.file_name,
       })}
-      sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.5 }}
     >
       {kind === 'image' && <AttachmentThumbnail attachment={attachment} />}
       {attachment.file_name}
-    </Link>
+    </TextLink>
   )
 }
 
@@ -205,14 +176,10 @@ export function AttachedTo({
       })
     : t('runDetail.attachments.caseUnknown')
   return (
-    <Link
-      component={RouterLink}
-      to={caseExecutionPath(attachment.run_id, id)}
-      underline="hover"
-    >
+    <TextLink to={caseExecutionPath(attachment.run_id, id)}>
       {attachment.sample_id
         ? t('runDetail.attachments.toSample', { name })
         : name}
-    </Link>
+    </TextLink>
   )
 }

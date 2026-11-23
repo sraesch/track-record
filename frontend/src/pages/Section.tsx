@@ -1,7 +1,6 @@
-import Box from '@mui/material/Box'
-import Paper from '@mui/material/Paper'
-import Typography from '@mui/material/Typography'
-import { type ReactNode, useId } from 'react'
+import type { ReactNode } from 'react'
+import { useId } from 'react'
+import './pages.css'
 
 type Props = {
   title: string
@@ -12,39 +11,18 @@ type Props = {
   flush?: boolean
 }
 
-/** A titled block of a page, e.g. one part of a run's detail. */
+/** A titled block of a page (Graphite's panel), e.g. one part of a run's detail. */
 export function Section({ title, children, actions, flush }: Props) {
   const titleId = useId()
   return (
-    <Paper
-      component="section"
-      variant="outlined"
-      aria-labelledby={titleId}
-      sx={{ minWidth: 0, overflow: 'hidden' }}
-    >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 1,
-          px: 2,
-          pt: 1.5,
-          pb: flush ? 1.5 : 1,
-          minHeight: 48,
-        }}
-      >
-        <Typography
-          id={titleId}
-          variant="subtitle1"
-          component="h2"
-          sx={{ fontWeight: 500, flexGrow: 1 }}
-        >
+    <section aria-labelledby={titleId} className="g-panel tr-section">
+      <header className="g-panel-head">
+        <h2 id={titleId} className="g-panel-title">
           {title}
-        </Typography>
-        {actions}
-      </Box>
-      <Box sx={flush ? undefined : { px: 2, pb: 2 }}>{children}</Box>
-    </Paper>
+        </h2>
+        {actions && <div className="g-panel-actions">{actions}</div>}
+      </header>
+      <div className={flush ? undefined : 'tr-section-body'}>{children}</div>
+    </section>
   )
 }

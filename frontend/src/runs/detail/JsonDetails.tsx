@@ -1,4 +1,3 @@
-import Typography from '@mui/material/Typography'
 import type { ReactNode } from 'react'
 import { formatJsonValue } from '../../format'
 import { Facts } from '../../pages/Facts'
@@ -24,9 +23,7 @@ export function JsonDetails({ title, emptyText, details, actions }: Props) {
   return (
     <Section title={title} actions={actions}>
       {entries.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
-          {emptyText}
-        </Typography>
+        <p className="ui-text ui-secondary">{emptyText}</p>
       ) : (
         <Facts
           items={entries.map(([key, value]) => ({

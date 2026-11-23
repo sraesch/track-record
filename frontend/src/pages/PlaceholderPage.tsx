@@ -1,4 +1,4 @@
-import ConstructionIcon from '@mui/icons-material/Construction'
+import { Construction } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { NavItemId } from '../navigation'
 import { EmptyState } from './EmptyState'
@@ -21,7 +21,7 @@ export function PlaceholderPage({ id }: { id: NavItemId }) {
 export function NotBuilt() {
   const { t } = useTranslation()
   return (
-    <EmptyState icon={<ConstructionIcon />} dashed>
+    <EmptyState icon={<Construction size={24} aria-hidden />} dashed>
       {t('placeholder.notBuilt')}
     </EmptyState>
   )

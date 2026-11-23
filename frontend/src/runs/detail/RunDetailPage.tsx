@@ -1,12 +1,7 @@
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-import Alert from '@mui/material/Alert'
-import AlertTitle from '@mui/material/AlertTitle'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import LinearProgress from '@mui/material/LinearProgress'
+import { ArrowLeft } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useParams, useSearchParams } from 'react-router'
+import { useParams, useSearchParams } from 'react-router'
 import { isNotFound, type RunDetail } from '../../api/client'
 import { AttachmentPreview } from '../../attachments/AttachmentPreview'
 import {
@@ -17,6 +12,7 @@ import { formatDateTime } from '../../format'
 import { EmptyState } from '../../pages/EmptyState'
 import { ErrorAlert } from '../../pages/ErrorAlert'
 import { PageHeader } from '../../pages/PageHeader'
+import { Alert, Button, LinkButton, ProgressBar } from '../../ui'
 import { useCaseExecutions, useRun } from '../queries'
 import { runListHref } from '../runFilters'
 import {
@@ -32,6 +28,7 @@ import { RunAnnotations } from './RunAnnotations'
 import { AttachedTo, RunAttachments } from './RunAttachments'
 import { RunOverview } from './RunOverview'
 import { RunTags } from './RunTags'
+import '../runs.css'
 
 /**
  * One run (FR-21: /runs/:runId): what it is, its tags, annotations, case
@@ -44,15 +41,15 @@ export function RunDetailPage() {
   const run = useRun(runId)
 
   const back = (
-    <Button
-      component={Link}
+    <LinkButton
       to="/runs"
-      size="small"
-      startIcon={<ArrowBackIcon />}
-      sx={{ mb: 1, ml: -1 }}
+      variant="ghost"
+      size="sm"
+      icon={ArrowLeft}
+      className="tr-runs-back"
     >
       {t('runDetail.back')}
-    </Button>
+    </LinkButton>
   )
 
   if (!run.data) {
@@ -60,7 +57,7 @@ export function RunDetailPage() {
       <>
         <PageHeader title={t('runDetail.titleLoading')} before={back} />
         {run.isPending ? (
-          <LinearProgress aria-label={t('common.loading')} />
+          <ProgressBar label={t('common.loading')} />
         ) : isNotFound(run.error) ? (
           <EmptyState>{t('runDetail.notFound', { runId })}</EmptyState>
         ) : (
@@ -92,7 +89,7 @@ export function RunDetailPage() {
               : t('runDetail.error', { message: run.error.message })
           }
           onRetry={() => run.refetch()}
-          sx={{ mb: 2 }}
+          style={{ marginBottom: 'var(--space-4)' }}
         />
       )}
       <RunDetailView run={run.data} />
@@ -127,19 +124,9 @@ function RunDetailView({ run }: { run: RunDetail }) {
   return (
     <>
       {!run.is_valid && <InvalidNotice run={run} />}
-      <Box
-        sx={{
-          display: 'grid',
-          gap: 2,
-          alignItems: 'start',
-          gridTemplateColumns: {
-            xs: 'minmax(0, 1fr)',
-            lg: 'minmax(0, 2fr) minmax(0, 1fr)',
-          },
-        }}
-      >
+      <div className="tr-runs-detail">
         <RunOverview run={run} />
-        <Box sx={{ display: 'grid', gap: 2, minWidth: 0 }}>
+        <div className="tr-runs-detail-side">
           <RunTags run={run} />
           <RunAnnotations run={run} />
           <JsonDetails
@@ -147,18 +134,18 @@ function RunDetailView({ run }: { run: RunDetail }) {
             emptyText={t('runDetail.environment.empty')}
             details={run.shared_environment}
             actions={
-              <Button
-                component={Link}
-                size="small"
+              <LinkButton
+                variant="ghost"
+                size="sm"
                 to={runListHref({ environment: run.shared_environment_id })}
               >
                 {t('runDetail.environment.runs')}
-              </Button>
+              </LinkButton>
             }
           />
-        </Box>
+        </div>
         {/* Above the case executions, which can be a long list. */}
-        <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
+        <div className="tr-runs-detail-wide">
           <RunAttachments
             attachments={run.attachments}
             attachedTo={(attachment) => (
@@ -166,16 +153,16 @@ function RunDetailView({ run }: { run: RunDetail }) {
             )}
             previewHref={preview.previewHref}
           />
-        </Box>
-        <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
+        </div>
+        <div className="tr-runs-detail-wide">
           <CaseExecutions
             runId={run.id}
             query={caseExecutions}
             filters={filters}
             onChange={setFilters}
           />
-        </Box>
-      </Box>
+        </div>
+      </div>
       <AttachmentPreview
         attachment={preview.previewed}
         onClose={preview.closePreview}
@@ -190,12 +177,17 @@ function InvalidNotice({ run }: { run: RunDetail }) {
   const validate = useValidateRun(run.id)
   return (
     <Alert
-      severity="warning"
-      sx={{ mb: 2 }}
+      tone="warning"
+      className="tr-runs-notice"
+      title={
+        run.invalid_reason
+          ? t('runDetail.validate.reason', { reason: run.invalid_reason })
+          : t('runDetail.validate.noReason')
+      }
       action={
         <Button
-          color="inherit"
-          size="small"
+          variant="ghost"
+          size="sm"
           loading={validate.isPending}
           onClick={() => validate.mutate()}
         >
@@ -203,16 +195,11 @@ function InvalidNotice({ run }: { run: RunDetail }) {
         </Button>
       }
     >
-      <AlertTitle>
-        {run.invalid_reason
-          ? t('runDetail.validate.reason', { reason: run.invalid_reason })
-          : t('runDetail.validate.noReason')}
-      </AlertTitle>
       {t('runDetail.validate.text')}
       {validate.error && (
-        <Box sx={{ mt: 1, color: 'error.main' }}>
+        <div className="tr-runs-notice-error">
           {t('runDetail.validate.error', { message: validate.error.message })}
-        </Box>
+        </div>
       )}
     </Alert>
   )

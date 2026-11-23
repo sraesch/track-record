@@ -5,6 +5,18 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Track Record</title>
+    <script>
+      // The color mode before the app loads, so a reload does not flash
+      // the other scheme (src/ui/ColorMode.tsx keeps it up to date).
+      try {
+        var mode = localStorage.getItem('track-record.color-mode')
+        var dark =
+          mode === 'dark' ||
+          (mode !== 'light' && !matchMedia('(prefers-color-scheme: light)').matches)
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

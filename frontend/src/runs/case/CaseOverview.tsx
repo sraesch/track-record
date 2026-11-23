@@ -1,16 +1,12 @@
-import Box from '@mui/material/Box'
-import Link from '@mui/material/Link'
-import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink } from 'react-router'
 import type { CaseExecutionDetail, RunDetail } from '../../api/client'
 import { formatDateTime, formatDuration, formatNumber } from '../../format'
 import { CopyButton } from '../../pages/CopyButton'
 import { type Fact, Facts } from '../../pages/Facts'
 import { Section } from '../../pages/Section'
-import { codeSx, inlineRow } from '../../pages/styles'
 import { Time } from '../../pages/Time'
 import { testCaseHref } from '../../suites/paths'
+import { TextLink } from '../../ui'
 import { runPath } from '../paths'
 import { InvalidChip, RunStatusChip } from '../RunStatusChip'
 import { Aliased, AssetList } from '../TestCaseParts'
@@ -33,11 +29,11 @@ export function CaseOverview({ caseExecution: ce, run }: Props) {
       {ce.started_at && (
         <>
           {' '}
-          <Typography component="span" variant="body2" color="text.secondary">
+          <span className="ui-secondary">
             {t('runDetail.overview.durationOf', {
               duration: formatDuration(ce.started_at, ce.ended_at),
             })}
-          </Typography>
+          </span>
         </>
       )}
     </>
@@ -49,30 +45,28 @@ export function CaseOverview({ caseExecution: ce, run }: Props) {
     {
       label: t('caseExecution.overview.run'),
       value: (
-        <Box component="span" sx={{ ...inlineRow, flexWrap: 'wrap' }}>
-          <Link component={RouterLink} to={runPath(ce.run_id)} underline="hover">
+        <span className="ui-inline-row" style={{ flexWrap: 'wrap' }}>
+          <TextLink to={runPath(ce.run_id)}>
             {run
               ? t('caseExecution.overview.runName', {
                   suite: run.suite.name,
                   started: formatDateTime(run.started_at),
                 })
               : t('caseExecution.overview.openRun')}
-          </Link>
+          </TextLink>
           {run && <RunStatusChip status={run.status} />}
           {run && !run.is_valid && <InvalidChip reason={run.invalid_reason} />}
-        </Box>
+        </span>
       ),
     },
     {
       label: t('caseExecution.overview.scenario'),
       value: (
         <>
-          <Link component={RouterLink} to={testCaseHref(tc)} underline="hover">
-            {tc.scenario}
-          </Link>{' '}
-          <Typography component="span" variant="body2" color="text.secondary">
+          <TextLink to={testCaseHref(tc)}>{tc.scenario}</TextLink>{' '}
+          <span className="ui-secondary">
             {t('runs.version', { version: tc.scenario_version })}
-          </Typography>
+          </span>
         </>
       ),
     },
@@ -93,9 +87,9 @@ export function CaseOverview({ caseExecution: ce, run }: Props) {
           {warmup > 0 && (
             <>
               {' '}
-              <Typography component="span" variant="body2" color="text.secondary">
+              <span className="ui-secondary">
                 {t('caseExecution.overview.warmup', { count: warmup })}
-              </Typography>
+              </span>
             </>
           )}
         </>
@@ -117,12 +111,10 @@ export function CaseOverview({ caseExecution: ce, run }: Props) {
     {
       label: t('caseExecution.overview.id'),
       value: (
-        <Box component="span" sx={inlineRow}>
-          <Typography component="code" variant="body2" sx={codeSx}>
-            {ce.id}
-          </Typography>
+        <span className="ui-inline-row">
+          <code className="ui-code">{ce.id}</code>
           <CopyButton text={ce.id} label={t('caseExecution.overview.copyId')} />
-        </Box>
+        </span>
       ),
     },
   ]
