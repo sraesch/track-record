@@ -152,13 +152,30 @@ call -X PUT "$api/api/v1/runs/$run/attachments/$attachment?file_name=install-tes
     -H 'content-type: text/plain' --data-binary "$content" >/dev/null
 call -X POST "$api/api/v1/runs/$run/close" "${auth[@]}" "${json[@]}" -d '{"status": "completed"}' >/dev/null
 
+# GET with retries: for a few seconds after a rollout, Service routing can
+# still point at a pod that is gone, and connections to it hang.
+get() {
+    local out
+    out=$(mktemp)
+    for _ in $(seq 1 20); do
+        if curl --silent --fail --max-time 10 --output "$out" "$@"; then
+            cat "$out"
+            return 0
+        fi
+        sleep 3
+    done
+    for arg in "$@"; do [[ $arg == http* ]] && url=$arg; done
+    echo "FAIL: GET ${url:-?} did not succeed" >&2
+    return 1
+}
+
 check_run() {
     local status
-    status=$(call "$api/api/v1/runs/$run" "${auth[@]}" | jq -r .status)
+    status=$(get "$api/api/v1/runs/$run" "${auth[@]}" | jq -r .status)
     [ "$status" = completed ] || fail "run status is $status"
-    [ "$(call "$api/api/v1/attachments/$attachment/content" "${auth[@]}")" = "$content" ] \
+    [ "$(get "$api/api/v1/attachments/$attachment/content" "${auth[@]}")" = "$content" ] \
         || fail "attachment content differs"
-    call "$ui/ui/api/v1/runs/$run" | jq -e '.attachments | length == 1' >/dev/null \
+    get "$ui/ui/api/v1/runs/$run" | jq -e '.attachments | length == 1' >/dev/null \
         || fail "the UI API does not show the attachment"
     echo "run $run: completed, attachment readable through both ports"
 }

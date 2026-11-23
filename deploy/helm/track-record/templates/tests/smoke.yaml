@@ -29,9 +29,16 @@ spec:
         - |
           set -e
           get() { wget -q -T 10 -O /dev/null "$1"; }
-          echo "web UI";                       get {{ $frontend }}/
-          echo "UI API through the frontend";  get {{ $frontend }}/ui/api/openapi.json
-          echo "machine API";                  get {{ $machine }}/api/openapi.json
+          # Right after an install, Service routing and network policies
+          # for new pods may lag a few seconds behind readiness.
+          retry() {
+            for i in $(seq 1 30); do get "$1" && return 0; sleep 2; done
+            echo "FAIL: $1" >&2
+            return 1
+          }
+          echo "web UI";                       retry {{ $frontend }}/
+          echo "UI API through the frontend";  retry {{ $frontend }}/ui/api/openapi.json
+          echo "machine API";                  retry {{ $machine }}/api/openapi.json
           echo "machine port has no UI API"
           if get {{ $machine }}/ui/api/openapi.json; then
             echo "FAIL: /ui/api answers on the machine port" >&2
