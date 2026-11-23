@@ -1,35 +1,29 @@
-import BlockIcon from '@mui/icons-material/Block'
-import CancelIcon from '@mui/icons-material/Cancel'
-import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import PendingIcon from '@mui/icons-material/Pending'
-import StopCircleIcon from '@mui/icons-material/StopCircle'
-import Chip, { type ChipProps } from '@mui/material/Chip'
-import Tooltip from '@mui/material/Tooltip'
+import {
+  Ban,
+  CircleCheck,
+  CircleStop,
+  CircleX,
+  LoaderCircle,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { RunStatus } from '../api/client'
+import { Chip, type ChipTone, Tooltip } from '../ui'
 
-const look: Record<
-  RunStatus,
-  { color: ChipProps['color']; icon: typeof CheckCircleIcon }
-> = {
-  running: { color: 'info', icon: PendingIcon },
-  completed: { color: 'success', icon: CheckCircleIcon },
-  failed: { color: 'error', icon: CancelIcon },
-  aborted: { color: 'warning', icon: StopCircleIcon },
+const look: Record<RunStatus, { tone: ChipTone; icon: typeof CircleCheck }> = {
+  running: { tone: 'info', icon: LoaderCircle },
+  completed: { tone: 'success', icon: CircleCheck },
+  failed: { tone: 'danger', icon: CircleX },
+  aborted: { tone: 'warning', icon: CircleStop },
 }
 
-/** Run status (FR-2) as a colored chip. */
+/** Run status (FR-2) with a color and an icon, so it does not rest on color alone. */
 export function RunStatusChip({ status }: { status: RunStatus }) {
   const { t } = useTranslation()
-  const { color, icon: Icon } = look[status]
+  const { tone, icon } = look[status]
   return (
-    <Chip
-      size="small"
-      variant="outlined"
-      color={color}
-      icon={<Icon />}
-      label={t(`runs.status.${status}`)}
-    />
+    <Chip tone={tone} icon={icon}>
+      {t(`runs.status.${status}`)}
+    </Chip>
   )
 }
 
@@ -37,16 +31,15 @@ export function RunStatusChip({ status }: { status: RunStatus }) {
 export function InvalidChip({ reason }: { reason?: string | null }) {
   const { t } = useTranslation()
   const chip = (
-    <Chip
-      size="small"
-      variant="outlined"
-      icon={<BlockIcon />}
-      label={t('runs.invalid')}
-    />
+    <Chip icon={Ban} outlined>
+      {t('runs.invalid')}
+    </Chip>
   )
   // The tooltip also labels the chip, so screen readers hear the reason.
   return reason ? (
-    <Tooltip title={t('runs.invalidReason', { reason })}>{chip}</Tooltip>
+    <Tooltip title={t('runs.invalidReason', { reason })} labels>
+      {chip}
+    </Tooltip>
   ) : (
     chip
   )

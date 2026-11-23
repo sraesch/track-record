@@ -1,0 +1,21 @@
+/* The app frame on Graphite's shell classes (g-shell, g-titlebar, g-sidebar, g-main). */
+html, body, #root { height: 100%; }
+
+.tr-shell { grid-template-rows: var(--titlebar) minmax(0, 1fr); height: 100%; }
+.tr-shell .g-titlebar { gap: var(--space-2); padding-left: var(--space-2); }
+.tr-home { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-primary); text-decoration: none; font: 600 14px/20px var(--font-sans); white-space: nowrap; border-radius: var(--radius-sm); padding: 0 var(--space-1); }
+.tr-home img { width: 20px; height: 20px; display: block; flex: none; }
+.tr-home:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.tr-sidebar { padding-top: var(--space-1); }
+.tr-sidebar ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.tr-nav-section { margin-bottom: var(--space-2); }
+.tr-main { background: var(--bg-000); }
+.tr-page { padding: var(--space-6); max-width: 1600px; width: 100%; box-sizing: border-box; }
+
+/* Narrow screens: the menu slides in over the page. */
+@media (max-width: 899.95px) {
+  .tr-shell, .tr-shell.g-shell-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .tr-shell .g-sidebar { position: fixed; top: var(--titlebar); bottom: 0; left: 0; width: min(var(--sidebar), 85vw); z-index: var(--z-dialog); box-shadow: var(--shadow-dialog); }
+  .tr-page { padding: var(--space-4); }
+}
+.tr-scrim { position: fixed; inset: var(--titlebar) 0 0 0; z-index: calc(var(--z-dialog) - 1); background: rgba(0, 0, 0, 0.4); border: 0; padding: 0; }

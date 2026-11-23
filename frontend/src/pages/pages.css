@@ -1,0 +1,26 @@
+/* Building blocks shared by pages. */
+.tr-page-header { margin-bottom: var(--space-6); }
+.tr-page-title-row { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-4); row-gap: var(--space-2); }
+.tr-page-description { margin: var(--space-1) 0 0; max-width: 72ch; color: var(--text-secondary); }
+
+/* Section: Graphite's panel with a level-2 heading */
+.tr-section { overflow: hidden; }
+.tr-section > .g-panel-head { height: auto; min-height: var(--titlebar); flex-wrap: wrap; padding-top: var(--space-1); padding-bottom: var(--space-1); }
+.tr-section > .g-panel-head > h2 { flex-grow: 1; }
+.tr-section-body { padding: var(--space-3) var(--space-4) var(--space-4); min-width: 0; }
+
+.tr-empty { padding: var(--space-8); display: flex; flex-direction: column; align-items: center; gap: var(--space-2); text-align: center; color: var(--text-secondary); }
+.tr-empty p { margin: 0; }
+
+/* Facts: label/value pairs, two columns where there is room */
+.tr-facts { container-type: inline-size; }
+.tr-facts dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: var(--space-4); row-gap: var(--space-2); align-items: baseline; }
+.tr-facts dt { font: 400 12px/16px var(--font-sans); color: var(--text-secondary); }
+.tr-facts dt.tr-facts-code { font-family: var(--font-mono); }
+.tr-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+@container (min-width: 640px) {
+  .tr-facts dl { grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr); column-gap: var(--space-6); }
+}
+
+.tr-search { flex: 0 1 280px; min-width: 200px; }
+

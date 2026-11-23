@@ -1,23 +1,22 @@
-import Alert from '@mui/material/Alert'
-import Button from '@mui/material/Button'
-import type { SxProps, Theme } from '@mui/material/styles'
+import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Alert, Button } from '../ui'
 
 type Props = {
   message: string
   onRetry: () => void
-  sx?: SxProps<Theme>
+  style?: CSSProperties
 }
 
 /** A failed request, with a button to try again. */
-export function ErrorAlert({ message, onRetry, sx }: Props) {
+export function ErrorAlert({ message, onRetry, style }: Props) {
   const { t } = useTranslation()
   return (
     <Alert
-      severity="error"
-      sx={sx}
+      tone="error"
+      style={style}
       action={
-        <Button color="inherit" size="small" onClick={onRetry}>
+        <Button variant="ghost" size="sm" onClick={onRetry}>
           {t('common.retry')}
         </Button>
       }

@@ -1,0 +1,57 @@
+/* Attachment previews (ADR 0013): images, Markdown, JSON and text. */
+
+/* The attachment on its own page. */
+.tr-attachments-page { padding: var(--space-4); }
+
+/* Thumbnail of an image in a list of attachments. */
+.tr-attachments-thumb { flex-shrink: 0; width: 56px; height: 40px; box-sizing: border-box; border-radius: var(--radius-xs); border: 1px solid var(--border-200); background: var(--bg-300); }
+img.tr-attachments-thumb { display: block; object-fit: cover; }
+div.tr-attachments-thumb { display: flex; align-items: center; justify-content: center; color: var(--text-secondary); }
+
+/* An image preview; a checkerboard shows where the image is transparent. */
+.tr-attachments-image-frame { display: flex; justify-content: center; }
+.tr-attachments-image {
+  display: block;
+  max-width: 100%;
+  object-fit: contain;
+  background-color: var(--bg-300);
+  background-image: conic-gradient(rgba(127, 127, 127, 0.12) 25%, transparent 0 50%, rgba(127, 127, 127, 0.12) 0 75%, transparent 0);
+  background-size: 16px 16px;
+}
+.tr-attachments-image-dialog { max-height: calc(100vh - 220px); }
+
+/* On a wide page, keep Markdown lines short enough to read. */
+.tr-attachments-readable { max-width: 80ch; }
+
+/* Preformatted text in a monospace block; long lines wrap. */
+.tr-attachments-code { margin: 0; padding: var(--space-4); border-radius: var(--radius-md); background: var(--bg-300); font: 400 12px/20px var(--font-mono); color: var(--text-primary); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* JSON tokens, in colors that follow the color mode. */
+.tr-attachments-json [data-token="key"] { color: var(--accent-text); }
+.tr-attachments-json [data-token="string"] { color: var(--success); }
+.tr-attachments-json [data-token="number"] { color: var(--warning); }
+.tr-attachments-json [data-token="boolean"] { color: var(--info); }
+.tr-attachments-json [data-token="null"] { color: var(--text-secondary); }
+.tr-attachments-json [data-token="other"] { color: var(--danger); }
+
+/* Markdown, rendered as React elements. */
+.tr-attachments-markdown { font: 400 13px/20px var(--font-sans); color: var(--text-primary); overflow-wrap: anywhere; }
+.tr-attachments-markdown > :last-child { margin-bottom: 0; }
+.tr-attachments-markdown :is(h1, h2, h3, h4, h5, h6) { margin: 0 0 var(--space-3); line-height: 1.3; font-weight: 600; }
+/* Space above a heading, except at the very top. */
+.tr-attachments-markdown * + :is(h1, h2, h3, h4, h5, h6) { margin-top: var(--space-6); }
+.tr-attachments-markdown h1 { font-size: 22px; }
+.tr-attachments-markdown h2 { font-size: 18px; }
+.tr-attachments-markdown h3 { font-size: 15px; }
+.tr-attachments-markdown :is(h4, h5, h6) { font-size: 13px; }
+.tr-attachments-markdown :is(p, ul, ol, blockquote, pre, table) { margin: 0 0 var(--space-4); }
+.tr-attachments-markdown :is(ul, ol) { padding-left: var(--space-6); }
+.tr-attachments-markdown li + li { margin-top: var(--space-1); }
+.tr-attachments-markdown code { font-family: var(--font-mono); font-size: 0.92em; padding: 0 var(--space-1); border-radius: var(--radius-xs); background: var(--bg-300); }
+.tr-attachments-markdown pre { padding: var(--space-4); border-radius: var(--radius-md); background: var(--bg-300); overflow-x: auto; }
+.tr-attachments-markdown pre code { padding: 0; background: transparent; }
+.tr-attachments-markdown blockquote { margin-left: 0; margin-right: 0; padding-left: var(--space-4); border-left: 4px solid var(--border-200); color: var(--text-secondary); }
+.tr-attachments-markdown table { display: block; overflow-x: auto; border-collapse: collapse; }
+.tr-attachments-markdown :is(th, td) { border: 1px solid var(--border-200); padding: var(--space-1) var(--space-3); }
+.tr-attachments-markdown th { font-weight: 600; background: var(--bg-300); }
+.tr-attachments-markdown hr { border: 0; border-top: 1px solid var(--border-200); margin: var(--space-6) 0; }

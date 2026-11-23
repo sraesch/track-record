@@ -17,6 +17,7 @@
     ]
   },
   "ignorePatterns": [
-    "src/api/schema.d.ts"
+    "src/api/schema.d.ts",
+    "graphite/**"
   ]
 }

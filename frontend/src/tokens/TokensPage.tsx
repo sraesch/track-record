@@ -1,21 +1,5 @@
-import AddIcon from '@mui/icons-material/Add'
-import BlockIcon from '@mui/icons-material/Block'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Chip from '@mui/material/Chip'
-import FormControlLabel from '@mui/material/FormControlLabel'
-import IconButton from '@mui/material/IconButton'
-import LinearProgress from '@mui/material/LinearProgress'
-import Paper from '@mui/material/Paper'
-import Switch from '@mui/material/Switch'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
+import { cx, Switch } from '@graphite/react'
+import { Ban, CircleCheck, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
@@ -24,7 +8,15 @@ import { EmptyState } from '../pages/EmptyState'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { PageHeader } from '../pages/PageHeader'
 import { Time } from '../pages/Time'
-import { visuallyHidden } from '../pages/visuallyHidden'
+import {
+  Button,
+  Chip,
+  IconButton,
+  ProgressBar,
+  Table,
+  Tooltip,
+  VisuallyHidden,
+} from '../ui'
 import { useTokens } from './queries'
 import {
   CreateTokenDialog,
@@ -37,6 +29,7 @@ import {
   shownTokens,
   tokensViewToParams,
 } from './tokenModel'
+import './tokens.css'
 
 /**
  * API tokens (NFR-2) for the machine clients: the harness and MCP clients.
@@ -70,8 +63,8 @@ export function TokensPage() {
         description={t('pages.tokens.description')}
         actions={
           <Button
-            variant="contained"
-            startIcon={<AddIcon />}
+            variant="primary"
+            icon={Plus}
             onClick={() => setCreating((c) => ({ open: true, key: c.key + 1 }))}
           >
             {t('tokens.create.action')}
@@ -79,27 +72,19 @@ export function TokensPage() {
         }
       />
 
-      <Box sx={{ display: 'flex', mb: 1 }}>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={view.revoked}
-              onChange={(event) =>
-                setSearchParams(
-                  tokensViewToParams({ revoked: event.target.checked }),
-                )
-              }
-            />
-          }
+      <div className="tr-tokens-toolbar">
+        <Switch
           label={t('tokens.showRevoked')}
+          checked={view.revoked}
+          onCheckedChange={(revoked) =>
+            setSearchParams(tokensViewToParams({ revoked }))
+          }
         />
-      </Box>
+      </div>
 
-      <Box sx={{ height: 4, mb: 1 }}>
-        {tokens.isFetching && (
-          <LinearProgress aria-label={t('common.loading')} />
-        )}
-      </Box>
+      <div className="tr-tokens-progress">
+        {tokens.isFetching && <ProgressBar />}
+      </div>
 
       {tokens.isError && !tokens.data ? (
         <ErrorAlert
@@ -118,12 +103,12 @@ export function TokensPage() {
             rows={shown}
             onRevoke={(token) => setRevoking({ token, open: true })}
           />
-          <Typography variant="body2" color="text.secondary" sx={{ my: 1.5 }}>
+          <p className="ui-text ui-secondary tr-tokens-count">
             {t('tokens.count', { count: shown.length })}
             {!view.revoked &&
               revokedCount > 0 &&
               ` · ${t('tokens.hiddenCount', { count: revokedCount })}`}
-          </Typography>
+          </p>
         </>
       )}
 
@@ -165,101 +150,73 @@ type TableProps = {
 function TokenTable({ rows, onRevoke }: TableProps) {
   const { t } = useTranslation()
   return (
-    <TableContainer component={Paper} variant="outlined">
-      <Table size="small" aria-label={t('nav.items.tokens')}>
-        <TableHead>
-          <TableRow>
-            <TableCell>{t('tokens.columns.name')}</TableCell>
-            <TableCell>{t('tokens.columns.scope')}</TableCell>
-            <TableCell>{t('tokens.columns.created')}</TableCell>
-            <TableCell>{t('tokens.columns.lastUsed')}</TableCell>
-            <TableCell>{t('tokens.columns.status')}</TableCell>
-            <TableCell align="right">
-              <Box component="span" sx={visuallyHidden}>
-                {t('tokens.columns.actions')}
-              </Box>
-            </TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((token) => (
-            <TableRow key={token.id}>
-              <TableCell
-                sx={{
-                  minWidth: 160,
-                  overflowWrap: 'anywhere',
-                  fontWeight: 500,
-                  color: isRevoked(token) ? 'text.secondary' : undefined,
-                }}
-              >
-                {token.name}
-              </TableCell>
-              <TableCell>
-                {/* Describes the chip; as its label it would replace the
-                    scope's name for screen readers. */}
-                <Tooltip
-                  describeChild
-                  title={t(`tokens.scopeHelp.${token.scope}`)}
-                >
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    label={t(`tokens.scope.${token.scope}`)}
-                  />
-                </Tooltip>
-              </TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                <Time iso={token.created_at} />
-              </TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                {token.last_used_at ? (
-                  <Time iso={token.last_used_at} />
-                ) : (
-                  <Typography
-                    component="span"
-                    variant="body2"
-                    color="text.secondary"
-                  >
-                    {t('tokens.neverUsed')}
-                  </Typography>
-                )}
-              </TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                {token.revoked_at ? (
-                  <Box
-                    sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
-                  >
-                    <Chip size="small" label={t('tokens.status.revoked')} />
-                    <Time iso={token.revoked_at} />
-                  </Box>
-                ) : (
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    color="success"
-                    label={t('tokens.status.active')}
-                  />
-                )}
-              </TableCell>
-              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                {!isRevoked(token) && (
-                  <Tooltip title={t('tokens.revoke.action')}>
-                    <IconButton
-                      size="small"
-                      aria-label={t('tokens.revoke.named', {
-                        name: token.name,
-                      })}
-                      onClick={() => onRevoke(token)}
-                    >
-                      <BlockIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
+    <Table framed aria-label={t('nav.items.tokens')}>
+      <thead>
+        <tr>
+          <th>{t('tokens.columns.name')}</th>
+          <th>{t('tokens.columns.scope')}</th>
+          <th>{t('tokens.columns.created')}</th>
+          <th>{t('tokens.columns.lastUsed')}</th>
+          <th>{t('tokens.columns.status')}</th>
+          <th className="g-r">
+            <VisuallyHidden>{t('tokens.columns.actions')}</VisuallyHidden>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((token) => (
+          <tr key={token.id}>
+            <td
+              className={cx(
+                'ui-wrap-cell tr-tokens-name',
+                isRevoked(token) && 'tr-tokens-revoked',
+              )}
+            >
+              {token.name}
+            </td>
+            <td>
+              {/* Describes the chip; as its label it would replace the
+                  scope's name for screen readers. */}
+              <Tooltip title={t(`tokens.scopeHelp.${token.scope}`)}>
+                <Chip outlined>{t(`tokens.scope.${token.scope}`)}</Chip>
+              </Tooltip>
+            </td>
+            <td>
+              <Time iso={token.created_at} />
+            </td>
+            <td>
+              {token.last_used_at ? (
+                <Time iso={token.last_used_at} />
+              ) : (
+                <span className="ui-secondary">{t('tokens.neverUsed')}</span>
+              )}
+            </td>
+            <td>
+              {token.revoked_at ? (
+                <span className="ui-inline-row tr-tokens-gap">
+                  <Chip icon={Ban}>{t('tokens.status.revoked')}</Chip>
+                  <Time iso={token.revoked_at} />
+                </span>
+              ) : (
+                <Chip tone="success" icon={CircleCheck}>
+                  {t('tokens.status.active')}
+                </Chip>
+              )}
+            </td>
+            <td className="g-r">
+              {!isRevoked(token) && (
+                <IconButton
+                  size="sm"
+                  icon={Ban}
+                  label={t('tokens.revoke.named', { name: token.name })}
+                  tooltip={t('tokens.revoke.action')}
+                  onClick={() => onRevoke(token)}
+                />
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
   )
 }

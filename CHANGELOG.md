@@ -173,7 +173,13 @@ Nothing has been released yet. This is everything on `develop` so far.
 ### Changed
 
 These changes happened before any release. They matter only for databases
-that already run a `develop` image.
+that already run a `develop` image, except the first one.
+
+- The web UI is built on the **Graphite** design system instead of MUI
+  ([ADR 0019](docs/adr/0019-graphite-design-system.md)): denser pages,
+  dark by default where the system is dark, Lucide icons and the Geist
+  fonts bundled with the app (no requests to Google Fonts). On wide screens
+  the side menu collapses to a rail of icons instead of disappearing.
 
 - Derived metrics are no longer versioned: each has one definition, which
   can be changed (FR-7, FR-17,

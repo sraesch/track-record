@@ -1,18 +1,12 @@
-import Box from '@mui/material/Box'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import Typography from '@mui/material/Typography'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SampleDetail } from '../../api/client'
 import { formatNumber } from '../../format'
 import { Section } from '../../pages/Section'
-import { byRepetition, warmupRowSx } from './samples'
+import { Table } from '../../ui'
+import { byRepetition, warmupRowClass } from './samples'
 import { WarmupChip } from './WarmupChip'
+import './case.css'
 
 type Column = SampleDetail['measurements'][number]
 
@@ -41,84 +35,67 @@ export function SampleMeasurements({
       title={t('caseExecution.measurements.title')}
       flush
       actions={
-        <Typography variant="body2" color="text.secondary">
+        <span className="small ui-secondary">
           {warmup > 0
             ? t('caseExecution.measurements.countWithWarmup', {
                 count: samples.length,
                 warmup,
               })
             : t('caseExecution.measurements.count', { count: samples.length })}
-        </Typography>
+        </span>
       }
     >
       {columns.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" sx={{ px: 2, pb: 2 }}>
+        <p className="ui-text ui-secondary tr-case-flush-text">
           {t('caseExecution.measurements.empty')}
-        </Typography>
+        </p>
       ) : (
-        <TableContainer>
-          <Table size="small" aria-label={t('caseExecution.measurements.title')}>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  {t('caseExecution.repetition')}
-                </TableCell>
-                {columns.map((column) => (
-                  <TableCell
-                    key={column.metric_id}
-                    align="right"
-                    sx={{ verticalAlign: 'bottom' }}
-                  >
-                    <Box component="span" sx={{ display: 'block', whiteSpace: 'nowrap' }}>
-                      {column.metric}
-                    </Box>
-                    {/* An empty line without a unit keeps the names aligned. */}
-                    <Typography
-                      component="span"
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: 'block' }}
-                    >
-                      {column.unit || '\u00a0'}
-                    </Typography>
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.map((sample) => {
-                const values = new Map(
-                  sample.measurements.map((m) => [m.metric_id, m.value]),
-                )
-                return (
-                  <TableRow
-                    key={sample.id}
-                    sx={sample.is_warmup ? warmupRowSx : undefined}
-                  >
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                      {sample.repetition}
-                      {sample.is_warmup && <WarmupChip />}
-                    </TableCell>
-                    {columns.map((column) => {
-                      const value = values.get(column.metric_id)
-                      return (
-                        <TableCell
-                          key={column.metric_id}
-                          align="right"
-                          sx={{ fontVariantNumeric: 'tabular-nums' }}
-                        >
-                          {value === undefined
-                            ? t('common.none')
-                            : formatNumber(value)}
-                        </TableCell>
-                      )
-                    })}
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <Table aria-label={t('caseExecution.measurements.title')}>
+          <thead>
+            <tr>
+              <th className="tr-case-metric-head">
+                {t('caseExecution.repetition')}
+              </th>
+              {columns.map((column) => (
+                <th key={column.metric_id} className="g-r tr-case-metric-head">
+                  <span>{column.metric}</span>
+                  {/* An empty line without a unit keeps the names aligned. */}
+                  <span className="tr-case-metric-unit">
+                    {column.unit || ' '}
+                  </span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((sample) => {
+              const values = new Map(
+                sample.measurements.map((m) => [m.metric_id, m.value]),
+              )
+              return (
+                <tr
+                  key={sample.id}
+                  className={sample.is_warmup ? warmupRowClass : undefined}
+                >
+                  <td>
+                    {sample.repetition}
+                    {sample.is_warmup && <WarmupChip />}
+                  </td>
+                  {columns.map((column) => {
+                    const value = values.get(column.metric_id)
+                    return (
+                      <td key={column.metric_id} className="g-r">
+                        {value === undefined
+                          ? t('common.none')
+                          : formatNumber(value)}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </Table>
       )}
     </Section>
   )

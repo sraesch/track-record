@@ -1,11 +1,7 @@
-import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Skeleton from '@mui/material/Skeleton'
 import { lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ErrorBoundary } from '../pages/ErrorBoundary'
-import { visuallyHidden } from '../pages/visuallyHidden'
+import { Alert, Button, Skeleton, VisuallyHidden } from '../ui'
 import type { EChartProps } from './EChart'
 
 // ECharts is large: it is loaded with the first chart a page shows, as its
@@ -27,40 +23,32 @@ type Props = EChartProps & {
  */
 export function Chart({ label, ...chart }: Props) {
   return (
-    <Box sx={{ position: 'relative' }}>
-      <Box component="span" sx={visuallyHidden}>
-        {label}
-      </Box>
+    <div style={{ position: 'relative' }}>
+      <VisuallyHidden>{label}</VisuallyHidden>
       <ErrorBoundary fallback={() => <ChartFailed />}>
         <Suspense fallback={<ChartPlaceholder height={chart.height} />}>
           <EChart {...chart} />
         </Suspense>
       </ErrorBoundary>
-    </Box>
+    </div>
   )
 }
 
 /** Takes the place of a chart while it or its data loads. */
 export function ChartPlaceholder({ height }: { height: number }) {
   const { t } = useTranslation()
-  return (
-    <Skeleton
-      variant="rounded"
-      height={height}
-      aria-label={t('common.loading')}
-    />
-  )
+  return <Skeleton height={height} label={t('common.loading')} />
 }
 
 function ChartFailed() {
   const { t } = useTranslation()
   return (
     <Alert
-      severity="error"
+      tone="error"
       action={
         <Button
-          color="inherit"
-          size="small"
+          variant="ghost"
+          size="sm"
           onClick={() => window.location.reload()}
         >
           {t('charts.reload')}

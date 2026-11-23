@@ -1,15 +1,7 @@
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import Accordion from '@mui/material/Accordion'
-import AccordionDetails from '@mui/material/AccordionDetails'
-import AccordionSummary from '@mui/material/AccordionSummary'
-import Box from '@mui/material/Box'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableRow from '@mui/material/TableRow'
-import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
 import { dslFunctions } from '../dsl/syntax'
+import { Disclosure, Table } from '../ui'
+import './derived.css'
 
 const syntaxExamples = [
   ['load_time', 'metric'],
@@ -24,28 +16,31 @@ const syntaxExamples = [
 export function FunctionReference() {
   const { t } = useTranslation()
   return (
-    <Accordion
-      variant="outlined"
-      disableGutters
-      slotProps={{ transition: { unmountOnExit: true } }}
-      sx={{ '&::before': { display: 'none' } }}
-    >
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography variant="body2">{t('dsl.reference.title')}</Typography>
-      </AccordionSummary>
-      <AccordionDetails sx={{ pt: 0 }}>
-        <Table size="small" aria-label={t('dsl.reference.syntax')}>
-          <TableBody>
+    <Disclosure summary={t('dsl.reference.title')}>
+      <div className="tr-derived-reference">
+        <Table
+          framed
+          className="tr-derived-reference-table"
+          aria-label={t('dsl.reference.syntax')}
+        >
+          <tbody>
             {syntaxExamples.map(([example, key]) => (
               <Row key={key} code={example} text={t(`dsl.reference.${key}`)} />
             ))}
-          </TableBody>
+          </tbody>
         </Table>
-        <Typography variant="subtitle2" component="h3" sx={{ mt: 2, mb: 0.5 }}>
+        <h4
+          className="body-medium ui-heading"
+          style={{ marginTop: 'var(--space-2)' }}
+        >
           {t('dsl.reference.functions')}
-        </Typography>
-        <Table size="small" aria-label={t('dsl.reference.functions')}>
-          <TableBody>
+        </h4>
+        <Table
+          framed
+          className="tr-derived-reference-table"
+          aria-label={t('dsl.reference.functions')}
+        >
+          <tbody>
             {dslFunctions.map((f) => (
               <Row
                 key={f.name}
@@ -53,28 +48,21 @@ export function FunctionReference() {
                 text={t(`dsl.functions.${f.name}`)}
               />
             ))}
-          </TableBody>
+          </tbody>
         </Table>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-          {t('dsl.reference.noValue')}
-        </Typography>
-      </AccordionDetails>
-    </Accordion>
+        <p className="ui-text ui-secondary">{t('dsl.reference.noValue')}</p>
+      </div>
+    </Disclosure>
   )
 }
 
 function Row({ code, text }: { code: string; text: string }) {
   return (
-    <TableRow>
-      <TableCell sx={{ width: '40%', verticalAlign: 'top' }}>
-        <Box
-          component="code"
-          sx={{ fontFamily: 'monospace', overflowWrap: 'anywhere' }}
-        >
-          {code}
-        </Box>
-      </TableCell>
-      <TableCell sx={{ verticalAlign: 'top' }}>{text}</TableCell>
-    </TableRow>
+    <tr>
+      <td>
+        <code className="ui-code">{code}</code>
+      </td>
+      <td>{text}</td>
+    </tr>
   )
 }

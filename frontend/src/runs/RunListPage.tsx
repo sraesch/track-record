@@ -1,13 +1,10 @@
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import LinearProgress from '@mui/material/LinearProgress'
-import Typography from '@mui/material/Typography'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
 import { EmptyState } from '../pages/EmptyState'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { PageHeader } from '../pages/PageHeader'
+import { Button, ProgressBar } from '../ui'
 import { useRunList } from './queries'
 import { RunFilterBar } from './RunFilterBar'
 import {
@@ -18,6 +15,7 @@ import {
   runFiltersToQuery,
 } from './runFilters'
 import { RunTable } from './RunTable'
+import './runs.css'
 
 /** The run list (FR-11): newest measured start first, filtered by the URL. */
 export function RunListPage() {
@@ -61,9 +59,9 @@ export function RunListPage() {
       <RunFilterBar filters={filters} onChange={setFilters} />
 
       {/* Keeps its height so the table does not jump while refetching. */}
-      <Box sx={{ height: 4, mb: 1 }}>
-        {runs.isFetching && <LinearProgress aria-label={t('common.loading')} />}
-      </Box>
+      <div className="tr-runs-progress">
+        {runs.isFetching && <ProgressBar label={t('common.loading')} />}
+      </div>
 
       {/* Without rows, an error takes the whole area; with rows (a failed
           "Load more" or background refetch), the rows stay and the error
@@ -71,27 +69,21 @@ export function RunListPage() {
       {!runs.data ? (
         errorAlert
       ) : loaded.length === 0 ? (
-        <EmptyState>{filtered ? t('runs.noMatch') : t('runs.empty')}</EmptyState>
+        <EmptyState>
+          {filtered ? t('runs.noMatch') : t('runs.empty')}
+        </EmptyState>
       ) : (
         <>
           <RunTable runs={loaded} onTagClick={addTag} />
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              my: 1.5,
-            }}
-          >
-            <Typography variant="body2" color="text.secondary">
+          <div className="tr-runs-list-footer">
+            <p className="ui-text ui-secondary">
               {runs.hasNextPage
                 ? t('runs.shown', { count: loaded.length })
                 : t('runs.allShown', { count: loaded.length })}
-            </Typography>
+            </p>
             {runs.hasNextPage && (
               <Button
-                variant="outlined"
-                size="small"
+                size="sm"
                 loading={runs.isFetchingNextPage}
                 disabled={runs.isPlaceholderData}
                 onClick={() => runs.fetchNextPage()}
@@ -99,7 +91,7 @@ export function RunListPage() {
                 {t('runs.loadMore')}
               </Button>
             )}
-          </Box>
+          </div>
           {errorAlert}
         </>
       )}

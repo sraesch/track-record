@@ -1,17 +1,5 @@
-import Box from '@mui/material/Box'
-import Chip from '@mui/material/Chip'
-import Link from '@mui/material/Link'
-import Paper from '@mui/material/Paper'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
+import { cx } from '@graphite/react'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink } from 'react-router'
 import type { RunSummary } from '../api/client'
 import {
   formatDateTime,
@@ -20,8 +8,10 @@ import {
   shortCommit,
 } from '../format'
 import { useRowLink } from '../pages/useRowLink'
+import { Chip, Stack, Table, TextLink, Tooltip } from '../ui'
 import { runPath } from './paths'
 import { InvalidChip, RunStatusChip } from './RunStatusChip'
+import './runs.css'
 
 type Props = {
   runs: readonly RunSummary[]
@@ -35,120 +25,92 @@ export function RunTable({ runs, onTagClick }: Props) {
   const rowLink = useRowLink()
 
   return (
-    <TableContainer component={Paper} variant="outlined">
-      <Table size="small" aria-label={t('nav.items.runs')}>
-        <TableHead>
-          <TableRow>
-            <TableCell>{t('runs.columns.status')}</TableCell>
-            <TableCell>{t('runs.columns.started')}</TableCell>
-            <TableCell>{t('runs.columns.duration')}</TableCell>
-            <TableCell>{t('runs.columns.suite')}</TableCell>
-            <TableCell>{t('runs.columns.sutVersion')}</TableCell>
-            <TableCell>{t('runs.columns.trigger')}</TableCell>
-            <TableCell>{t('runs.columns.tags')}</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {runs.map((run) => {
-            const href = runPath(run.id)
-            const started = formatDateTime(run.started_at)
-            return (
-              <TableRow
-                key={run.id}
-                hover
-                onClick={rowLink(href)}
-                sx={{
-                  cursor: 'pointer',
-                  opacity: run.is_valid ? 1 : 0.6,
-                  '& td': { whiteSpace: 'nowrap' },
-                }}
-              >
-                <TableCell>
-                  <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    <RunStatusChip status={run.status} />
-                    {!run.is_valid && (
-                      <InvalidChip reason={run.invalid_reason} />
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Tooltip title={formatTimestamp(run.started_at)}>
-                    <Link
-                      component={RouterLink}
-                      to={href}
-                      underline="hover"
-                      aria-label={t('runs.open', { started })}
+    <Table framed aria-label={t('nav.items.runs')}>
+      <thead>
+        <tr>
+          <th>{t('runs.columns.status')}</th>
+          <th>{t('runs.columns.started')}</th>
+          <th>{t('runs.columns.duration')}</th>
+          <th>{t('runs.columns.suite')}</th>
+          <th>{t('runs.columns.sutVersion')}</th>
+          <th>{t('runs.columns.trigger')}</th>
+          <th>{t('runs.columns.tags')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {runs.map((run) => {
+          const href = runPath(run.id)
+          const started = formatDateTime(run.started_at)
+          return (
+            <tr
+              key={run.id}
+              className={cx('ui-row-link', !run.is_valid && 'tr-runs-dim')}
+              onClick={rowLink(href)}
+            >
+              <td>
+                <Stack row gap={1}>
+                  <RunStatusChip status={run.status} />
+                  {!run.is_valid && <InvalidChip reason={run.invalid_reason} />}
+                </Stack>
+              </td>
+              <td>
+                <Tooltip title={formatTimestamp(run.started_at)}>
+                  <TextLink to={href} aria-label={t('runs.open', { started })}>
+                    {started}
+                  </TextLink>
+                </Tooltip>
+              </td>
+              <td>
+                {run.ended_at
+                  ? formatDuration(run.started_at, run.ended_at)
+                  : run.status === 'running'
+                    ? t('runs.stillRunning')
+                    : t('common.none')}
+              </td>
+              <td>
+                {run.suite.name}{' '}
+                <span className="ui-secondary">
+                  {t('runs.version', { version: run.suite.version })}
+                </span>
+              </td>
+              <td>
+                <SutVersion version={run.sut_version} />
+              </td>
+              <td>{t(`runs.trigger.${run.triggered_by}`)}</td>
+              <td>
+                <Stack row gap={1}>
+                  {run.tags.map((tag) => (
+                    <Chip
+                      key={tag}
+                      aria-label={t('runs.filterByTag', { tag })}
+                      onClick={() => onTagClick(tag)}
                     >
-                      {started}
-                    </Link>
-                  </Tooltip>
-                </TableCell>
-                <TableCell>
-                  {run.ended_at
-                    ? formatDuration(run.started_at, run.ended_at)
-                    : run.status === 'running'
-                      ? t('runs.stillRunning')
-                      : t('common.none')}
-                </TableCell>
-                <TableCell>
-                  {run.suite.name}
-                  <Typography
-                    component="span"
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ ml: 0.5 }}
-                  >
-                    {t('runs.version', { version: run.suite.version })}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <SutVersion version={run.sut_version} />
-                </TableCell>
-                <TableCell>{t(`runs.trigger.${run.triggered_by}`)}</TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    {run.tags.map((tag) => (
-                      <Chip
-                        key={tag}
-                        size="small"
-                        label={tag}
-                        aria-label={t('runs.filterByTag', { tag })}
-                        onClick={() => onTagClick(tag)}
-                      />
-                    ))}
-                  </Box>
-                </TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+                      {tag}
+                    </Chip>
+                  ))}
+                </Stack>
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </Table>
   )
 }
 
 function SutVersion({ version }: { version: RunSummary['sut_version'] }) {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+    <Stack row gap={2} align="baseline">
       {version.branch && <span>{version.branch}</span>}
       <Tooltip title={version.commit}>
-        <Typography
-          component="code"
-          variant="body2"
-          color="text.secondary"
-          sx={{ fontFamily: 'monospace' }}
-        >
+        <code className="ui-code ui-secondary">
           {shortCommit(version.commit)}
-        </Typography>
+        </code>
       </Tooltip>
-      {version.tag && (
-        <Chip size="small" variant="outlined" label={version.tag} />
-      )}
+      {version.tag && <Chip outlined>{version.tag}</Chip>}
       {version.build_config && (
-        <Typography component="span" variant="body2" color="text.secondary">
-          {version.build_config}
-        </Typography>
+        <span className="ui-secondary">{version.build_config}</span>
       )}
-    </Box>
+    </Stack>
   )
 }

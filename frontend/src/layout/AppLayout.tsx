@@ -1,126 +1,87 @@
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
-import MenuIcon from '@mui/icons-material/Menu'
-import MenuOpenIcon from '@mui/icons-material/MenuOpen'
-import AppBar from '@mui/material/AppBar'
-import Box from '@mui/material/Box'
-import Drawer from '@mui/material/Drawer'
-import IconButton from '@mui/material/IconButton'
-import { useTheme } from '@mui/material/styles'
-import Toolbar from '@mui/material/Toolbar'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
-import useMediaQuery from '@mui/material/useMediaQuery'
+import { cx } from '@graphite/react'
+import { Info, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet } from 'react-router'
 import { aboutPath, homePath } from '../navigation'
-import { drawerWidth } from '../theme'
+import { breakpoints, IconButton, IconLinkButton, useMediaQuery } from '../ui'
 import { ColorModeMenu } from './ColorModeMenu'
+import './layout.css'
 import { NavMenu } from './NavMenu'
 
 const appIconUrl = `${import.meta.env.BASE_URL}favicon.svg`
 
 /**
- * The frame of every page: app bar on top, side menu on the left, the page
- * in the middle. On wide screens the menu is docked and can be hidden; on
- * narrow screens it slides in over the page.
+ * The frame of every page (Graphite's app shell): title bar on top, side
+ * menu on the left, the page in the middle. On wide screens the menu is
+ * docked and can be collapsed to a rail of icons; on narrow screens it
+ * slides in over the page and closes after navigating.
  */
 export function AppLayout() {
   const { t } = useTranslation()
-  const theme = useTheme()
-  const wide = useMediaQuery(theme.breakpoints.up('md'))
-  const [dockedOpen, setDockedOpen] = useState(true)
-  const [overlayOpen, setOverlayOpen] = useState(false)
+  const wide = useMediaQuery(`(min-width:${breakpoints.md}px)`)
+  const [docked, setDocked] = useState(true)
+  const [overlay, setOverlay] = useState(false)
 
-  const menuOpen = wide ? dockedOpen : overlayOpen
-  const menuLabel = menuOpen ? t('nav.close') : t('nav.open')
-  const toggleMenu = () =>
-    wide ? setDockedOpen((open) => !open) : setOverlayOpen((open) => !open)
+  const expanded = wide ? docked : overlay
+  const showMenu = wide || overlay
+  const toggleLabel = wide
+    ? t(docked ? 'nav.collapse' : 'nav.expand')
+    : t(overlay ? 'nav.close' : 'nav.open')
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      <AppBar
-        position="fixed"
-        elevation={0}
-        sx={{
-          zIndex: (th) => th.zIndex.drawer + 1,
-          borderBottom: 1,
-          borderColor: 'divider',
-        }}
-      >
-        <Toolbar>
-          {/* The tooltip also labels the button. */}
-          <Tooltip title={menuLabel}>
-            <IconButton
-              color="inherit"
-              edge="start"
-              aria-expanded={menuOpen}
-              aria-controls="side-menu"
-              onClick={toggleMenu}
-              sx={{ mr: 1.5 }}
-            >
-              {menuOpen ? <MenuOpenIcon /> : <MenuIcon />}
-            </IconButton>
-          </Tooltip>
-          <Typography
-            variant="h6"
-            component={Link}
-            to={homePath}
-            aria-label={t('nav.home')}
-            noWrap
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 1.25,
-              color: 'inherit',
-              textDecoration: 'none',
-              fontWeight: 600,
-            }}
-          >
-            {/* The same file as the favicon; the link's label names it. */}
-            <Box
-              component="img"
-              src={appIconUrl}
-              alt=""
-              sx={{ width: 28, height: 28, flexShrink: 0, display: 'block' }}
-            />
-            {t('app.name')}
-          </Typography>
-          <Box sx={{ flexGrow: 1 }} />
-          {/* The tooltip also labels the link. */}
-          <Tooltip title={t('about.label')}>
-            <IconButton color="inherit" component={Link} to={aboutPath}>
-              <InfoOutlinedIcon />
-            </IconButton>
-          </Tooltip>
+    <div
+      className={cx(
+        'g-shell',
+        'g-shell-nostatus',
+        'tr-shell',
+        wide && !docked && 'g-shell-collapsed',
+      )}
+    >
+      <header className="g-titlebar">
+        <IconButton
+          icon={expanded ? PanelLeftClose : PanelLeftOpen}
+          label={toggleLabel}
+          aria-expanded={expanded}
+          aria-controls="side-menu"
+          onClick={() => (wide ? setDocked((d) => !d) : setOverlay((o) => !o))}
+        />
+        <Link to={homePath} className="tr-home" aria-label={t('nav.home')}>
+          {/* The same file as the favicon; the link's label names it. */}
+          <img src={appIconUrl} alt="" />
+          {t('app.name')}
+        </Link>
+        <div className="g-titlebar-actions">
+          <IconLinkButton icon={Info} label={t('about.label')} to={aboutPath} />
           <ColorModeMenu />
-        </Toolbar>
-      </AppBar>
+        </div>
+      </header>
 
-      <Drawer
-        id="side-menu"
-        variant={wide ? 'persistent' : 'temporary'}
-        open={menuOpen}
-        onClose={() => setOverlayOpen(false)}
-        ModalProps={{ keepMounted: true }}
-        sx={{
-          width: wide && dockedOpen ? drawerWidth : 0,
-          flexShrink: 0,
-          transition: (th) => th.transitions.create('width'),
-          '& .MuiDrawer-paper': { width: drawerWidth, boxSizing: 'border-box' },
-        }}
-      >
-        <Toolbar />
-        <NavMenu onNavigate={wide ? undefined : () => setOverlayOpen(false)} />
-      </Drawer>
+      {showMenu && (
+        <nav
+          id="side-menu"
+          className="g-sidebar tr-sidebar"
+          aria-label={t('nav.label')}
+        >
+          {/* The overlay closes after navigating. */}
+          <NavMenu onNavigate={wide ? undefined : () => setOverlay(false)} />
+        </nav>
+      )}
+      {!wide && overlay && (
+        <button
+          type="button"
+          className="tr-scrim"
+          aria-label={t('nav.close')}
+          tabIndex={-1}
+          onClick={() => setOverlay(false)}
+        />
+      )}
 
-      <Box
-        component="main"
-        sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, sm: 3 } }}
-      >
-        <Toolbar />
-        <Outlet />
-      </Box>
-    </Box>
+      <main className="g-main tr-main">
+        <div className="tr-page">
+          <Outlet />
+        </div>
+      </main>
+    </div>
   )
 }

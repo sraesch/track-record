@@ -1,12 +1,7 @@
-import EditIcon from '@mui/icons-material/Edit'
-import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Link from '@mui/material/Link'
-import Typography from '@mui/material/Typography'
+import { Pencil } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink, useLocation } from 'react-router'
+import { useLocation } from 'react-router'
 import type { DerivedMetric } from '../api/client'
 import { derivedReference } from '../dsl/syntax'
 import { UnitLabel } from '../metrics/UnitLabel'
@@ -15,6 +10,7 @@ import { CopyButton } from '../pages/CopyButton'
 import { Facts } from '../pages/Facts'
 import { Section } from '../pages/Section'
 import { Time } from '../pages/Time'
+import { Alert, LinkButton, Stack, TextLink } from '../ui'
 import { DerivedMetricActions } from './DerivedMetricActions'
 import {
   type DerivedView,
@@ -22,6 +18,7 @@ import {
   type SetDerivedView,
 } from './derivedModel'
 import { derivedHref, derivedMetricHref } from './paths'
+import './derived.css'
 
 /** Set by the editor and the actions when they navigate after a change. */
 export type SavedState = {
@@ -70,35 +67,29 @@ export function DerivedMetricDetail({ metric, metrics, view, setView }: Props) {
     <Section
       title={metric.name}
       actions={
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+        <Stack row wrap gap={2}>
           <DerivedMetricActions
             metric={metric}
             metrics={metrics}
             view={view}
             setView={setView}
           />
-          <Button
-            component={RouterLink}
-            to={editHref}
-            size="small"
-            variant="outlined"
-            startIcon={<EditIcon />}
-          >
+          <LinkButton to={editHref} size="sm" icon={Pencil}>
             {t('derived.detail.edit')}
-          </Button>
-        </Box>
+          </LinkButton>
+        </Stack>
       }
     >
-      <Box sx={{ display: 'grid', gap: 2 }}>
+      <Stack gap={4}>
         {saved?.name === metric.name && (
-          <Alert severity="success">
+          <Alert tone="success">
             {saved.created
               ? t('derived.detail.created')
               : t('derived.detail.changed')}
           </Alert>
         )}
         {renamed?.name === metric.name && (
-          <Alert severity="success">
+          <Alert tone="success">
             {t('derived.detail.renamed', { from: renamed.from })}
             {renamed.rewritten.length > 0 &&
               ` ${t('derived.detail.rewritten', {
@@ -107,38 +98,18 @@ export function DerivedMetricDetail({ metric, metrics, view, setView }: Props) {
               })}`}
           </Alert>
         )}
-        <Box>
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <Typography variant="subtitle2" component="h3">
+        <div>
+          <Stack row justify="space-between" gap={2}>
+            <h3 className="body-medium ui-heading">
               {t('derived.detail.expression')}
-            </Typography>
+            </h3>
             <CopyButton
               text={metric.expression}
               label={t('derived.detail.copyExpression')}
             />
-          </Box>
-          <Box
-            component="pre"
-            sx={{
-              m: 0,
-              p: 1.5,
-              borderRadius: 1,
-              bgcolor: 'action.hover',
-              fontFamily: 'monospace',
-              fontSize: '0.875rem',
-              whiteSpace: 'pre-wrap',
-              overflowWrap: 'anywhere',
-            }}
-          >
-            {metric.expression}
-          </Box>
-        </Box>
+          </Stack>
+          <pre className="tr-derived-expression">{metric.expression}</pre>
+        </div>
         <Facts
           items={[
             {
@@ -148,18 +119,13 @@ export function DerivedMetricDetail({ metric, metrics, view, setView }: Props) {
             {
               label: t('derived.detail.reference'),
               value: (
-                <Box
-                  component="span"
-                  sx={{ display: 'inline-flex', alignItems: 'center' }}
-                >
-                  <Box component="code" sx={{ fontFamily: 'monospace' }}>
-                    {reference}
-                  </Box>
+                <span className="ui-inline-row">
+                  <code className="ui-code">{reference}</code>
                   <CopyButton
                     text={reference}
                     label={t('derived.detail.copyReference')}
                   />
-                </Box>
+                </span>
               ),
             },
             {
@@ -190,7 +156,7 @@ export function DerivedMetricDetail({ metric, metrics, view, setView }: Props) {
             },
           ]}
         />
-      </Box>
+      </Stack>
     </Section>
   )
 }
@@ -198,17 +164,16 @@ export function DerivedMetricDetail({ metric, metrics, view, setView }: Props) {
 /** Links to derived metrics, by name. */
 function MetricLinks({ names }: { names: readonly string[] }) {
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', columnGap: 1.5, rowGap: 0.5 }}>
+    <Stack
+      row
+      wrap
+      style={{ columnGap: 'var(--space-3)', rowGap: 'var(--space-1)' }}
+    >
       {names.map((name) => (
-        <Link
-          key={name}
-          component={RouterLink}
-          to={derivedMetricHref(name)}
-          sx={{ fontFamily: 'monospace' }}
-        >
+        <TextLink key={name} to={derivedMetricHref(name)} className="ui-code">
           {name}
-        </Link>
+        </TextLink>
       ))}
-    </Box>
+    </Stack>
   )
 }

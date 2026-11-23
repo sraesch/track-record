@@ -1,24 +1,21 @@
-import AddIcon from '@mui/icons-material/Add'
-import FunctionsIcon from '@mui/icons-material/Functions'
-import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import LinearProgress from '@mui/material/LinearProgress'
-import List from '@mui/material/List'
-import ListItemButton from '@mui/material/ListItemButton'
-import ListItemText from '@mui/material/ListItemText'
-import Paper from '@mui/material/Paper'
-import { useTheme } from '@mui/material/styles'
-import Typography from '@mui/material/Typography'
-import useMediaQuery from '@mui/material/useMediaQuery'
+import { Plus, Sigma } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink, useLocation, useSearchParams } from 'react-router'
+import { Link, useLocation, useSearchParams } from 'react-router'
 import type { DerivedMetric } from '../api/client'
 import { EmptyState } from '../pages/EmptyState'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { PageHeader } from '../pages/PageHeader'
 import { SearchField } from '../pages/SearchField'
+import {
+  Alert,
+  breakpoints,
+  LinkButton,
+  ProgressBar,
+  Stack,
+  Surface,
+  useMediaQuery,
+} from '../ui'
 import { DerivedMetricDetail, type SavedState } from './DerivedMetricDetail'
 import { DerivedMetricEditor } from './DerivedMetricEditor'
 import {
@@ -30,6 +27,7 @@ import {
 } from './derivedModel'
 import { derivedHref } from './paths'
 import { useDerivedMetrics } from './queries'
+import './derived.css'
 
 /**
  * Derived metrics (FR-17): the list on the left, the selected metric or the
@@ -57,8 +55,7 @@ export function DerivedMetricsPage() {
 
   // Stacked on narrow screens: bring the panel into view when the
   // selection or the editor changes, not when the page opens.
-  const theme = useTheme()
-  const stacked = useMediaQuery(theme.breakpoints.down('md'))
+  const stacked = !useMediaQuery(`(min-width:${breakpoints.md}px)`)
   const panel = useRef<HTMLDivElement>(null)
   const shownKey = `${view.name ?? ''}|${view.edit ?? ''}`
   const firstKey = useRef(shownKey)
@@ -74,17 +71,7 @@ export function DerivedMetricsPage() {
         title={t('nav.items.derivedMetrics')}
         description={t('pages.derivedMetrics.description')}
       />
-      <Box
-        sx={{
-          display: 'grid',
-          gap: 2,
-          alignItems: 'start',
-          gridTemplateColumns: {
-            xs: 'minmax(0, 1fr)',
-            md: 'minmax(240px, 1fr) minmax(0, 2.4fr)',
-          },
-        }}
-      >
+      <div className="tr-derived-layout">
         <DerivedList
           view={view}
           rows={rows}
@@ -95,7 +82,7 @@ export function DerivedMetricsPage() {
           // character.
           onSearch={(search) => setView({ ...view, search }, { replace: true })}
         />
-        <Box ref={panel} sx={{ minWidth: 0, scrollMarginTop: 72 }}>
+        <div ref={panel} className="tr-derived-panel">
           {metrics.isError && !metrics.data ? (
             <ErrorAlert
               message={t('derived.error', { message: metrics.error.message })}
@@ -124,23 +111,25 @@ export function DerivedMetricsPage() {
               setView={setView}
             />
           ) : view.name ? (
-            <EmptyState>{t('derived.notFound', { name: view.name })}</EmptyState>
+            <EmptyState>
+              {t('derived.notFound', { name: view.name })}
+            </EmptyState>
           ) : (
-            <Box sx={{ display: 'grid', gap: 2 }}>
+            <Stack gap={4}>
               {deleted && (
-                <Alert severity="success">
+                <Alert tone="success">
                   {t('derived.delete.done', { name: deleted })}
                 </Alert>
               )}
-              <EmptyState icon={<FunctionsIcon />} dashed>
+              <EmptyState icon={<Sigma size={24} aria-hidden />} dashed>
                 {rows.length === 0
                   ? t('derived.empty')
                   : t('derived.selectHint')}
               </EmptyState>
-            </Box>
+            </Stack>
           )}
-        </Box>
-      </Box>
+        </div>
+      </div>
     </>
   )
 }
@@ -168,118 +157,63 @@ function DerivedList({
     caseExecution: view.caseExecution,
   }
   return (
-    <Paper
-      component="nav"
-      variant="outlined"
+    <Surface
+      as="nav"
       aria-label={t('derived.listLabel')}
-      sx={{ minWidth: 0, overflow: 'hidden' }}
+      className="tr-derived-list"
     >
-      <Box
-        sx={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: 1,
-          p: 1.5,
-        }}
-      >
-        <Box component="search" sx={{ display: 'flex', flex: '1 1 160px' }}>
+      <div className="tr-derived-list-head">
+        <search className="tr-derived-search">
           <SearchField
             label={t('derived.search')}
             value={view.search ?? ''}
             onChange={onSearch}
           />
-        </Box>
-        <Button
-          component={RouterLink}
+        </search>
+        <LinkButton
           to={derivedHref({ ...keep, edit: 'new' })}
-          variant="contained"
-          size="small"
-          startIcon={<AddIcon />}
+          variant="primary"
+          icon={Plus}
         >
           {t('derived.new')}
-        </Button>
-      </Box>
-      <Box sx={{ height: 4 }}>
-        {fetching && <LinearProgress aria-label={t('common.loading')} />}
-      </Box>
+        </LinkButton>
+      </div>
+      <div className="tr-derived-progress">{fetching && <ProgressBar />}</div>
       {loaded && shown.length === 0 ? (
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ px: 2, py: 2 }}
-        >
+        <p className="ui-text tr-derived-list-note">
           {rows.length === 0 ? t('derived.none') : t('derived.noMatch')}
-        </Typography>
+        </p>
       ) : (
-        <List
-          dense
-          disablePadding
-          sx={{ maxHeight: { md: 'calc(100vh - 260px)' }, overflowY: 'auto' }}
-        >
+        <ul className="ui-list tr-derived-items">
           {shown.map((row) => {
             const current = row.name === view.name
             return (
-              <ListItemButton
-                key={row.id}
-                component={RouterLink}
-                to={derivedHref({ ...keep, name: row.name })}
-                selected={current}
-                aria-current={current ? 'page' : undefined}
-                sx={{ alignItems: 'flex-start' }}
-              >
-                <ListItemText
-                  primary={
-                    <Box
-                      component="span"
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        gap: 1,
-                      }}
-                    >
-                      <Box
-                        component="code"
-                        sx={{
-                          fontFamily: 'monospace',
-                          fontWeight: 500,
-                          overflowWrap: 'anywhere',
-                        }}
-                      >
-                        {row.name}
-                      </Box>
-                      <Typography
-                        component="span"
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ whiteSpace: 'nowrap' }}
-                      >
-                        {row.unit || t('metrics.unit.dimensionless')}
-                      </Typography>
-                    </Box>
-                  }
-                  secondary={row.expression}
-                  slotProps={{
-                    secondary: {
-                      noWrap: true,
-                      sx: { fontFamily: 'monospace', fontSize: '0.75rem' },
-                    },
-                  }}
-                />
-              </ListItemButton>
+              <li key={row.id}>
+                <Link
+                  to={derivedHref({ ...keep, name: row.name })}
+                  aria-current={current ? 'page' : undefined}
+                  className="tr-derived-item"
+                >
+                  <span className="tr-derived-item-head">
+                    <code className="tr-derived-item-name">{row.name}</code>
+                    <span className="tr-derived-item-unit">
+                      {row.unit || t('metrics.unit.dimensionless')}
+                    </span>
+                  </span>
+                  <span className="tr-derived-item-expression">
+                    {row.expression}
+                  </span>
+                </Link>
+              </li>
             )
           })}
-        </List>
+        </ul>
       )}
       {loaded && shown.length > 0 && (
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ px: 2, py: 1, borderTop: 1, borderColor: 'divider' }}
-        >
+        <p className="ui-text small tr-derived-count">
           {t('derived.count', { count: shown.length })}
-        </Typography>
+        </p>
       )}
-    </Paper>
+    </Surface>
   )
 }

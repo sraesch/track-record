@@ -1,19 +1,7 @@
-import ListAltIcon from '@mui/icons-material/ListAlt'
-import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Chip from '@mui/material/Chip'
-import Link from '@mui/material/Link'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import Typography from '@mui/material/Typography'
+import { cx } from '@graphite/react'
+import { ListChecks } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink } from 'react-router'
 import type { VersionedDefinition } from '../api/client'
 import { formatJsonValue, formatNumber } from '../format'
 import { CopyButton } from '../pages/CopyButton'
@@ -22,12 +10,12 @@ import { Section } from '../pages/Section'
 import { Time } from '../pages/Time'
 import { useRowLink } from '../pages/useRowLink'
 import { runListHref } from '../runs/runFilters'
+import { Alert, Chip, LinkButton, Stack, Table, TextLink } from '../ui'
 import { suitesHref } from './paths'
 import { useScenarioTestCases } from './queries'
 import { ScenarioTestCases } from './ScenarioTestCases'
 import {
   casesPerVersion,
-  type DefinitionChange,
   type DefinitionEntry,
   definitionEntries,
   selectedRow,
@@ -35,6 +23,7 @@ import {
   type VersionRow,
   versionRows,
 } from './suiteModel'
+import './suites.css'
 
 type Props = {
   definition: VersionedDefinition
@@ -61,33 +50,27 @@ export function DefinitionDetail({ definition, view }: Props) {
   )
 
   return (
-    <Box sx={{ display: 'grid', gap: 2 }}>
+    <Stack gap={4}>
       <Section
         title={definition.name}
         flush
         actions={
-          <Button
-            component={RouterLink}
+          <LinkButton
             to={runListHref(
               isScenario
                 ? { scenario: definition.name }
                 : { suite: definition.name },
             )}
-            size="small"
-            variant="outlined"
-            startIcon={<ListAltIcon />}
+            size="sm"
+            icon={ListChecks}
           >
             {t(`suites.kind.${view.tab}.runs`)}
-          </Button>
+          </LinkButton>
         }
       >
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ px: 2, pb: 1.5, maxWidth: '80ch' }}
-        >
+        <p className="ui-text ui-secondary tr-suites-intro">
           {t(`suites.kind.${view.tab}.about`)}
-        </Typography>
+        </p>
         <VersionTable
           rows={rows}
           selected={row}
@@ -101,7 +84,7 @@ export function DefinitionDetail({ definition, view }: Props) {
       {row ? (
         <VersionDefinition row={row} />
       ) : (
-        <Alert severity="warning">
+        <Alert tone="warning">
           {t('suites.versions.notFound', {
             name: definition.name,
             version: view.version,
@@ -116,7 +99,7 @@ export function DefinitionDetail({ definition, view }: Props) {
           query={testCases}
         />
       )}
-    </Box>
+    </Stack>
   )
 }
 
@@ -143,78 +126,68 @@ function VersionTable({
   const rowLink = useRowLink()
   const latest = rows[0]?.version.version
   return (
-    <TableContainer>
-      <Table size="small" aria-label={t('suites.versions.title')}>
-        <TableHead>
-          <TableRow>
-            <TableCell>{t('suites.versions.version')}</TableCell>
-            <TableCell>{t('suites.versions.uploaded')}</TableCell>
-            <TableCell>{t('suites.versions.changes')}</TableCell>
-            {withCases && (
-              <TableCell align="right">
-                {t('suites.versions.testCases')}
-              </TableCell>
-            )}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((row) => {
-            const { version } = row.version
-            const current = row === selected
-            // Test cases belong to their version; the tag filter is kept.
-            const href = suitesHref({
-              tab: view.tab,
-              search: view.search,
-              name,
-              version,
-              tag: view.tag,
-            })
-            return (
-              <TableRow
-                key={row.version.id}
-                hover
-                selected={current}
-                onClick={rowLink(href)}
-                sx={{ cursor: 'pointer', verticalAlign: 'top' }}
-              >
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  <Link
-                    component={RouterLink}
+    <Table aria-label={t('suites.versions.title')}>
+      <thead>
+        <tr>
+          <th>{t('suites.versions.version')}</th>
+          <th>{t('suites.versions.uploaded')}</th>
+          <th>{t('suites.versions.changes')}</th>
+          {withCases && (
+            <th className="g-r">{t('suites.versions.testCases')}</th>
+          )}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => {
+          const { version } = row.version
+          const current = row === selected
+          // Test cases belong to their version; the tag filter is kept.
+          const href = suitesHref({
+            tab: view.tab,
+            search: view.search,
+            name,
+            version,
+            tag: view.tag,
+          })
+          return (
+            <tr
+              key={row.version.id}
+              className={cx(
+                'ui-row-link tr-suites-top',
+                current && 'tr-suites-current',
+              )}
+              onClick={rowLink(href)}
+            >
+              <td>
+                <span className="ui-inline-row tr-suites-gap">
+                  <TextLink
                     to={href}
-                    underline="hover"
                     aria-current={current ? 'true' : undefined}
-                    sx={{ fontWeight: current ? 500 : undefined }}
+                    className={cx(current && 'tr-suites-current-link')}
                   >
                     {t('runs.version', { version })}
-                  </Link>
+                  </TextLink>
                   {version === latest && (
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label={t('suites.versions.latest')}
-                      sx={{ ml: 1 }}
-                    />
+                    <Chip outlined>{t('suites.versions.latest')}</Chip>
                   )}
-                </TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  <Time iso={row.version.created_at} />
-                </TableCell>
-                <TableCell sx={{ minWidth: 200, overflowWrap: 'anywhere' }}>
-                  <Changes row={row} />
-                </TableCell>
-                {withCases && (
-                  <TableCell align="right">
-                    {caseCounts
-                      ? formatNumber(caseCounts.get(version) ?? 0)
-                      : ''}
-                  </TableCell>
-                )}
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+                </span>
+              </td>
+              <td>
+                <Time iso={row.version.created_at} />
+              </td>
+              <td className="ui-wrap-cell tr-suites-changes">
+                <Changes row={row} />
+              </td>
+              {withCases && (
+                <td className="g-r">
+                  {caseCounts ? formatNumber(caseCounts.get(version) ?? 0) : ''}
+                </td>
+              )}
+            </tr>
+          )
+        })}
+      </tbody>
+    </Table>
   )
 }
 
@@ -225,9 +198,9 @@ function Changes({ row }: { row: VersionRow }) {
   const kinds = changeKinds.filter((kind) => row.changes[kind].length > 0)
   if (kinds.length === 0) return t('common.none')
   return kinds.map((kind) => (
-    <Box key={kind} component="span" sx={{ display: 'block' }}>
+    <span key={kind} className="tr-suites-block">
       {t(`suites.versions.${kind}`, { keys: row.changes[kind].join(', ') })}
-    </Box>
+    </span>
   ))
 }
 
@@ -255,24 +228,22 @@ function VersionDefinition({ row }: { row: VersionRow }) {
       }
     >
       {entries.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
-          {t('suites.definition.empty')}
-        </Typography>
+        <p className="ui-text ui-secondary">{t('suites.definition.empty')}</p>
       ) : (
         <>
           {previous && marked && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            <p
+              className="ui-text ui-secondary"
+              style={{ marginBottom: 'var(--space-3)' }}
+            >
               {t('suites.definition.compared', { version: previous.version })}
-            </Typography>
+            </p>
           )}
           <Facts
             items={entries.map((entry) => ({
               label: entry.key,
               value: (
-                <EntryValue
-                  entry={entry}
-                  previousVersion={previous?.version}
-                />
+                <EntryValue entry={entry} previousVersion={previous?.version} />
               ),
               code: true,
             }))}
@@ -281,12 +252,6 @@ function VersionDefinition({ row }: { row: VersionRow }) {
       )}
     </Section>
   )
-}
-
-const changeColor: Record<DefinitionChange, 'warning' | 'success' | 'error'> = {
-  changed: 'warning',
-  added: 'success',
-  removed: 'error',
 }
 
 /** A detail's value; a difference from the version before is said in words. */
@@ -301,22 +266,16 @@ function EntryValue({
   const value = formatJsonValue(entry.value)
   if (!entry.change) return value
   return (
-    <Box
-      sx={{
-        pl: 1,
-        borderLeft: 3,
-        borderColor: `${changeColor[entry.change]}.main`,
-      }}
-    >
+    <div className={`tr-suites-change tr-suites-change-${entry.change}`}>
       {entry.change === 'removed' ? <s>{value}</s> : value}
-      <Typography variant="caption" color="text.secondary" component="div">
+      <div className="small ui-secondary">
         {entry.change === 'changed'
           ? t('suites.definition.was', {
               version: previousVersion,
               value: formatJsonValue(entry.previous),
             })
           : t(`suites.definition.${entry.change}`)}
-      </Typography>
-    </Box>
+      </div>
+    </div>
   )
 }

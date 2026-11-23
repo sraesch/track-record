@@ -1,8 +1,4 @@
-import Box from '@mui/material/Box'
-import LinearProgress from '@mui/material/LinearProgress'
-import Tab from '@mui/material/Tab'
-import Tabs from '@mui/material/Tabs'
-import Typography from '@mui/material/Typography'
+import { Tabs } from '@graphite/react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
@@ -10,6 +6,7 @@ import { EmptyState } from '../pages/EmptyState'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { PageHeader } from '../pages/PageHeader'
 import { SearchField } from '../pages/SearchField'
+import { ProgressBar } from '../ui'
 import {
   customUnits,
   filterMetrics,
@@ -24,9 +21,10 @@ import {
 import { MetricTable } from './MetricTable'
 import { useMetrics, useUnits } from './queries'
 import { UnitCatalogue } from './UnitCatalogue'
+import './metrics.css'
 
-const tabId = (tab: MetricsTab) => `metrics-tab-${tab}`
-const panelId = (tab: MetricsTab) => `metrics-panel-${tab}`
+// Graphite's tabs name their tabs and panels after this prefix.
+const idPrefix = 'metrics'
 
 /**
  * The uploaded metrics (FR-7) with their unit, value type and direction,
@@ -83,33 +81,21 @@ export function MetricsPage() {
         description={t('pages.metrics.description')}
       />
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tabs
-          value={view.tab}
-          onChange={(_, tab: MetricsTab) => setView({ ...view, tab })}
-          aria-label={t('metrics.tabs.label')}
-          variant="scrollable"
-          allowScrollButtonsMobile
-        >
-          <Tab
-            value="metrics"
-            label={t('metrics.tabs.metrics')}
-            id={tabId('metrics')}
-            aria-controls={panelId('metrics')}
-          />
-          <Tab
-            value="units"
-            label={t('metrics.tabs.units')}
-            id={tabId('units')}
-            aria-controls={panelId('units')}
-          />
-        </Tabs>
-      </Box>
+      <Tabs<MetricsTab>
+        className="tr-metrics-tabs"
+        items={[
+          { value: 'metrics', label: t('metrics.tabs.metrics') },
+          { value: 'units', label: t('metrics.tabs.units') },
+        ]}
+        value={view.tab}
+        onChange={(tab) => setView({ ...view, tab })}
+        aria-label={t('metrics.tabs.label')}
+        idPrefix={idPrefix}
+      />
 
-      <Box
-        component="search"
+      <search
         aria-label={t('metrics.searchLabel')}
-        sx={{ display: 'flex', mb: 2 }}
+        className="tr-metrics-search"
       >
         <SearchField
           label={
@@ -120,18 +106,16 @@ export function MetricsPage() {
           value={view.search ?? ''}
           onChange={(search) => setView({ ...view, search }, true)}
         />
-      </Box>
+      </search>
 
-      <Box sx={{ height: 4, mb: 1 }}>
-        {(metrics.isFetching || units.isFetching) && (
-          <LinearProgress aria-label={t('common.loading')} />
-        )}
-      </Box>
+      <div className="tr-metrics-progress">
+        {(metrics.isFetching || units.isFetching) && <ProgressBar />}
+      </div>
 
-      <Box
+      <div
         role="tabpanel"
-        id={panelId(view.tab)}
-        aria-labelledby={tabId(view.tab)}
+        id={`${idPrefix}-panel-${view.tab}`}
+        aria-labelledby={`${idPrefix}-tab-${view.tab}`}
       >
         {query.isError && !query.data ? (
           <ErrorAlert
@@ -154,13 +138,9 @@ export function MetricsPage() {
                 units={units.data ?? []}
                 catalogue={catalogue}
               />
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ my: 1.5 }}
-              >
+              <p className="ui-text ui-secondary small tr-metrics-count">
                 {t('metrics.count', { count: shownMetrics.length })}
-              </Typography>
+              </p>
             </>
           )
         ) : shownGroups.length === 0 && custom.length === 0 ? (
@@ -172,12 +152,12 @@ export function MetricsPage() {
               custom={custom}
               usedBy={usedBy}
             />
-            <Typography variant="body2" color="text.secondary" sx={{ my: 1.5 }}>
+            <p className="ui-text ui-secondary small tr-metrics-count">
               {t('metrics.units.count', { count: unitCount })}
-            </Typography>
+            </p>
           </>
         )}
-      </Box>
+      </div>
     </>
   )
 }

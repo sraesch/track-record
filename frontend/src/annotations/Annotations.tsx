@@ -1,13 +1,4 @@
-import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
-import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import IconButton from '@mui/material/IconButton'
-import LinearProgress from '@mui/material/LinearProgress'
-import TextField from '@mui/material/TextField'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
+import { Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Annotation } from '../api/client'
@@ -16,11 +7,22 @@ import { ConfirmDialog } from '../pages/ConfirmDialog'
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { Section } from '../pages/Section'
 import {
+  Alert,
+  Button,
+  IconButton,
+  ProgressBar,
+  space,
+  Stack,
+  TextArea,
+  Tooltip,
+} from '../ui'
+import {
   type AnnotationTarget,
   useCreateAnnotation,
   useDeleteAnnotation,
   useUpdateAnnotation,
 } from './queries'
+import './annotations.css'
 
 type Props = {
   title: string
@@ -54,79 +56,71 @@ export function Annotations({
 
   return (
     <Section title={title}>
-      {description && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          {description}
-        </Typography>
-      )}
-      {annotations === undefined ? (
-        loadError ? (
-          <ErrorAlert
-            message={t('annotations.loadError', { message: loadError.message })}
-            onRetry={loadError.onRetry}
-            sx={{ mb: 1.5 }}
-          />
-        ) : (
-          <LinearProgress aria-label={t('common.loading')} sx={{ mb: 1.5 }} />
-        )
-      ) : annotations.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          {t('annotations.empty')}
-        </Typography>
-      ) : (
-        <Box
-          component="ul"
-          aria-label={title}
-          sx={{ m: 0, mb: 1.5, p: 0, listStyle: 'none', display: 'grid', gap: 1 }}
-        >
-          {annotations.map((annotation) => (
-            <AnnotationItem
-              key={annotation.id}
-              annotation={annotation}
-              onDelete={() => setDeleting(annotation)}
-            />
-          ))}
-        </Box>
-      )}
-
-      <Box
-        component="form"
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (!body || create.isPending) return
-          create.mutate(body, { onSuccess: () => setDraft('') })
-        }}
-      >
-        <TextField
-          size="small"
-          fullWidth
-          multiline
-          minRows={2}
-          label={t('annotations.new')}
-          value={draft}
-          onChange={(event) => {
-            setDraft(event.target.value)
-            if (create.isError) create.reset()
-          }}
-        />
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-          <Button
-            type="submit"
-            size="small"
-            variant="outlined"
-            disabled={!body}
-            loading={create.isPending}
-          >
-            {t('annotations.add')}
-          </Button>
-        </Box>
-        {create.error && (
-          <Alert severity="error" sx={{ mt: 1 }}>
-            {t('annotations.error', { message: create.error.message })}
-          </Alert>
+      <Stack gap={3}>
+        {description && (
+          <p className="ui-text small ui-secondary">{description}</p>
         )}
-      </Box>
+        {annotations === undefined ? (
+          loadError ? (
+            <ErrorAlert
+              message={t('annotations.loadError', {
+                message: loadError.message,
+              })}
+              onRetry={loadError.onRetry}
+            />
+          ) : (
+            <ProgressBar />
+          )
+        ) : annotations.length === 0 ? (
+          <p className="ui-text small ui-secondary">{t('annotations.empty')}</p>
+        ) : (
+          <Stack as="ul" gap={2} aria-label={title} className="ui-list">
+            {annotations.map((annotation) => (
+              <AnnotationItem
+                key={annotation.id}
+                annotation={annotation}
+                onDelete={() => setDeleting(annotation)}
+              />
+            ))}
+          </Stack>
+        )}
+
+        <form
+          className="ui-stack"
+          style={{ gap: space(2) }}
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!body || create.isPending) return
+            create.mutate(body, { onSuccess: () => setDraft('') })
+          }}
+        >
+          <TextArea
+            rows={2}
+            label={t('annotations.new')}
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value)
+              if (create.isError) create.reset()
+            }}
+          />
+          <Stack row justify="flex-end">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={!body}
+              loading={create.isPending}
+            >
+              {t('annotations.add')}
+            </Button>
+          </Stack>
+          {create.error && (
+            <Alert tone="error">
+              {t('annotations.error', { message: create.error.message })}
+            </Alert>
+          )}
+        </form>
+      </Stack>
 
       <ConfirmDialog
         open={deleting !== null}
@@ -142,20 +136,10 @@ export function Annotations({
         onClose={() => setDeleting(null)}
         onExited={() => remove.reset()}
       >
-        <Typography sx={{ mb: 1 }}>{t('annotations.deleteText')}</Typography>
-        <Typography
-          component="blockquote"
-          color="text.secondary"
-          sx={{
-            m: 0,
-            pl: 1.5,
-            borderLeft: 3,
-            borderColor: 'divider',
-            whiteSpace: 'pre-wrap',
-          }}
-        >
+        <p className="ui-text">{t('annotations.deleteText')}</p>
+        <blockquote className="tr-annotations-quote">
           {deleting?.body}
-        </Typography>
+        </blockquote>
       </ConfirmDialog>
     </Section>
   )
@@ -181,43 +165,37 @@ function AnnotationItem({ annotation, onDelete }: ItemProps) {
   }
 
   return (
-    <Box
-      component="li"
-      sx={{ display: 'flex', gap: 1, p: 1, borderRadius: 1, bgcolor: 'action.hover' }}
-    >
-      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-        <Typography
-          variant="body2"
-          sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
-        >
-          {annotation.body}
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          <Tooltip describeChild title={formatTimestamp(annotation.created_at)}>
+    <li className="tr-annotations-item">
+      <div className="ui-grow">
+        <p className="ui-text tr-annotations-body">{annotation.body}</p>
+        <span className="small ui-secondary">
+          <Tooltip title={formatTimestamp(annotation.created_at)}>
             <time dateTime={annotation.created_at}>
               {formatDateTime(annotation.created_at)}
             </time>
           </Tooltip>
           {edited && (
-            <Tooltip describeChild title={formatTimestamp(annotation.updated_at)}>
+            <Tooltip title={formatTimestamp(annotation.updated_at)}>
               <span> {t('annotations.edited')}</span>
             </Tooltip>
           )}
-        </Typography>
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', flexShrink: 0 }}>
-        <Tooltip title={t('annotations.edit')}>
-          <IconButton size="small" onClick={() => setEditing(true)}>
-            <EditOutlinedIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title={t('annotations.delete')}>
-          <IconButton size="small" onClick={onDelete}>
-            <DeleteOutlinedIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Box>
-    </Box>
+        </span>
+      </div>
+      <div className="tr-annotations-actions">
+        <IconButton
+          size="sm"
+          icon={Pencil}
+          label={t('annotations.edit')}
+          onClick={() => setEditing(true)}
+        />
+        <IconButton
+          size="sm"
+          icon={Trash2}
+          label={t('annotations.delete')}
+          onClick={onDelete}
+        />
+      </div>
+    </li>
   )
 }
 
@@ -243,9 +221,10 @@ function AnnotationEditor({ annotation, onDone }: EditorProps) {
   }, [])
 
   return (
-    <Box component="li" sx={{ p: 1, borderRadius: 1, bgcolor: 'action.hover' }}>
-      <Box
-        component="form"
+    <li className="tr-annotations-item">
+      <form
+        className="ui-stack ui-grow"
+        style={{ gap: space(2) }}
         noValidate
         onSubmit={(event) => {
           event.preventDefault()
@@ -254,12 +233,9 @@ function AnnotationEditor({ annotation, onDone }: EditorProps) {
           update.mutate({ annotation, body }, { onSuccess: onDone })
         }}
       >
-        <TextField
-          size="small"
-          fullWidth
-          multiline
-          minRows={2}
-          inputRef={inputRef}
+        <TextArea
+          rows={2}
+          ref={inputRef}
           label={t('annotations.editLabel')}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
@@ -268,25 +244,30 @@ function AnnotationEditor({ annotation, onDone }: EditorProps) {
           }}
         />
         {update.error && (
-          <Alert severity="error" sx={{ mt: 1 }}>
+          <Alert tone="error">
             {t('annotations.error', { message: update.error.message })}
           </Alert>
         )}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
-          <Button size="small" disabled={update.isPending} onClick={onDone}>
+        <Stack row gap={2} justify="flex-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={update.isPending}
+            onClick={onDone}
+          >
             {t('common.cancel')}
           </Button>
           <Button
             type="submit"
-            size="small"
-            variant="contained"
+            variant="primary"
+            size="sm"
             disabled={!body}
             loading={update.isPending}
           >
             {t('common.save')}
           </Button>
-        </Box>
-      </Box>
-    </Box>
+        </Stack>
+      </form>
+    </li>
   )
 }

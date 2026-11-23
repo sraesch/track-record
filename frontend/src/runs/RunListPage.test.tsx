@@ -50,7 +50,9 @@ const runs = [
 
 const table = () => screen.findByRole('table', { name: 'Runs' })
 const bodyRows = async () =>
-  within(await table()).getAllByRole('row').slice(1)
+  within(await table())
+    .getAllByRole('row')
+    .slice(1)
 
 describe('Run list', () => {
   it('shows the runs of the API', async () => {
@@ -222,7 +224,7 @@ describe('Run list', () => {
     const router = renderApp('/runs')
     await table()
     await user.click(screen.getByRole('button', { name: 'More filters' }))
-    const input = screen.getByRole('combobox', { name: 'Parameters' })
+    const input = screen.getByRole('textbox', { name: 'Parameters' })
 
     await enterText(user, input, ' size = 10 ')
     await user.keyboard('{Enter}')
@@ -247,8 +249,12 @@ describe('Run list', () => {
     const router = renderApp('/runs?env=3&validity=all')
     await table()
 
-    const chip = screen.getByRole('button', { name: 'Shared environment 3' })
-    await user.click(within(chip).getByTestId('CancelIcon'))
+    expect(screen.getByText('Shared environment 3')).toBeInTheDocument()
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Remove the shared environment filter',
+      }),
+    )
     expect(currentQuery(router)).toBe('validity=all')
   })
 
@@ -346,7 +352,9 @@ describe('Run list', () => {
 
     await user.click(screen.getByRole('button', { name: 'Load more' }))
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('More runs could not be loaded: upstream down')
+    expect(alert).toHaveTextContent(
+      'More runs could not be loaded: upstream down',
+    )
     expect(await bodyRows()).toHaveLength(2)
 
     fail = false
@@ -380,7 +388,9 @@ describe('Run list', () => {
     renderApp('/runs')
 
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('The runs could not be loaded: unknown suite')
+    expect(alert).toHaveTextContent(
+      'The runs could not be loaded: unknown suite',
+    )
 
     fail = false
     await user.click(within(alert).getByRole('button', { name: 'Retry' }))

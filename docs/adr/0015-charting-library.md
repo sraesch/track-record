@@ -1,6 +1,7 @@
 # ADR 0015: Charting library
 
-**Status:** proposed · **Date:** 2026-11-22
+**Status:** proposed · **Date:** 2026-11-22 · colors from Graphite's tokens
+since [ADR 0019](0019-graphite-design-system.md)
 
 ## Context
 

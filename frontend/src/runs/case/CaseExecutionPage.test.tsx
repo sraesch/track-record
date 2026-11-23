@@ -50,10 +50,9 @@ describe('Case execution', () => {
       }),
     ).toBeInTheDocument()
     expect(document.title).toBe('orbit · pixel-8-lab-1 · Track Record')
-    expect(screen.getByRole('link', { name: 'Back to the run' })).toHaveAttribute(
-      'href',
-      `/runs/${runId}`,
-    )
+    expect(
+      screen.getByRole('link', { name: 'Back to the run' }),
+    ).toHaveAttribute('href', `/runs/${runId}`)
 
     const overview = within(await section('Overview'))
     expect(
@@ -95,7 +94,11 @@ describe('Case execution', () => {
           parameters: json({ bandwidth: 20, pipeline: 'meshopt-v1' }),
           resolved_parameters: json({ bandwidth: 20, pipeline: 'meshopt' }),
         },
-        client_device: { id: 2, name: 'pixel8-lab1', resolved_name: 'pixel-8-lab-1' },
+        client_device: {
+          id: 2,
+          name: 'pixel8-lab1',
+          resolved_name: 'pixel-8-lab-1',
+        },
       }),
     })
     renderApp(pagePath())
@@ -132,8 +135,7 @@ describe('Case execution', () => {
     ]
     mockApi({
       [runPath]: () => runDetail(),
-      [caseExecutionPath('ce1')]: () =>
-        caseExecutionDetail('ce1', { samples }),
+      [caseExecutionPath('ce1')]: () => caseExecutionDetail('ce1', { samples }),
     })
     renderApp(pagePath())
 
@@ -161,7 +163,9 @@ describe('Case execution', () => {
       ['1', 'fps', 'fps', 'time (s)', '161'],
       ['2', 'fps', 'fps', 'time (s)', '161'],
     ])
-    expect(within(await section('Series')).getByText('3 series')).toBeInTheDocument()
+    expect(
+      within(await section('Series')).getByText('3 series'),
+    ).toBeInTheDocument()
   })
 
   it('plots the series of every sample, a line per sample', async () => {
@@ -191,9 +195,9 @@ describe('Case execution', () => {
     ])
     // Downsampled on the server for display (FR-19).
     expect(
-      api.requests('/ui/api/v1/series/fps-s1/points')[0]?.searchParams.get(
-        'max_points',
-      ),
+      api
+        .requests('/ui/api/v1/series/fps-s1/points')[0]
+        ?.searchParams.get('max_points'),
     ).toBe('1000')
   })
 
@@ -215,9 +219,7 @@ describe('Case execution', () => {
 
     const series = within(await section('Series'))
     expect(
-      await series.findByText(
-        'The series could not be loaded: database down',
-      ),
+      await series.findByText('The series could not be loaded: database down'),
     ).toBeInTheDocument()
     fail = false
     await user.click(series.getByRole('button', { name: 'Retry' }))
@@ -244,9 +246,13 @@ describe('Case execution', () => {
     })
     renderApp(pagePath())
 
-    expect(await screen.findByText('No measurements uploaded.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('No measurements uploaded.'),
+    ).toBeInTheDocument()
     expect(screen.getByText('No series uploaded.')).toBeInTheDocument()
-    expect(screen.getByText('This test case has no parameters.')).toBeInTheDocument()
+    expect(
+      screen.getByText('This test case has no parameters.'),
+    ).toBeInTheDocument()
     expect(screen.getByText('No device details uploaded.')).toBeInTheDocument()
   })
 
@@ -257,8 +263,19 @@ describe('Case execution', () => {
         runDetail({
           attachments: [
             ...runDetail().attachments,
-            { ...attachment, id: 'f3', sample_id: null, file_name: 'trace.json', content_type: 'application/json' },
-            { ...attachment, id: 'f4', case_execution_id: 'ce9', file_name: 'other.png' },
+            {
+              ...attachment,
+              id: 'f3',
+              sample_id: null,
+              file_name: 'trace.json',
+              content_type: 'application/json',
+            },
+            {
+              ...attachment,
+              id: 'f4',
+              case_execution_id: 'ce9',
+              file_name: 'other.png',
+            },
           ],
         }),
       [caseExecutionPath('ce2')]: () => caseExecutionDetail('ce2'),
@@ -306,7 +323,9 @@ describe('Case execution', () => {
     })
     const router = renderApp(pagePath('ce1'))
 
-    expect(await screen.findByText('Replaced by a correction')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Replaced by a correction'),
+    ).toBeInTheDocument()
     await user.click(screen.getByRole('link', { name: 'Open the correction' }))
     expect(router.state.location.pathname).toBe(pagePath('ce4'))
     expect(await screen.findByText('Correction')).toBeInTheDocument()
@@ -337,9 +356,9 @@ describe('Case execution', () => {
     ).toBeInTheDocument()
     expect(notes.getByText('· edited')).toBeInTheDocument()
     expect(
-      api.requests('/ui/api/v1/annotations')[0]?.searchParams.get(
-        'test_case_id',
-      ),
+      api
+        .requests('/ui/api/v1/annotations')[0]
+        ?.searchParams.get('test_case_id'),
     ).toBe('1')
   })
 
@@ -445,7 +464,9 @@ describe('Case execution', () => {
     ).toBeInTheDocument()
     expect(tagSection.getByRole('textbox', { name: 'New tag' })).toHaveValue('')
 
-    await user.click(tagSection.getByTitle('Remove tag flaky'))
+    await user.click(
+      tagSection.getByRole('button', { name: 'Remove tag flaky' }),
+    )
     await waitFor(() =>
       expect(
         tagSection.queryByRole('button', {
@@ -474,7 +495,9 @@ describe('Case execution', () => {
       'flaky{Enter}',
     )
     expect(
-      await tagSection.findByText('The tags could not be changed: tag too long'),
+      await tagSection.findByText(
+        'The tags could not be changed: tag too long',
+      ),
     ).toBeInTheDocument()
     // The draft stays, to be corrected.
     expect(tagSection.getByRole('textbox', { name: 'New tag' })).toHaveValue(
@@ -524,7 +547,10 @@ describe('Case execution', () => {
     const router = renderApp(`${pagePath('ce1', otherRun)}?attachment=f2`)
 
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'orbit · pixel-8-lab-1' }),
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'orbit · pixel-8-lab-1',
+      }),
     ).toBeInTheDocument()
     expect(router.state.location.pathname).toBe(pagePath('ce1'))
     expect(router.state.location.search).toBe('?attachment=f2')
@@ -561,7 +587,10 @@ describe('Case execution', () => {
     fail = false
     await user.click(screen.getByRole('button', { name: 'Retry' }))
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'orbit · pixel-8-lab-1' }),
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'orbit · pixel-8-lab-1',
+      }),
     ).toBeInTheDocument()
   })
 })

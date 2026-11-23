@@ -1,6 +1,6 @@
-import Paper from '@mui/material/Paper'
-import Typography from '@mui/material/Typography'
 import type { ReactNode } from 'react'
+import { Surface } from '../ui'
+import './pages.css'
 
 type Props = {
   children: ReactNode
@@ -12,21 +12,9 @@ type Props = {
 /** Stands in for content that is empty or missing. */
 export function EmptyState({ children, icon, dashed }: Props) {
   return (
-    <Paper
-      variant="outlined"
-      sx={{
-        p: 4,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 1,
-        textAlign: 'center',
-        color: 'text.secondary',
-        borderStyle: dashed ? 'dashed' : undefined,
-      }}
-    >
+    <Surface dashed={dashed} className="tr-empty">
       {icon}
-      <Typography>{children}</Typography>
-    </Paper>
+      <p>{children}</p>
+    </Surface>
   )
 }

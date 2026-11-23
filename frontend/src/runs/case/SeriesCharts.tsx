@@ -1,5 +1,3 @@
-import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SampleDetail } from '../../api/client'
@@ -15,6 +13,7 @@ import {
   seriesChartOption,
   seriesDisplayPoints,
 } from './seriesChart'
+import './case.css'
 
 const chartHeight = 300
 
@@ -28,7 +27,7 @@ export function SeriesCharts({
 }) {
   const groups = useMemo(() => groupSeries(samples), [samples])
   return (
-    <Box sx={{ display: 'grid', gap: 3, px: 2, pb: 2 }}>
+    <div className="tr-case-charts">
       {groups.map((group) => (
         <SeriesChart
           key={group.key}
@@ -37,7 +36,7 @@ export function SeriesCharts({
           title={group.metric}
         />
       ))}
-    </Box>
+    </div>
   )
 }
 
@@ -106,14 +105,8 @@ function SeriesChart({
   }, [group, points, xName, colors, t])
 
   return (
-    <Box component="figure" sx={{ m: 0, minWidth: 0 }}>
-      <Typography
-        component="figcaption"
-        variant="subtitle2"
-        sx={{ mb: 1 }}
-      >
-        {title}
-      </Typography>
+    <figure className="tr-case-chart">
+      <figcaption className="title-3">{title}</figcaption>
       {error ? (
         <ErrorAlert
           message={t('caseExecution.series.pointsError', {
@@ -134,6 +127,6 @@ function SeriesChart({
           })}
         />
       )}
-    </Box>
+    </figure>
   )
 }

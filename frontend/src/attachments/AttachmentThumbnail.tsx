@@ -1,10 +1,8 @@
-import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined'
-import Box from '@mui/material/Box'
+import { Image } from 'lucide-react'
 import { useState } from 'react'
 import type { AttachmentMeta } from '../api/client'
 import { attachmentContentUrl, maxThumbnailBytes } from './kind'
-
-const size = { width: 56, height: 40 }
+import './attachments.css'
 
 /**
  * A small preview of an image attachment, loaded once it scrolls into
@@ -17,38 +15,21 @@ export function AttachmentThumbnail({
   attachment: AttachmentMeta
 }) {
   const [failed, setFailed] = useState(false)
-  const frame = {
-    ...size,
-    flexShrink: 0,
-    borderRadius: 0.5,
-    border: 1,
-    borderColor: 'divider',
-    bgcolor: 'action.hover',
-  }
   if (failed || attachment.size_bytes > maxThumbnailBytes) {
     return (
-      <Box
-        sx={{
-          ...frame,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'text.secondary',
-        }}
-      >
-        <ImageOutlinedIcon fontSize="small" />
-      </Box>
+      <div className="tr-attachments-thumb">
+        <Image aria-hidden />
+      </div>
     )
   }
   return (
-    <Box
-      component="img"
+    <img
+      className="tr-attachments-thumb"
       src={attachmentContentUrl(attachment.id)}
       alt=""
       loading="lazy"
       decoding="async"
       onError={() => setFailed(true)}
-      sx={{ ...frame, display: 'block', objectFit: 'cover' }}
     />
   )
 }

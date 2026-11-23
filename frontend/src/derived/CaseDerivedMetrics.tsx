@@ -1,11 +1,5 @@
-import Box from '@mui/material/Box'
-import Link from '@mui/material/Link'
-import Skeleton from '@mui/material/Skeleton'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
 import { Fragment, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink } from 'react-router'
 import {
   ApiError,
   type CaseExecutionDetail,
@@ -16,6 +10,7 @@ import {
 import { ErrorAlert } from '../pages/ErrorAlert'
 import { Section } from '../pages/Section'
 import { liveRunInterval } from '../runs/queries'
+import { Skeleton, TextLink, Tooltip } from '../ui'
 import { allMissing, resultsBySample } from './derivedModel'
 import {
   ScalarTable,
@@ -25,6 +20,7 @@ import {
 import { derivedHref, derivedMetricHref } from './paths'
 import { useDerivedMetrics, useEvaluations } from './queries'
 import { previewPoints } from './EvaluationPreview'
+import './derived.css'
 
 type Evaluated = { row: DerivedMetric; response: EvaluateResponse }
 type Skipped = { row: DerivedMetric; reason: string }
@@ -48,13 +44,11 @@ export function CaseDerivedMetrics({
   const rows = useMemo(() => metrics.data ?? [], [metrics.data])
   const requests = useMemo(
     () =>
-      rows.map(
-        (row): EvaluateRequest => ({
-          case_execution_id: caseExecution.id,
-          name: row.name,
-          max_points: previewPoints,
-        }),
-      ),
+      rows.map((row): EvaluateRequest => ({
+        case_execution_id: caseExecution.id,
+        name: row.name,
+        max_points: previewPoints,
+      })),
     [rows, caseExecution.id],
   )
   const results = useEvaluations(requests, live ? liveRunInterval : false)
@@ -96,13 +90,9 @@ export function CaseDerivedMetrics({
   const columns: ValueColumn[] = scalars.map(({ row, response }) => ({
     key: row.name,
     label: (
-      <Link
-        component={RouterLink}
-        to={derivedMetricHref(row.name)}
-        sx={{ fontFamily: 'monospace' }}
-      >
+      <TextLink to={derivedMetricHref(row.name)} className="ui-code">
         {row.name}
-      </Link>
+      </TextLink>
     ),
     unit: response.unit,
     results: resultsBySample(response),
@@ -113,29 +103,29 @@ export function CaseDerivedMetrics({
       title={t('caseExecution.derived.title')}
       flush
       actions={
-        <Link component={RouterLink} to="/derived-metrics" variant="body2">
+        <TextLink to="/derived-metrics" className="small">
           {t('caseExecution.derived.manage')}
-        </Link>
+        </TextLink>
       }
     >
       {metrics.isError && !metrics.data ? (
-        <Box sx={{ px: 2, pb: 2 }}>
+        <div className="tr-derived-case-pad">
           <ErrorAlert
             message={t('derived.error', { message: metrics.error.message })}
             onRetry={() => metrics.refetch()}
           />
-        </Box>
+        </div>
       ) : metrics.isPending ? (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <Skeleton variant="rounded" height={80} aria-label={t('common.loading')} />
-        </Box>
+        <div className="tr-derived-case-pad">
+          <Skeleton height={80} label={t('common.loading')} />
+        </div>
       ) : rows.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" sx={{ px: 2, pb: 2 }}>
+        <p className="ui-text ui-secondary tr-derived-case-pad">
           {t('caseExecution.derived.none')}{' '}
-          <Link component={RouterLink} to={derivedHref({ edit: 'new' })}>
+          <TextLink to={derivedHref({ edit: 'new' })}>
             {t('caseExecution.derived.define')}
-          </Link>
-        </Typography>
+          </TextLink>
+        </p>
       ) : (
         <>
           {columns.length > 0 && (
@@ -146,18 +136,19 @@ export function CaseDerivedMetrics({
             />
           )}
           {pending > 0 && (
-            <Box sx={{ px: 2, pt: 1 }}>
+            <div style={{ padding: 'var(--space-2) var(--space-4) 0' }}>
               <Skeleton
-                variant="rounded"
                 height={columns.length > 0 ? 24 : 80}
-                aria-label={t('caseExecution.derived.evaluating', {
+                label={t('caseExecution.derived.evaluating', {
                   count: pending,
                 })}
               />
-            </Box>
+            </div>
           )}
+          {/* The last block keeps space below the charts, which have no
+              table border under them. */}
           {series.length > 0 && (
-            <Box sx={{ display: 'grid', gap: 3, px: 2, pt: 2 }}>
+            <div className="tr-derived-case-charts">
               {series.map(({ row, response }) => (
                 <SeriesResultChart
                   key={row.name}
@@ -165,16 +156,14 @@ export function CaseDerivedMetrics({
                   response={response}
                 />
               ))}
-            </Box>
+            </div>
           )}
-          {(nothingShown ||
-            notApplicable.length > 0 ||
-            failed.length > 0) && (
-            <Box sx={{ display: 'grid', gap: 0.5, px: 2, py: 1.5 }}>
+          {(nothingShown || notApplicable.length > 0 || failed.length > 0) && (
+            <div className="tr-derived-case-notes">
               {nothingShown && (
-                <Typography variant="body2" color="text.secondary">
+                <p className="ui-text ui-secondary">
                   {t('caseExecution.derived.noneApply')}
-                </Typography>
+                </p>
               )}
               <SkippedList
                 label={t('caseExecution.derived.notApplicable', {
@@ -189,12 +178,8 @@ export function CaseDerivedMetrics({
                 skipped={failed}
                 error
               />
-            </Box>
+            </div>
           )}
-          {/* Space below the charts, which have no table border under them. */}
-          {series.length > 0 &&
-            notApplicable.length === 0 &&
-            failed.length === 0 && <Box sx={{ height: 16 }} />}
         </>
       )}
     </Section>
@@ -213,23 +198,21 @@ function SkippedList({
 }) {
   if (skipped.length === 0) return null
   return (
-    <Typography variant="body2" color={error ? 'error' : 'text.secondary'}>
+    <p className={error ? 'ui-text tr-derived-error' : 'ui-text ui-secondary'}>
       {label}{' '}
       {skipped.map(({ row, reason }, i) => (
         <Fragment key={row.name}>
           {i > 0 && ', '}
-          <Tooltip title={reason} describeChild>
-            <Link
-              component={RouterLink}
+          <Tooltip title={reason} describes>
+            <TextLink
               to={derivedMetricHref(row.name)}
-              color="inherit"
-              sx={{ fontFamily: 'monospace' }}
+              className="ui-code tr-derived-quiet-link"
             >
               {row.name}
-            </Link>
+            </TextLink>
           </Tooltip>
         </Fragment>
       ))}
-    </Typography>
+    </p>
   )
 }

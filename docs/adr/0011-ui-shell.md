@@ -1,6 +1,7 @@
 # ADR 0011: UI shell, component library and routing
 
-**Status:** proposed · **Date:** 2026-11-21
+**Status:** proposed · **Date:** 2026-11-21 · component library, shell
+and color mode superseded by [ADR 0019](0019-graphite-design-system.md)
 
 ## Context
 
