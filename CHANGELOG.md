@@ -1,8 +1,8 @@
 # Changelog
 
 All notable changes to track-record are listed here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and releases will
-use [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Requirement
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and releases use
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html). Requirement
 IDs (`FR-n`, `NFR-n`) refer to [docs/requirements.md](docs/requirements.md).
 
 [frontend/APP_CHANGELOG.md](frontend/APP_CHANGELOG.md) is a shorter version
@@ -11,7 +11,7 @@ change that they can see.
 
 ## [Unreleased]
 
-Nothing has been released yet. This is everything on `develop` so far.
+## [0.1.0] - 2026-11-23
 
 ### Added
 
@@ -189,8 +189,9 @@ Nothing has been released yet. This is everything on `develop` so far.
 
 ### Changed
 
-These changes happened before any release. They matter only for databases
-that already run a `develop` image, except the first one.
+These changes happened on `develop` before this release. They matter only
+for databases that ran a `develop` image; the first one concerns only the
+web UI.
 
 - The web UI is built on the **Graphite** design system instead of MUI
   ([ADR 0019](docs/adr/0019-graphite-design-system.md)): denser pages,
@@ -219,4 +220,5 @@ that already run a `develop` image, except the first one.
 - Frontend tests stay within their timeouts on loaded machines
   ([#15](https://github.com/sraesch/track-record/pull/15)).
 
-[Unreleased]: https://github.com/sraesch/track-record/commits/develop
+[Unreleased]: https://github.com/sraesch/track-record/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/sraesch/track-record/releases/tag/v0.1.0
