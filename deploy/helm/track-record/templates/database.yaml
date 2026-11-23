@@ -1,0 +1,109 @@
+{{- /*
+In-cluster PostgreSQL 18 with the schema (track-record-db, ADR 0006). On
+first start with an empty volume, the image applies all migrations to
+track_record; later upgrades go through the migration job.
+*/ -}}
+{{- if .Values.database.enabled }}
+{{- $name := include "track-record.component" (list . "database") }}
+{{- $db := .Values.database }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "track-record.componentLabels" (list . "database") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "track-record.componentSelectorLabels" (list . "database") | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "track-record.componentLabels" (list . "database") | nindent 4 }}
+spec:
+  serviceName: {{ $name }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "track-record.componentSelectorLabels" (list . "database") | nindent 6 }}
+  # The volume stays when the StatefulSet is deleted (FR-8).
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  template:
+    metadata:
+      labels:
+        {{- include "track-record.componentLabels" (list . "database") | nindent 8 }}
+      {{- with $db.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "track-record.optional" (list "track-record.imagePullSecrets" . 6) }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml $db.podSecurityContext | nindent 8 }}
+      containers:
+        - name: postgres
+          image: {{ include "track-record.image" (list . $db.image) }}
+          imagePullPolicy: {{ $db.image.pullPolicy }}
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "track-record.databaseSecretName" . }}
+                  key: {{ include "track-record.databaseSecretKey" . }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          # TCP opens only after the first start applied the migrations.
+          readinessProbe:
+            exec:
+              command: [pg_isready, --host=127.0.0.1, --username=postgres, --quiet]
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: [pg_isready, --host=127.0.0.1, --username=postgres, --quiet]
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+          startupProbe:
+            exec:
+              command: [pg_isready, --host=127.0.0.1, --username=postgres, --quiet]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            # Up to 30 minutes for the first start or crash recovery.
+            failureThreshold: 360
+          securityContext:
+            {{- toYaml $db.securityContext | nindent 12 }}
+          {{- with $db.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+      {{- include "track-record.optional" (list "track-record.scheduling" $db 6) }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "track-record.componentSelectorLabels" (list . "database") | nindent 10 }}
+      spec:
+        accessModes:
+          {{- toYaml $db.persistence.accessModes | nindent 10 }}
+        {{- with $db.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $db.persistence.size }}
+{{- end }}

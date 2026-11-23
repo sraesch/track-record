@@ -60,4 +60,5 @@ emulation would take far longer than the amd64 one, especially for Rust.
 
 ## Left for later ADRs
 
-Helm chart and its publishing, build caching, release notes.
+Helm chart and its publishing ([ADR 0021](0021-helm-chart.md)), build
+caching, release notes.

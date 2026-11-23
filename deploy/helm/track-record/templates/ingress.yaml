@@ -1,0 +1,83 @@
+{{- /*
+Two ingresses (NFR-2). The machine ingress routes only /api and /mcp to the
+machine port and bypasses the auth proxy; the server checks API tokens. The
+UI ingress routes everything to the frontend; put the auth proxy on it.
+Neither can reach the UI port: its Service is not referenced here.
+*/ -}}
+{{- $machine := include "track-record.component" (list . "server-machine") }}
+{{- $frontend := include "track-record.component" (list . "frontend") }}
+{{- with .Values.ingress.machine }}
+{{- if .enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $machine }}
+  labels:
+    {{- include "track-record.componentLabels" (list $ "server") | nindent 4 }}
+  {{- with .annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  {{- with .tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- if not .hosts }}{{ fail "ingress.machine.hosts must list at least one host" }}{{ end }}
+    {{- range .hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          {{- range list "/api" "/mcp" }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $machine }}
+                port:
+                  name: machine
+          {{- end }}
+    {{- end }}
+---
+{{- end }}
+{{- end }}
+{{- with .Values.ingress.ui }}
+{{- if .enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $frontend }}
+  labels:
+    {{- include "track-record.componentLabels" (list $ "frontend") | nindent 4 }}
+  {{- with .annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  {{- with .tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- if not .hosts }}{{ fail "ingress.ui.hosts must list at least one host" }}{{ end }}
+    {{- range .hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $frontend }}
+                port:
+                  name: http
+    {{- end }}
+{{- end }}
+{{- end }}

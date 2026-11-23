@@ -1,0 +1,87 @@
+{{- /*
+Web UI (frontend/Dockerfile): nginx serves the app and proxies /ui/api to
+the server's UI port. The auth proxy belongs in front of it (NFR-2).
+*/ -}}
+{{- $f := .Values.frontend }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "track-record.component" (list . "frontend") }}
+  labels:
+    {{- include "track-record.componentLabels" (list . "frontend") | nindent 4 }}
+spec:
+  replicas: {{ $f.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "track-record.componentSelectorLabels" (list . "frontend") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "track-record.componentLabels" (list . "frontend") | nindent 8 }}
+      {{- with $f.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "track-record.optional" (list "track-record.imagePullSecrets" . 6) }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml $f.podSecurityContext | nindent 8 }}
+      containers:
+        - name: frontend
+          image: {{ include "track-record.image" (list . $f.image) }}
+          imagePullPolicy: {{ $f.image.pullPolicy }}
+          env:
+            - name: TR_UI_API_UPSTREAM
+              value: http://{{ include "track-record.component" (list . "server-ui") }}:8081
+          ports:
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          securityContext:
+            {{- toYaml $f.securityContext | nindent 12 }}
+          {{- with $f.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          # The entrypoint renders the config into conf.d; nginx keeps its
+          # pid and temp files in /tmp.
+          volumeMounts:
+            - name: conf
+              mountPath: /etc/nginx/conf.d
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: conf
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+      {{- include "track-record.optional" (list "track-record.scheduling" $f 6) }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "track-record.component" (list . "frontend") }}
+  labels:
+    {{- include "track-record.componentLabels" (list . "frontend") | nindent 4 }}
+  {{- with $f.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $f.service.type }}
+  selector:
+    {{- include "track-record.componentSelectorLabels" (list . "frontend") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $f.service.port }}
+      targetPort: http

@@ -1,0 +1,22 @@
+# Helm chart for the whole track-record stack (ADR 0021). `version` and
+# `appVersion` are the release version of the system (ADR 0020) and change
+# together in the `Prepare X.Y.Z release` commit; deploy/helm/test.sh checks
+# that they match the server crate.
+apiVersion: v2
+name: track-record
+description: >-
+  Benchmark results store: PostgreSQL with the track-record schema, the
+  REST/MCP server and the web UI
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.28.0-0"
+home: https://github.com/sraesch/track-record
+sources:
+  - https://github.com/sraesch/track-record
+keywords:
+  - benchmark
+  - performance
+  - mcp
+annotations:
+  org.opencontainers.image.source: https://github.com/sraesch/track-record

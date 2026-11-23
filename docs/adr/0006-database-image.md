@@ -53,4 +53,7 @@ not exist yet.
 
 ## Left for later ADRs
 
-The Helm chart, including the migration job.
+The Helm chart, including the migration job, is decided in
+[ADR 0021](0021-helm-chart.md): the job runs before every upgrade, and
+before the install only with an external database, because the in-cluster
+database applies all migrations itself on first start.

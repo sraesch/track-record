@@ -169,6 +169,19 @@ Nothing has been released yet. This is everything on `develop` so far.
   without buffering, so streamed results pass through (NFR-7) (#9).
 - `deploy/local/` runs the whole stack on Docker Desktop Kubernetes for
   trying the UI (#9). This is not the Helm chart.
+- A Helm chart for the whole stack, `deploy/helm/track-record/`
+  ([ADR 0021](docs/adr/0021-helm-chart.md), NFR-1, NFR-2): the published
+  images, an optional in-cluster database (or an external PostgreSQL 18),
+  `track-record-migrate` as a pre-upgrade hook (pre-install too with an
+  external database), the server scaled horizontally on a `ReadWriteMany`
+  attachment volume, and separate ingresses or Gateway API routes for
+  machine clients (`/api`, `/mcp`) and the web UI. The UI port has its own
+  cluster-internal Service, and NetworkPolicies let only the frontend reach
+  it. Data volumes and the generated database password survive
+  `helm uninstall` (FR-8). `deploy/helm/test.sh` (lint, template,
+  kubeconform, access rules) and `deploy/helm/install-test.sh` (install,
+  upload, upgrade on a real cluster) run in CI, and release tags publish
+  the chart to `oci://ghcr.io/sraesch/charts/track-record`.
 - A release process: `develop` is merged into `main` and tagged `vX.Y.Z`,
   and a GitHub Release carries the matching section of this file
   ([ADR 0020](docs/adr/0020-release-process.md)). The steps are the Claude

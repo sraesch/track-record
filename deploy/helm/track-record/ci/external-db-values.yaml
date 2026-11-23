@@ -1,0 +1,46 @@
+# External database with a password from the values, both ingresses.
+imageTag: "1.2.3"
+database:
+  enabled: false
+externalDatabase:
+  host: postgres.example.internal
+  port: 6432
+  database: benchmarks
+  user: track_record
+  password: not-a-real-password
+  sslMode: verify-full
+server:
+  replicaCount: 3
+  config:
+    staleRunTimeout: 2h
+    mcpAllowedHosts: [bench-api.example.com]
+  extraEnv:
+    - name: PGSSLROOTCERT
+      value: /etc/track-record/ca.crt
+  extraVolumes:
+    - name: ca
+      secret:
+        secretName: postgres-ca
+  extraVolumeMounts:
+    - name: ca
+      mountPath: /etc/track-record
+      readOnly: true
+ingress:
+  machine:
+    enabled: true
+    className: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-body-size: 256m
+    hosts: [bench-api.example.com]
+    tls:
+      - hosts: [bench-api.example.com]
+        secretName: bench-api-tls
+  ui:
+    enabled: true
+    className: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/auth-url: https://auth.example.com/oauth2/auth
+    hosts: [bench.example.com]
+    tls:
+      - hosts: [bench.example.com]
+        secretName: bench-tls

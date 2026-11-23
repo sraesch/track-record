@@ -1,0 +1,24 @@
+{{- /*
+Attachment volume shared by every server pod (ADR 0003). Kept on uninstall:
+nothing is deleted automatically (FR-8).
+*/ -}}
+{{- $p := .Values.attachments.persistence }}
+{{- if not $p.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "track-record.component" (list . "attachments") }}
+  labels:
+    {{- include "track-record.componentLabels" (list . "server") | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    {{- toYaml $p.accessModes | nindent 4 }}
+  {{- with $p.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $p.size }}
+{{- end }}

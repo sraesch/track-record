@@ -1,0 +1,45 @@
+track-record {{ include "track-record.imageTag" . }} is installed as {{ .Release.Name }}.
+
+{{- $ns := .Release.Namespace }}
+{{- $fe := include "track-record.component" (list . "frontend") }}
+{{- $m := include "track-record.component" (list . "server-machine") }}
+
+Web UI (put an auth proxy in front of it; the UI API has no tokens):
+{{- if .Values.ingress.ui.enabled }}
+{{- range .Values.ingress.ui.hosts }}
+  http{{ if $.Values.ingress.ui.tls }}s{{ end }}://{{ . }}
+{{- end }}
+{{- else if .Values.httpRoute.ui.enabled }}
+  HTTPRoute {{ $fe }}: {{ join ", " (default (list "<gateway hosts>") .Values.httpRoute.ui.hostnames) }}
+{{- else }}
+  kubectl --namespace {{ $ns }} port-forward svc/{{ $fe }} 8088:{{ .Values.frontend.service.port }}
+  then http://localhost:8088
+{{- end }}
+
+Machine API and MCP (API tokens, created on the web UI's API tokens page):
+{{- if .Values.ingress.machine.enabled }}
+{{- range .Values.ingress.machine.hosts }}
+  http{{ if $.Values.ingress.machine.tls }}s{{ end }}://{{ . }}/api   and   /mcp
+{{- end }}
+{{- else if .Values.httpRoute.machine.enabled }}
+  HTTPRoute {{ $m }}: {{ join ", " (default (list "<gateway hosts>") .Values.httpRoute.machine.hostnames) }} (/api, /mcp)
+{{- else }}
+  kubectl --namespace {{ $ns }} port-forward svc/{{ $m }} 8089:{{ .Values.server.service.port }}
+  then http://localhost:8089/api and http://localhost:8089/mcp
+{{- end }}
+
+Check the release with: helm test {{ .Release.Name }} --namespace {{ $ns }}
+
+Uninstalling keeps the data: the attachment volume
+{{- if .Values.database.enabled }}, the database volume and its password Secret{{ end }} stay
+until you delete them.
+{{- if and .Values.attachments.persistence.accessModes (not (has "ReadWriteMany" .Values.attachments.persistence.accessModes)) }}
+
+WARNING: the attachment volume is not ReadWriteMany. All server pods must run
+on one node.
+{{- end }}
+{{- if and (not .Values.ingress.machine.enabled) (not .Values.httpRoute.machine.enabled) (eq .Values.server.service.type "ClusterIP") }}
+
+The machine API is not exposed outside the cluster; enable ingress.machine or
+httpRoute.machine for harnesses and MCP clients outside it.
+{{- end }}

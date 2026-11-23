@@ -1,0 +1,70 @@
+{{- /*
+Gateway API routes, the same split as ingress.yaml (NFR-2): /api and /mcp
+to the machine port, everything else of the UI hosts to the frontend.
+*/ -}}
+{{- $machine := include "track-record.component" (list . "server-machine") }}
+{{- $frontend := include "track-record.component" (list . "frontend") }}
+{{- with .Values.httpRoute.machine }}
+{{- if .enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $machine }}
+  labels:
+    {{- include "track-record.componentLabels" (list $ "server") | nindent 4 }}
+  {{- with .annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- if not .parentRefs }}{{ fail "httpRoute.machine.parentRefs is required" }}{{ end }}
+    {{- toYaml .parentRefs | nindent 4 }}
+  {{- with .hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+        - path:
+            type: PathPrefix
+            value: /mcp
+      backendRefs:
+        - name: {{ $machine }}
+          port: {{ $.Values.server.service.port }}
+---
+{{- end }}
+{{- end }}
+{{- with .Values.httpRoute.ui }}
+{{- if .enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $frontend }}
+  labels:
+    {{- include "track-record.componentLabels" (list $ "frontend") | nindent 4 }}
+  {{- with .annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- if not .parentRefs }}{{ fail "httpRoute.ui.parentRefs is required" }}{{ end }}
+    {{- toYaml .parentRefs | nindent 4 }}
+  {{- with .hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ $frontend }}
+          port: {{ $.Values.frontend.service.port }}
+{{- end }}
+{{- end }}
