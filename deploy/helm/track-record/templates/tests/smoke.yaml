@@ -1,0 +1,42 @@
+{{- /*
+`helm test`: read-only checks of a running release. It uses the frontend
+image (busybox wget), so nothing extra is pulled, and writes nothing.
+*/ -}}
+{{- $frontend := printf "http://%s:%v" (include "track-record.component" (list . "frontend")) .Values.frontend.service.port }}
+{{- $machine := printf "http://%s:%v" (include "track-record.component" (list . "server-machine")) .Values.server.service.port }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "track-record.component" (list . "test") }}
+  labels:
+    {{- include "track-record.componentLabels" (list . "test") | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  {{- include "track-record.optional" (list "track-record.imagePullSecrets" . 2) }}
+  securityContext:
+    {{- toYaml .Values.frontend.podSecurityContext | nindent 4 }}
+  containers:
+    - name: smoke
+      image: {{ include "track-record.image" (list . .Values.frontend.image) }}
+      imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+      command:
+        - sh
+        - -c
+        - |
+          set -e
+          get() { wget -q -T 10 -O /dev/null "$1"; }
+          echo "web UI";                       get {{ $frontend }}/
+          echo "UI API through the frontend";  get {{ $frontend }}/ui/api/openapi.json
+          echo "machine API";                  get {{ $machine }}/api/openapi.json
+          echo "machine port has no UI API"
+          if get {{ $machine }}/ui/api/openapi.json; then
+            echo "FAIL: /ui/api answers on the machine port" >&2
+            exit 1
+          fi
+          echo ok
+      securityContext:
+        {{- toYaml .Values.frontend.securityContext | nindent 8 }}

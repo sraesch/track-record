@@ -1,0 +1,14 @@
+# deploy/helm/install-test.sh on a one-node cluster (Docker Desktop, kind):
+# their default storage classes only provide ReadWriteOnce, which is enough
+# while all server pods share the node.
+attachments:
+  persistence:
+    accessModes: [ReadWriteOnce]
+    size: 1Gi
+database:
+  persistence:
+    size: 2Gi
+server:
+  replicaCount: 2
+frontend:
+  replicaCount: 1

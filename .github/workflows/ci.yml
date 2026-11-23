@@ -1,5 +1,5 @@
-# Continuous integration and image publishing. See docs/adr/0005-ci.md and
-# docs/adr/0007-image-publishing.md.
+# Continuous integration, image and chart publishing. See docs/adr/0005-ci.md,
+# docs/adr/0007-image-publishing.md and docs/adr/0021-helm-chart.md.
 #
 # Each check job runs the same command a developer runs locally. Add a job here
 # when a new part of the system gets tests. Images are published by the
@@ -73,6 +73,34 @@ jobs:
       - name: Build the frontend image
         run: docker build --tag track-record-frontend frontend
 
+  helm:
+    name: Helm chart (lint, template, kubeconform)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Lint, render and validate the chart
+        run: deploy/helm/test.sh
+
+  # Installs the chart into a kind cluster with the published develop
+  # images: this checks the chart, not the images of this commit.
+  helm-install:
+    name: Helm chart (install on kind)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: v4.3.0
+      - uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
+        with:
+          cluster_name: track-record
+      - name: Install, test, upload and upgrade
+        env:
+          KUBE_CONTEXT: kind-track-record
+        run: deploy/helm/install-test.sh
+
   # Publishing: each image is pushed to ghcr.io/<owner>/<image> for amd64 and
   # arm64 after its own checks passed, then its old sha- images are deleted
   # (publish-image.yml). Never runs for pull requests.
@@ -116,3 +144,25 @@ jobs:
       image: track-record-frontend
       context: frontend
       description: Track Record web UI
+
+  # Release tags only: the chart goes to oci://ghcr.io/<owner>/charts as
+  # track-record:X.Y.Z, after its checks and all three images of the
+  # release are published (ADR 0021).
+  publish-chart:
+    name: Publish Helm chart
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [helm, helm-install, publish-database-image, publish-server-image, publish-frontend-image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Package and push the chart
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          OWNER: ${{ github.repository_owner }}
+        run: deploy/helm/publish.sh "${TAG#v}" "oci://ghcr.io/$OWNER/charts"

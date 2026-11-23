@@ -1,0 +1,292 @@
+# Values for the track-record chart. The design is in
+# docs/adr/0021-helm-chart.md; README.md lists common setups.
+#
+# Access (NFR-2): the server has two ports. The machine port (/api, /mcp)
+# checks API tokens itself. The UI port (/ui/api) has no authentication and
+# carries invalidation, deletion and token management; only the frontend
+# reaches it, and the web UI belongs behind an auth proxy. The two are
+# exposed through separate ingresses (or HTTPRoutes) below, and the UI port
+# has no Service a machine ingress could point at.
+
+# -- Image tag for all three images (database, server, frontend). Empty means
+# the chart's appVersion, i.e. the release this chart belongs to. Set it to
+# `develop`, `main` or `sha-<short>` to run unreleased images.
+imageTag: ""
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# -- Labels added to every resource.
+commonLabels: {}
+
+# --------------------------------------------------------------------------
+# Database
+# --------------------------------------------------------------------------
+
+database:
+  # -- Run PostgreSQL 18 with the schema in the cluster (track-record-db,
+  # ADR 0006). Set to false and fill in `externalDatabase` to use another
+  # PostgreSQL 18 database, e.g. a managed one.
+  enabled: true
+
+  # -- The database image. It also provides `track-record-migrate` for the
+  # migration job, so it is used even with an external database.
+  image:
+    repository: ghcr.io/sraesch/track-record-db
+    # -- Overrides `imageTag` for this image.
+    tag: ""
+    pullPolicy: IfNotPresent
+
+  auth:
+    # -- Password of the `postgres` user. Empty: generated on install and
+    # kept on upgrades (the Secret is looked up in the cluster, so
+    # `helm template` renders a new one every time; set it, or use
+    # `existingSecret`, with GitOps tools). Changing it later does not
+    # change the password inside an existing database.
+    password: ""
+    # -- Secret with the password, created outside the chart.
+    existingSecret: ""
+    # -- Key of the password in `existingSecret`.
+    secretKey: password
+
+  persistence:
+    # -- Storage class of the data volume; empty uses the cluster default.
+    storageClass: ""
+    accessModes: [ReadWriteOnce]
+    size: 50Gi
+
+  # -- The postgres entrypoint starts as root and drops to `postgres` (999).
+  podSecurityContext:
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+
+  resources: {}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# -- An existing PostgreSQL 18 database, used when `database.enabled` is
+# false. The database must exist; the migration job creates the schema
+# before the server is installed and upgrades it before every upgrade.
+externalDatabase:
+  host: ""
+  port: 5432
+  database: track_record
+  # -- Owns the schema: the migration job creates tables and functions as
+  # this user, and the server uses it too.
+  user: postgres
+  # -- Password; or use `existingSecret`.
+  password: ""
+  existingSecret: ""
+  # -- Key of the password in `existingSecret`.
+  secretKey: password
+  # -- libpq/sqlx `sslmode` (disable, allow, prefer, require, verify-ca,
+  # verify-full).
+  sslMode: prefer
+
+# --------------------------------------------------------------------------
+# Migrations
+# --------------------------------------------------------------------------
+
+# -- The `track-record-migrate` job (ADR 0006), a Helm hook. It runs before
+# every upgrade and, with an external database, before the install. The
+# in-cluster database applies all migrations itself on first start.
+migrations:
+  # -- Seconds the job may take, waiting for the database included.
+  activeDeadlineSeconds: 900
+  backoffLimit: 2
+  # -- Runs `psql` as the image's `postgres` user.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+  resources: {}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# --------------------------------------------------------------------------
+# Server (REST API, MCP, jobs)
+# --------------------------------------------------------------------------
+
+server:
+  image:
+    repository: ghcr.io/sraesch/track-record-server
+    tag: ""
+    pullPolicy: IfNotPresent
+
+  # -- Stateless; scale as needed (NFR-1). Ignored with autoscaling. Every
+  # replica opens up to `config.databaseMaxConnections` connections.
+  replicaCount: 2
+
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 75
+
+  # -- Server settings (backend/README.md). Empty values keep the server's
+  # defaults.
+  config:
+    # -- Running runs without an upload for this long are aborted (FR-2).
+    staleRunTimeout: ""
+    staleRunCheckInterval: ""
+    # -- Maximum JSON request body in bytes (server default 256 MiB).
+    maxBodyBytes: ""
+    databaseMaxConnections: ""
+    # -- `Host` values accepted on /mcp (`host` or `host:port`); empty
+    # accepts any. Set it to the machine ingress host.
+    mcpAllowedHosts: []
+    # -- `RUST_LOG` filter; logs are JSON.
+    logLevel: info
+
+  # -- Wait in an init container (database image, `pg_isready`) until the
+  # database accepts connections. The server exits if it cannot connect.
+  waitForDatabase: true
+
+  # -- Extra environment variables, e.g. PGSSLROOTCERT for an external
+  # database.
+  extraEnv: []
+  extraVolumes: []
+  extraVolumeMounts: []
+
+  # -- The image runs as the distroless `nonroot` user (65532). `fsGroup`
+  # makes the attachment volume writable for it; some NFS drivers ignore
+  # `fsGroup`, then prepare the share's ownership instead.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+
+  service:
+    # -- Service of the machine port only (/api, /mcp). The UI port has its
+    # own ClusterIP Service, reachable only from the frontend.
+    type: ClusterIP
+    port: 8080
+    annotations: {}
+
+  resources: {}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# -- Attachments: files on one volume shared by every server pod (ADR 0003).
+attachments:
+  persistence:
+    # -- Use an existing claim instead of creating one.
+    existingClaim: ""
+    # -- A class that supports ReadWriteMany (NFS, CephFS, EFS, Azure Files,
+    # ...). Empty uses the cluster default.
+    storageClass: ""
+    # -- ReadWriteMany so that server pods on several nodes share it.
+    # ReadWriteOnce works only while all server pods run on one node.
+    accessModes: [ReadWriteMany]
+    size: 100Gi
+
+# --------------------------------------------------------------------------
+# Frontend (web UI)
+# --------------------------------------------------------------------------
+
+frontend:
+  image:
+    repository: ghcr.io/sraesch/track-record-frontend
+    tag: ""
+    pullPolicy: IfNotPresent
+
+  replicaCount: 2
+
+  # -- nginx-unprivileged runs as user 101. The root filesystem is
+  # read-only; the rendered config and nginx's temp files go to emptyDirs.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+
+  service:
+    type: ClusterIP
+    port: 80
+    annotations: {}
+
+  resources: {}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# --------------------------------------------------------------------------
+# Exposure
+# --------------------------------------------------------------------------
+
+ingress:
+  # -- Machine clients (harness, MCP): /api and /mcp on the machine port,
+  # nothing else. Bypasses the auth proxy; the server checks API tokens.
+  machine:
+    enabled: false
+    className: ""
+    # -- E.g. a larger body size and longer timeouts for uploads and
+    # streamed exports: `nginx.ingress.kubernetes.io/proxy-body-size: 256m`.
+    annotations: {}
+    hosts: []
+    tls: []
+  # -- The web UI (frontend, which proxies /ui/api to the UI port). Put the
+  # auth proxy here, e.g. through annotations of your ingress controller.
+  ui:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts: []
+    tls: []
+
+# -- Gateway API routes, an alternative to `ingress` with the same split.
+httpRoute:
+  machine:
+    enabled: false
+    annotations: {}
+    # -- Gateways (and listeners) the route attaches to.
+    parentRefs: []
+    hostnames: []
+  ui:
+    enabled: false
+    annotations: {}
+    parentRefs: []
+    hostnames: []
+
+# -- NetworkPolicies: the UI port only accepts the frontend (plus
+# `uiApiFrom`), the in-cluster database only the server and the migration
+# job. Needs a network plugin that enforces them.
+networkPolicy:
+  enabled: true
+  # -- Further peers allowed on the UI port (NetworkPolicyPeer list), e.g.
+  # an auth proxy that forwards /ui/api itself.
+  uiApiFrom: []

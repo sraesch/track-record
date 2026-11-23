@@ -21,8 +21,9 @@ released yet: there is no `main` branch and no tag, and the versions disagree
   prepare commit.
 - **One version for the whole system,** SemVer, `0.x` for now. It is set in
   the backend crates (`track-record-core`, `track-record-server`), the
-  frontend package and, generated from the server crate, the OpenAPI
-  documents and the MCP server info. The database image has no version of
+  frontend package, the Helm chart (`version` and `appVersion`,
+  [ADR 0021](0021-helm-chart.md)) and, generated from the server crate,
+  the OpenAPI documents and the MCP server info. The database image has no version of
   its own; its schema version is the list of applied migrations.
 - **Prepare commit** `Prepare X.Y.Z release` on `develop`: sets the version
   everywhere, rolls `## [Unreleased]` of `CHANGELOG.md` into
@@ -34,6 +35,9 @@ released yet: there is no `main` branch and no tag, and the versions disagree
 - **Images:** no extra workflow. The CI run for the tag publishes `X.Y.Z` and
   `X.Y` of all three images, the run for `main` publishes `main` and
   `latest` (ADR 0007).
+- **Helm chart:** the same CI run for the tag publishes the chart as
+  `oci://ghcr.io/<owner>/charts/track-record`, version `X.Y.Z`, once the
+  three images are published (ADR 0021).
 - **Release notes:** a GitHub Release for the tag, created once CI has
   published the images. Its notes are the `CHANGELOG.md` section of the
   version, with relative links pointed at the tag.
@@ -50,13 +54,15 @@ released yet: there is no `main` branch and no tag, and the versions disagree
 - The release is not automated end to end. A release workflow could take
   over steps 8 and 9 (wait for images, create the release) later; the skill
   is the specification for it.
-- There is no script that checks the versions agree. A forgotten bump of the
-  server crate is caught by the OpenAPI test only if the documents were not
-  regenerated either; the skill lists the checks.
+- There is no script that checks that all versions agree. A forgotten bump
+  of the server crate is caught by the OpenAPI test only if the documents
+  were not regenerated either, and `deploy/helm/test.sh` fails if the chart
+  and the server crate differ; the skill lists the checks.
 - `APP_CHANGELOG.md` must keep an `## Unreleased` section while changes
   accumulate, and tests must not depend on the text of its version
   headings.
 
 ## Left for later ADRs
 
-Helm chart and its versioning, a release workflow, signing images.
+A release workflow, signing images. The Helm chart and its versioning are
+decided in [ADR 0021](0021-helm-chart.md).

@@ -2,7 +2,8 @@
 
 Runs the whole stack (database, migrations, server, web UI) in the local
 Kubernetes cluster of Docker Desktop, to try the UI against a real backend.
-Plain manifests (`base/`) with kustomize; the production Helm chart is still open.
+Plain manifests (`base/`) with kustomize, built from the working tree. To
+deploy published images, use the Helm chart ([deploy/helm/](../helm/README.md)).
 **Local development only:** fixed database password, single replicas, no
 auth proxy.
 

@@ -1,0 +1,22 @@
+# Gateway API instead of ingresses; no network policies, no wait.
+database:
+  auth:
+    password: not-a-real-password
+server:
+  waitForDatabase: false
+networkPolicy:
+  enabled: false
+httpRoute:
+  machine:
+    enabled: true
+    parentRefs:
+      - name: public
+        namespace: gateways
+        sectionName: https
+    hostnames: [bench-api.example.com]
+  ui:
+    enabled: true
+    parentRefs:
+      - name: internal
+        namespace: gateways
+    hostnames: [bench.example.com]

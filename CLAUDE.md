@@ -28,7 +28,9 @@ rename and delete, unit catalogue, custom units), the derived metrics page (list
 uses and users, editor that creates or changes a metric with live validation
 and a preview on a case execution) and the API tokens page (list, create
 with the secret shown once, revoke) and the About page (the app changelog,
-`frontend/APP_CHANGELOG.md`, as Markdown); the other views are placeholders. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
+`frontend/APP_CHANGELOG.md`, as Markdown); the other views are placeholders.
+The Helm chart ([deploy/helm/](deploy/helm/README.md)) deploys the whole
+stack from the published images. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
 ## Commands
 
@@ -52,6 +54,9 @@ docker build --tag track-record-frontend frontend   # web UI image (nginx; proxi
 deploy/local/up.sh                # whole stack on Docker Desktop Kubernetes (build, push, deploy)
 deploy/local/forward.sh           # UI on localhost:8088, machine API on localhost:8089
 deploy/local/down.sh              # remove the local stack and its data
+deploy/helm/test.sh               # Helm chart: lint, template, kubeconform, access rules (needs Docker)
+deploy/helm/install-test.sh       # install the chart into Docker Desktop Kubernetes and check it (KUBE_CONTEXT)
+deploy/helm/publish.sh 0.1.0 oci://ghcr.io/sraesch/charts   # package the chart (dry run without REGISTRY_PASSWORD)
 npm run seed                      # test data for UI development (in frontend/; needs an empty database, forward.sh)
 npm run generate:api              # regenerate src/api/schema.d.ts from backend/openapi/ui.json (in frontend/)
 ```
@@ -153,6 +158,24 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   `/ui/api` to `TR_UI_API_UPSTREAM`. `deploy/local/` runs the whole stack on
   Docker Desktop Kubernetes for trying the UI; it is not the Helm chart.
 
+## Helm chart
+
+- `deploy/helm/track-record/` ([ADR 0021](docs/adr/0021-helm-chart.md)).
+  Its `version` and `appVersion` are the release version (ADR 0020);
+  `imageTag` (default `appVersion`) sets all three images.
+- Keep the access split (NFR-2): ingresses and HTTPRoutes point only at the
+  machine Service (`/api`, `/mcp`) or the frontend; the UI port has its own
+  always-ClusterIP Service that only the frontend uses. `test.sh` fails
+  otherwise.
+- Migrations run as the `track-record-migrate` hook Job (pre-upgrade; also
+  pre-install with an external database). Never let the server migrate.
+- Data outlives the release (FR-8): the attachment PVC and the generated
+  database password are `helm.sh/resource-policy: keep`.
+- A new value goes into `values.yaml` (with a comment) and
+  `values.schema.json` (unknown keys fail). Cover new options in a
+  `ci/*-values.yaml` that `test.sh` renders; check installs with
+  `install-test.sh`.
+
 ## Database
 
 - Schema changes are new numbered files in `db/migrations/`; never edit a
@@ -195,7 +218,9 @@ CI is GitHub Actions ([ADR 0005](docs/adr/0005-ci.md)): `.github/workflows/ci.ym
 runs on pull requests and on pushes to `develop` and `main`. Its jobs call the
 local test commands; when a new part gets tests, add a job that runs the same
 command (`backend` runs `backend/test.sh` and builds the server image,
-`frontend` runs `frontend/test.sh` and builds the UI image). After
+`frontend` runs `frontend/test.sh` and builds the UI image, `helm` runs
+`deploy/helm/test.sh`, `helm-install` runs `deploy/helm/install-test.sh` on
+kind). After
 the checks pass, pushes to `develop`, `main` and `v*` tags
 publish `ghcr.io/<owner>/track-record-db`, `-server` and `-frontend` for
 amd64 and arm64 ([ADR 0007](docs/adr/0007-image-publishing.md),
@@ -218,13 +243,15 @@ ADR 0016.
 
 Releases ([ADR 0020](docs/adr/0020-release-process.md)): `develop` is merged
 `--no-ff` into `main` and tagged `vX.Y.Z`; the version is set in the backend
-crates, the frontend package and the OpenAPI documents, and both changelogs
+crates, the frontend package, the Helm chart and the OpenAPI documents, and both changelogs
 are finalized in a `Prepare X.Y.Z release` commit. The steps are the
 `release` skill (`.claude/skills/release/SKILL.md`); keep it in step with
 the version files and workflows. `frontend/APP_CHANGELOG.md` keeps a
 `## Unreleased` section until then, so tests must not depend on its headings.
+The tag's CI run also publishes the Helm chart to
+`oci://ghcr.io/<owner>/charts/track-record` (job `publish-chart`, ADR 0021).
 
-Still open: cache strategy, Helm chart.
+Still open: cache strategy.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
 only in code.
 

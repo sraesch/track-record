@@ -1,0 +1,184 @@
+{{- /*
+Backend (track-record-server, ADR 0008). Stateless (NFR-1): any number of
+replicas share the database and the attachment volume. Two ports: machine
+(/api, /mcp, API tokens) and UI (/ui/api, no tokens).
+*/ -}}
+{{- $s := .Values.server }}
+{{- $c := $s.config }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "track-record.component" (list . "server") }}
+  labels:
+    {{- include "track-record.componentLabels" (list . "server") | nindent 4 }}
+spec:
+  {{- if not $s.autoscaling.enabled }}
+  replicas: {{ $s.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "track-record.componentSelectorLabels" (list . "server") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "track-record.componentLabels" (list . "server") | nindent 8 }}
+      annotations:
+        {{- if not (include "track-record.databaseExistingSecret" .) }}
+        # Restart on a changed password.
+        checksum/database-password: {{ include "track-record.databasePassword" . | sha256sum | trunc 16 }}
+        {{- end }}
+        {{- with $s.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "track-record.optional" (list "track-record.imagePullSecrets" . 6) }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml $s.podSecurityContext | nindent 8 }}
+      {{- if $s.waitForDatabase }}
+      initContainers:
+        {{- include "track-record.waitForDatabase" (list . (include "track-record.databaseSecretName" .)) | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: server
+          image: {{ include "track-record.image" (list . $s.image) }}
+          imagePullPolicy: {{ $s.image.pullPolicy }}
+          env:
+            {{- include "track-record.databaseEnv" (list . (include "track-record.databaseSecretName" .)) | nindent 12 }}
+            # User, password and sslmode come from the PG* variables above.
+            - name: DATABASE_URL
+              value: postgres://$(PGHOST):$(PGPORT)/$(PGDATABASE)
+            - name: TR_ATTACHMENT_ROOT
+              value: /data/attachments
+            - name: TR_MACHINE_ADDR
+              value: 0.0.0.0:8080
+            - name: TR_UI_ADDR
+              value: 0.0.0.0:8081
+            {{- with $c.staleRunTimeout }}
+            - name: TR_STALE_RUN_TIMEOUT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $c.staleRunCheckInterval }}
+            - name: TR_STALE_RUN_CHECK_INTERVAL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $c.maxBodyBytes }}
+            - name: TR_MAX_BODY_BYTES
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $c.databaseMaxConnections }}
+            - name: TR_DATABASE_MAX_CONNECTIONS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $c.mcpAllowedHosts }}
+            - name: TR_MCP_ALLOWED_HOSTS
+              value: {{ join "," . | quote }}
+            {{- end }}
+            - name: RUST_LOG
+              value: {{ $c.logLevel | quote }}
+            {{- with $s.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: machine
+              containerPort: 8080
+            - name: ui
+              containerPort: 8081
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: ui
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: ui
+            periodSeconds: 5
+            timeoutSeconds: 5
+          securityContext:
+            {{- toYaml $s.securityContext | nindent 12 }}
+          {{- with $s.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: attachments
+              mountPath: /data/attachments
+            - name: tmp
+              mountPath: /tmp
+            {{- with $s.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: attachments
+          persistentVolumeClaim:
+            claimName: {{ default (include "track-record.component" (list . "attachments")) .Values.attachments.persistence.existingClaim }}
+        - name: tmp
+          emptyDir: {}
+        {{- with $s.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- include "track-record.optional" (list "track-record.scheduling" $s 6) }}
+---
+# Machine port only (/api, /mcp). Machine ingresses and HTTPRoutes point
+# here; this Service has no UI port they could reach (NFR-2).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "track-record.component" (list . "server-machine") }}
+  labels:
+    {{- include "track-record.componentLabels" (list . "server") | nindent 4 }}
+  {{- with $s.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $s.service.type }}
+  selector:
+    {{- include "track-record.componentSelectorLabels" (list . "server") | nindent 4 }}
+  ports:
+    - name: machine
+      port: {{ $s.service.port }}
+      targetPort: machine
+---
+# UI port only (/ui/api, no tokens): for the frontend's proxy. Always
+# ClusterIP and never the backend of an ingress; exposing it would bypass
+# the auth proxy and allow invalidation and deletion (NFR-2).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "track-record.component" (list . "server-ui") }}
+  labels:
+    {{- include "track-record.componentLabels" (list . "server") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "track-record.componentSelectorLabels" (list . "server") | nindent 4 }}
+  ports:
+    - name: ui
+      port: 8081
+      targetPort: ui
+{{- if $s.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "track-record.component" (list . "server") }}
+  labels:
+    {{- include "track-record.componentLabels" (list . "server") | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "track-record.component" (list . "server") }}
+  minReplicas: {{ $s.autoscaling.minReplicas }}
+  maxReplicas: {{ $s.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $s.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

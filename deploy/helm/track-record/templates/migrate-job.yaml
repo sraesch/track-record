@@ -1,0 +1,87 @@
+{{- /*
+track-record-migrate as a Helm hook (ADR 0006, ADR 0021). Runs before every
+upgrade, so new server pods find the schema they expect. With an external
+database it also runs before the install; the in-cluster database applies
+all migrations itself on first start, and does not exist yet before the
+install.
+
+Hooks run before the release's own resources exist or are updated, so a
+chart-managed password reaches the job through its own hook Secret, which
+is deleted once the hooks succeeded.
+*/ -}}
+{{- $name := include "track-record.component" (list . "migrate") }}
+{{- $hooks := ternary "pre-upgrade" "pre-install,pre-upgrade" .Values.database.enabled }}
+{{- $existing := include "track-record.databaseExistingSecret" . }}
+{{- $m := .Values.migrations }}
+{{- if not $existing }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "track-record.componentLabels" (list . "migrate") | nindent 4 }}
+  annotations:
+    helm.sh/hook: {{ $hooks }}
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+type: Opaque
+data:
+  password: {{ include "track-record.databasePassword" . | b64enc | quote }}
+---
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "track-record.componentLabels" (list . "migrate") | nindent 4 }}
+  annotations:
+    helm.sh/hook: {{ $hooks }}
+    helm.sh/hook-weight: "0"
+    # A failed job stays for its logs until the next attempt.
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ $m.backoffLimit }}
+  activeDeadlineSeconds: {{ $m.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "track-record.componentLabels" (list . "migrate") | nindent 8 }}
+      {{- with $m.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "track-record.optional" (list "track-record.imagePullSecrets" . 6) }}
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml $m.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "track-record.image" (list . .Values.database.image) }}
+          imagePullPolicy: {{ .Values.database.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready --quiet --timeout=5; do
+                echo "waiting for $PGHOST:$PGPORT"
+                sleep 2
+              done
+              exec track-record-migrate
+          env:
+            {{- include "track-record.databaseEnv" (list . (ternary (include "track-record.databaseSecretName" .) $name (ne $existing ""))) | nindent 12 }}
+          securityContext:
+            {{- toYaml $m.securityContext | nindent 12 }}
+          {{- with $m.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- include "track-record.optional" (list "track-record.scheduling" $m 6) }}

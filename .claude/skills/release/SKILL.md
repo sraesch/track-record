@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a new release of track-record following the repo's develop/main branching and Keep-a-Changelog conventions. Use when the user asks to "release", "cut a release", "ship a new version", "bump the version", "publish a release", or "tag a release". Syncs develop/main, bumps the version in the backend crates, the frontend package and the OpenAPI documents, finalizes CHANGELOG.md and frontend/APP_CHANGELOG.md, merges develop into main, tags it, waits for CI to publish the versioned images to GHCR, and publishes a GitHub Release with the changelog section as notes.
+description: Cut a new release of track-record following the repo's develop/main branching and Keep-a-Changelog conventions. Use when the user asks to "release", "cut a release", "ship a new version", "bump the version", "publish a release", or "tag a release". Syncs develop/main, bumps the version in the backend crates, the frontend package, the Helm chart and the OpenAPI documents, finalizes CHANGELOG.md and frontend/APP_CHANGELOG.md, merges develop into main, tags it, waits for CI to publish the versioned images and the Helm chart to GHCR, and publishes a GitHub Release with the changelog section as notes.
 ---
 
 # Cut a track-record release
@@ -10,12 +10,14 @@ There is no separate release workflow: the **CI** workflow (`.github/workflows/c
 pushes to `main` and on `v*` tags and, after the checks pass, publishes the three images
 `ghcr.io/sraesch/track-record-db`, `-server` and `-frontend` for amd64 and arm64 through
 `.github/workflows/publish-image.yml` ([ADR 0007](../../../docs/adr/0007-image-publishing.md),
-[ADR 0014](../../../docs/adr/0014-server-and-frontend-images.md)):
+[ADR 0014](../../../docs/adr/0014-server-and-frontend-images.md)), and for the tag also the Helm
+chart `oci://ghcr.io/sraesch/charts/track-record` (job `publish-chart`,
+[ADR 0021](../../../docs/adr/0021-helm-chart.md)):
 
-| Push | Image tags |
-|---|---|
-| `main` | `main`, `latest`, `sha-<short>` |
-| tag `vX.Y.Z` | `X.Y.Z`, `X.Y`, `sha-<short>` |
+| Push | Image tags | Chart |
+|---|---|---|
+| `main` | `main`, `latest`, `sha-<short>` | — |
+| tag `vX.Y.Z` | `X.Y.Z`, `X.Y`, `sha-<short>` | `X.Y.Z` |
 
 The GitHub Release is created by hand in this workflow (step 9), with the matching `CHANGELOG.md`
 section as notes. The process is decided in
@@ -33,6 +35,9 @@ Release** (step 9). Don't push or publish without the user's go-ahead.
     (plus the matching `track-record-core` / `track-record-server` entries in `backend/Cargo.lock`)
   - `frontend/package.json` → `"version"` (plus both `track-record-frontend` entries at the top of
     `frontend/package-lock.json`)
+  - `deploy/helm/track-record/Chart.yaml` → `version` and `appVersion` (both `X.Y.Z`; the chart
+    deploys the images with its `appVersion`). `deploy/helm/test.sh` fails if they differ from the
+    server crate, and the `publish-chart` CI job refuses a tag that isn't the chart version.
   - `backend/openapi/machine.json` and `backend/openapi/ui.json` → `info.version`. utoipa takes it
     from the server crate's version, and the MCP server reports it too. The documents are
     regenerated, never edited by hand; `committed_openapi_documents_are_current` in
@@ -105,7 +110,7 @@ Run the same checks as CI and require all to pass. They need Docker and take sev
 run them in the background:
 
 ```bash
-db/test.sh && db/image-test.sh && backend/test.sh && frontend/test.sh
+db/test.sh && db/image-test.sh && backend/test.sh && frontend/test.sh && deploy/helm/test.sh
 ```
 
 Also check that CI on `develop` is green for the commit being released:
@@ -116,8 +121,9 @@ Also check that CI on `develop` is green for the commit being released:
 On `develop`, make one `Prepare NEXT release` commit that does all of this:
 
 1. **Set the version to `NEXT`** in `backend/crates/core/Cargo.toml`,
-   `backend/crates/server/Cargo.toml` and `frontend/package.json` (skip a file that is already at
-   `NEXT`). Then update the lockfiles, regenerate the OpenAPI documents and the frontend API types:
+   `backend/crates/server/Cargo.toml`, `frontend/package.json` and both `version` and
+   `appVersion` in `deploy/helm/track-record/Chart.yaml` (skip a file that is already at `NEXT`).
+   Then update the lockfiles, regenerate the OpenAPI documents and the frontend API types:
 
    ```bash
    (cd backend && cargo update --workspace --offline)
@@ -133,6 +139,7 @@ On `develop`, make one `Prepare NEXT release` commit that does all of this:
    grep -A1 '^name = "track-record-' backend/Cargo.lock
    (cd frontend && node -p "[require('./package.json').version, require('./package-lock.json').version, require('./package-lock.json').packages[''].version].join(' ')")
    (cd backend/openapi && node -p "['machine','ui'].map(f => f + ': ' + require('./' + f + '.json').info.version).join(', ')")
+   grep -E '^(version|appVersion):' deploy/helm/track-record/Chart.yaml
    ```
 
    Only the version lines should change: the `track-record-*` entries in the lockfiles and
@@ -180,13 +187,17 @@ Then re-run the checks that cover these files and commit:
 ```bash
 backend/test.sh -- committed_openapi_documents_are_current
 frontend/test.sh -- about
+deploy/helm/test.sh
+deploy/helm/publish.sh NEXT oci://ghcr.io/sraesch/charts
 ```
+
+The last one is a dry run (no `REGISTRY_PASSWORD`): it checks the version and packages the chart.
 
 ```bash
 git add backend/crates/core/Cargo.toml backend/crates/server/Cargo.toml backend/Cargo.lock \
   backend/openapi/machine.json backend/openapi/ui.json \
   frontend/package.json frontend/package-lock.json frontend/APP_CHANGELOG.md \
-  CHANGELOG.md
+  deploy/helm/track-record/Chart.yaml CHANGELOG.md
 git commit -m "Prepare NEXT release"
 ```
 
@@ -228,8 +239,8 @@ git push origin vNEXT
 ```
 
 Each push starts a CI run: `develop` publishes the `develop` images, `main` the `main` and `latest`
-images, and the tag the `NEXT` and `X.Y` images. On the first release, the `main` push creates the
-branch on GitHub.
+images, and the tag the `NEXT` and `X.Y` images and then the Helm chart `NEXT`. On the first
+release, the `main` push creates the branch on GitHub.
 
 ### 8. Wait for CI and the images
 
@@ -253,8 +264,15 @@ for image in track-record-db track-record-server track-record-frontend; do
 done
 ```
 
-If a package is new (first release of an image), remind the user to check that its visibility in
-the GitHub package settings is public, like the repository.
+and that the chart is published (`publish-chart` runs after the three image publishes):
+
+```bash
+helm show chart oci://ghcr.io/sraesch/charts/track-record --version NEXT
+```
+
+If a package is new (first release of an image, or of the chart: `charts/track-record`), remind the
+user to check that its visibility in the GitHub package settings is public, like the repository.
+A private chart package makes the `helm show chart` above fail without a login.
 
 ### 9. Publish the GitHub Release (confirm first)
 
@@ -291,12 +309,14 @@ For a pre-release, leave out `--latest`.
 - Return to `develop`: `git checkout develop`.
 - Confirm CI on `main` and on the tag is green.
 - Report to the user: the version, the release URL, the image tags published
-  (`ghcr.io/sraesch/track-record-{db,server,frontend}:NEXT`), and the CI status.
+  (`ghcr.io/sraesch/track-record-{db,server,frontend}:NEXT`), the chart
+  (`oci://ghcr.io/sraesch/charts/track-record`, version `NEXT`), and the CI status.
 
 ## Done when
 
-- [ ] The backend crates, `backend/Cargo.lock`, `frontend/package.json`, `frontend/package-lock.json`
-      and both OpenAPI documents are at `NEXT`.
+- [ ] The backend crates, `backend/Cargo.lock`, `frontend/package.json`, `frontend/package-lock.json`,
+      `deploy/helm/track-record/Chart.yaml` (`version` and `appVersion`) and both OpenAPI documents
+      are at `NEXT`.
 - [ ] `CHANGELOG.md` has a dated `## [NEXT]` section, a fresh empty `## [Unreleased]`, and updated
       links.
 - [ ] `frontend/APP_CHANGELOG.md` has a self-contained `## NEXT — YYYY-MM-DD` section at the top and
@@ -305,4 +325,5 @@ For a pre-release, leave out `--latest`.
       first release, was created at the prepare commit).
 - [ ] Annotated tag `vNEXT` is pushed.
 - [ ] CI succeeded for `main` and the tag, and all three images exist as `NEXT` for amd64 and arm64.
+- [ ] The Helm chart `oci://ghcr.io/sraesch/charts/track-record` exists as version `NEXT`.
 - [ ] The GitHub Release `vNEXT` is published with the changelog notes.
