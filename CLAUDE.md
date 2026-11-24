@@ -74,7 +74,8 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   identical retry, 409 for different content. One transaction per request.
 - After changing an endpoint, regenerate `backend/openapi/*.json`; a test
   checks them. For `ui.json`, also regenerate the frontend types
-  (`npm run generate:api` in `frontend/`).
+  (`npm run generate:api` in `frontend/`). For a machine endpoint
+  (`/api/v1`), also update its documentation in `docs/rest/`.
 - MCP (`/mcp`, rmcp, stateless) shows tools by token scope: read tools for
   every scope, tag/annotation tools only for `annotate`. Tool parameters are
   the REST request types (`schemars::JsonSchema` next to `ToSchema`); service

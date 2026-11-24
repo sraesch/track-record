@@ -80,6 +80,9 @@ docker buildx build --platform linux/amd64,linux/arm64 --file backend/Dockerfile
 
 ## API
 
+The machine API (`/api/v1`) is documented for its users in
+[docs/rest/](../docs/rest/README.md).
+
 Each port serves its own OpenAPI document: `/api/openapi.json` (machine)
 and `/ui/api/openapi.json` (UI). Both are also committed in `openapi/`. After
 changing an endpoint, regenerate them (a test fails otherwise):

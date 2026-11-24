@@ -68,7 +68,8 @@ See [docs/requirements.md](docs/requirements.md) for the full domain model.
 ## Interfaces
 
 - **REST API** (OpenAPI): ingestion, retrieval, querying, comparison,
-  attachments, annotations, aliases.
+  attachments, annotations, aliases. The machine API `/api/v1` is documented
+  in [docs/rest/](docs/rest/README.md).
 - **MCP server**: read access plus editing tags and annotations.
 - **Web UI**: run list and details, comparison, trends, series overlay, faceted
   filtering, definitions and alias management, run invalidation and deletion.
