@@ -32,6 +32,14 @@ with the secret shown once, revoke) and the About page (the app changelog,
 The Helm chart ([deploy/helm/](deploy/helm/README.md)) deploys the whole
 stack from the published images. Add build, test and run commands here as they appear. Do not invent commands that don't exist in the repo.
 
+**Planned:** the chart and dashboard designer (FR-22 to FR-27,
+[ADR 0022](docs/adr/0022-chart-and-dashboard-designer.md),
+[issue 23](https://github.com/sraesch/track-record/issues/23)). It is
+specified but not built. Its built-in charts will replace the Compare,
+Trends and Series placeholders, and its endpoints the analysis endpoints
+and the MCP analysis tools. Until that switch, the analysis endpoints stay
+as they are.
+
 ## Commands
 
 ```bash
@@ -252,6 +260,12 @@ the version files and workflows. `frontend/APP_CHANGELOG.md` keeps a
 The tag's CI run also publishes the Helm chart to
 `oci://ghcr.io/<owner>/charts/track-record` (job `publish-chart`, ADR 0021).
 
+The chart and dashboard designer is decided in
+[ADR 0022](docs/adr/0022-chart-and-dashboard-designer.md): frames and their
+attributes, the nodes of a graph, the JSON spec, variables, the built-in
+charts, storage with a history, and the endpoints that replace the analysis
+endpoints. The library of its node editor is still open.
+
 Still open: cache strategy.
 Record design decisions as ADRs in `docs/adr/` (numbered `NNNN-title.md`), not
 only in code.
@@ -342,8 +356,15 @@ only in code.
   safe: a fixed set of operators and functions, no loops, no I/O, no
   `eval` of host-language code. Validate on save: syntax, referenced metrics
   exist, unit consistency (FR-17a).
-- No cross-run expressions in the DSL; comparison against a reference is done
-  through normalization (FR-13).
+- No cross-run expressions in the DSL: it works within one sample. Results of
+  different runs are related in the graph of a chart (FR-22); comparison
+  against a reference is done through normalization (FR-13).
+- **Designer (FR-22 to FR-27, ADR 0022):** three rules above hold in the
+  analysis views and in the built-in charts only: never pool samples of
+  different runs, never mix scenario versions in one trend, always show and
+  count no value. An own chart may break them, and nothing marks it. Don't add
+  checks or marks for own charts, and don't weaken the rules in the built-in
+  ones.
 
 ## Access control
 
@@ -353,11 +374,14 @@ only in code.
   including the tags a run is created with).
 - **Invalidation and deletion must not be reachable with any token**, only from
   the web UI. The same holds for changing, renaming and deleting metrics and
-  derived metrics. Hard delete requires typing the run ID to confirm.
+  derived metrics, and for saving, restoring and deleting charts and
+  dashboards (FR-26). Hard delete requires typing the run ID to confirm.
 - MCP is read + tags/annotations only: no uploads, invalidation or deletion.
+  Charts and dashboards can be listed and run with every token scope, never
+  saved.
 
 ## Out of scope
 
 Don't add benchmark execution, automatic regression detection or alerting,
-authentication or user management, multi-project support, or general-purpose
-time-series features.
+authentication or user management, multi-project support, general-purpose
+time-series features, or charting of data other than the stored results.

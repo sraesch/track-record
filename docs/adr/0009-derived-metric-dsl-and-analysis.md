@@ -1,6 +1,8 @@
 # ADR 0009: Derived metric DSL and analysis
 
-**Status:** proposed · **Date:** 2026-11-21
+**Status:** proposed · **Date:** 2026-11-21 · the analysis views are to be
+replaced by charts ([ADR 0022](0022-chart-and-dashboard-designer.md)); the
+DSL stays
 
 ## Context
 

@@ -14,6 +14,8 @@ This system stores, manages and supports the analysis of benchmark results.
     people through analysis (comparisons, trends) that the system supports.
   - User management and authentication (handled by an ingress/auth proxy).
   - General-purpose time-series storage.
+  - Charting of other data. Charts (FR-22) show the results stored here and
+    nothing else.
 
 ## 2. Domain Model
 
@@ -37,6 +39,11 @@ This system stores, manages and supports the analysis of benchmark results.
 | **Alias** | Globally stored, versioned mapping that renames or merges dimension values (e.g. two device names → one device). Dimension values include the values of a case parameter, which keep their JSON type (e.g. a renamed pipeline keeps its trend). Applies to UI, API and MCP alike. |
 | **Attachment** | File (screenshot, log, trace, profile) linked to a run, case execution or sample. |
 | **Annotation / Tag** | Free-text note or label on a run, case or point in time (e.g. "switched to new compression"). |
+| **Frame** | The unit of data in a chart (FR-22): an ordered list of points with named values and their units. One series of one sample is a frame; a scalar of one sample is a frame with one point. Frames and points carry the attributes of what they come from: run, SUT version, shared environment, case, client device and sample. |
+| **Group** | An ordered list of frames, or of groups, in the graph of a chart. The attribute values that its members share define it (FR-22). |
+| **Chart** | A saved analysis: a graph of nodes that prepares frames and ends in one visualization (FR-22 to FR-24). It can have variables (FR-25) and keeps a history of its definitions (FR-26). |
+| **Dashboard** | An arrangement of charts with shared variables (FR-25). |
+| **Built-in chart** | A chart that ships with the system and cannot be changed: comparison, trend and series view (FR-27). |
 
 **Comparison key for trends:** Case + client device name (after aliases are applied).
 
@@ -69,8 +76,8 @@ This system stores, manages and supports the analysis of benchmark results.
   converted; with another unit they are read in that unit. Uploads create
   metrics but never change them: an upload with another unit or value type
   than the metric has is rejected. A metric can be renamed (the derived
-  metrics that use it are changed to the new name) and, while it has no
-  results and no derived metric uses it, deleted.
+  metrics and charts that use it are changed to the new name) and, while it
+  has no results and no derived metric or chart uses it, deleted.
 - **FR-8** All raw data (samples, series, attachments) is kept indefinitely. Nothing
   is deleted automatically.
 - **FR-9** Runs can be **marked invalid** with a reason. Invalid runs stay stored,
@@ -83,14 +90,18 @@ This system stores, manages and supports the analysis of benchmark results.
 
 ### Querying & analysis
 - **FR-11** Filter by SUT version, time range, shared environment, client device,
-  asset, scenario, parameters, metric, tags and validity.
+  asset, scenario, parameters, metric, tags and validity. The time range can
+  be relative, so that a saved view follows new runs (FR-21): the last N days,
+  the latest N runs, or the runs since a marked run (a run with a given tag
+  or SUT tag).
 - **FR-12** Aggregate across samples: mean, median, percentiles, stddev, confidence
   intervals, with warmup samples excluded by default.
 - **FR-12a** A derived metric can have **no value** (e.g. time-to-threshold when the
   threshold is never reached). Uploaded measurements always have a value. No value
   is shown as such and is not the same as missing data. Aggregates use the samples
   that have a value and state how many had none. A difference against no value is
-  shown as not computable.
+  shown as not computable. The built-in charts (FR-27) always show this. An own
+  chart (FR-22) gets the counts with every aggregate and decides what it shows.
 - **FR-13** **Value transforms:** unit conversion, normalization relative to a
   user-selected reference run/case, log scale.
 - **FR-13a** **Units:** every metric, every series x-dimension and, where it
@@ -118,13 +129,15 @@ This system stores, manages and supports the analysis of benchmark results.
     Differences to the reference then use the latest run by measured start time.
   - Compared columns that come from different SUT versions or shared environments
     are marked.
+  - The comparison is a built-in chart (FR-27), and these rules bind it. Own
+    charts (FR-22) can match and merge results in other ways.
 - **FR-17** Derived metrics are defined in the system as expressions and
   evaluated at query time, so they also apply to historical runs. A derived
   metric has one definition, which can be changed; there are no versions. A
   change applies to every analysis from then on, historical runs included.
   A derived metric can be renamed; the expressions of the derived metrics
-  that use it are changed to the new name. It can be deleted when no other
-  derived metric uses it. Supported:
+  and charts that use it are changed to the new name. It can be deleted when
+  no other derived metric and no chart uses it. Supported:
   - **Scalar arithmetic** over metrics of the same sample (e.g. throughput =
     bytes / time), including log10 and clamping to a range.
   - **Series reductions** (series → scalar): min, max, mean, area under curve,
@@ -145,8 +158,9 @@ This system stores, manages and supports the analysis of benchmark results.
     series, as long as there is no cycle. A change to a derived metric takes
     effect in the metrics built on it. A change that would make one of them
     invalid is rejected.
-  - Cross-run expressions are out of scope; FR-13 normalization covers comparison
-    against a reference.
+  - Cross-run expressions are out of scope for the DSL: a derived metric works
+    within one sample. Results of different runs are related in the graph of a
+    chart (FR-22); FR-13 normalization covers comparison against a reference.
 - **FR-17a** Derived metrics are written in a **small custom DSL**, e.g.
   `bytes / time`, `max(series.fps)`, `time_to(series.loaded, 0.9)`,
   `moving_avg(series.fps, 1.0)`. The DSL:
@@ -158,24 +172,89 @@ This system stores, manages and supports the analysis of benchmark results.
   - is the same in UI, REST API and MCP.
 - **FR-18** Trend view: a case/metric/device across runs over time or over SUT
   versions, with annotations, device detail changes and environment changes marked.
+  It is a built-in chart (FR-27).
 - **FR-19** Series operations: overlay series from different samples/runs, resample
   and align to a common x-grid, aggregate across samples (e.g. median series with a
-  percentile band), downsample for display.
-- **FR-20** Export query results (CSV, Parquet, JSON) for external analysis.
-- **FR-21** Every run, case execution and analysis view (comparison, trend, series
-  overlay) has a URL that reproduces it, including its filters. Views are live:
-  they reflect later runs, alias changes and invalidations.
+  percentile band), downsample for display. The series view is a built-in chart
+  (FR-27); the operations are also nodes of own charts (FR-22).
+- **FR-20** Export the data of a chart (CSV, Parquet, JSON) for external analysis.
+- **FR-21** Every run, case execution, chart and dashboard has a URL that
+  reproduces it, including the values of its variables (FR-25), its filters among
+  them. Views are live: they reflect later runs, alias changes and invalidations,
+  and they show the current definition of a chart.
+
+### Charts and dashboards
+
+The design is in [ADR 0022](adr/0022-chart-and-dashboard-designer.md).
+
+- **FR-22** **Charts.** An analysis is built as a chart: a graph of nodes that
+  prepares results and ends in one visualization (FR-24).
+  - A graph starts from one or more **sources**. A source is a run filter (FR-11)
+    and a metric expression (FR-17a). It yields one **frame** per sample: the
+    points of a series, or one point for a scalar. Aliases are applied. Invalid
+    runs and warmup samples are left out unless the source asks for them;
+    superseded results are never used.
+  - Frames and points carry the **attributes** of what they come from: run, SUT
+    version, shared environment, case (scenario version, assets, parameters),
+    client device and sample. A point that results from a reduction keeps the
+    attributes of the frame it was reduced from, so any attribute can be an axis
+    (FR-15).
+  - The **nodes** are a fixed set of operations:
+    - filter frames or points by conditions;
+    - derive an attribute from other attributes with an expression;
+    - group frames by attributes (groups can be nested) and flatten a group level;
+    - sort, and select the latest runs within each group;
+    - resample series onto a common x-grid, with linear or step interpolation;
+    - match the frames of two branches that agree on a key;
+    - reduce every frame to one point, so that the frames of a group become one
+      frame;
+    - concatenate the points of the frames of a group;
+    - combine the frames of a group point by point: with a function or, after a
+      match, with expressions (e.g. the difference or ratio to a reference).
+  - Reduce and combine offer fixed lists of functions: mean, median, percentiles,
+    confidence interval, minimum, maximum, sum, count, standard deviation and
+    geometric mean. The expressions of derived attributes and of combine are
+    written in the syntax of the DSL (FR-17a), with its unit rules. A graph has no
+    loops and no other code.
+  - Series are combined point by point only on equal x values. Resampling is
+    always an explicit node.
+  - **Own charts are free.** The rules that the built-in charts keep (FR-27) do
+    not bind them, and a chart that breaks them is not marked.
+- **FR-23** **Editor.** Charts are built in the web UI in a node graph editor. It
+  validates the graph while it is edited and shows what each node produces on a
+  limited part of the data, marked as partial.
+- **FR-24** **Visualizations:** line (with bands, and with the marks of FR-18),
+  scatter, bar, box plot, heatmap, single value and table. The columns and
+  attributes of the data and the group levels are assigned to the roles of a
+  visualization (axes, color, panel). Unit conversion and log scale (FR-13) are
+  options of an axis.
+- **FR-25** **Variables and dashboards.** A chart can have variables (e.g. a run
+  filter, a metric, a device) that its nodes use. A dashboard arranges charts and
+  passes shared variables to them.
+- **FR-26** **Saving and history.** Charts and dashboards are saved in the web UI
+  and shared by everyone with access. Every save keeps the earlier definitions,
+  and an earlier one can be restored. A chart that a dashboard uses cannot be
+  deleted.
+- **FR-27** **Built-in charts.** The comparison (FR-16), the trend (FR-18) and the
+  series view (FR-19) ship as charts. They cannot be changed, only duplicated as
+  own charts. They keep these rules:
+  - Samples of different runs are never pooled.
+  - Scenario versions are never mixed: a changed scenario is a different case.
+  - How many samples had no value is always shown (FR-12a).
 
 ## 4. Interfaces
 
-- **REST API** (OpenAPI-specified): ingestion, retrieval, querying, comparison,
-  attachments, annotations, aliases.
+- **REST API** (OpenAPI-specified): ingestion, retrieval, listing and running
+  charts (FR-22), attachments, annotations, aliases.
 - **MCP server:** read + annotate.
-  - Read: list/search runs, get run details, compare (FR-16), get trends, query
-    aggregates and derived metrics, list scenarios/metrics/devices.
-  - Write: add/edit tags and annotations only. No uploads, invalidation or deletion.
-- **Web UI:** run list, run detail (incl. attachments), comparison (FR-16), trend
-  view, series overlay, faceted filtering, annotation editing, management of
+  - Read: list/search runs, get run details, list and run charts (FR-22), among
+    them the built-in comparison and trend (FR-27), evaluate derived metrics, list
+    scenarios/metrics/devices.
+  - Write: add/edit tags and annotations only. No uploads, invalidation or
+    deletion, and no saving of charts or dashboards.
+- **Web UI:** run list, run detail (incl. attachments), charts and dashboards with
+  their editor (FR-22 to FR-26), among them the built-in comparison, trend and
+  series view (FR-27), faceted filtering, annotation editing, management of
   definitions, derived metrics and aliases, invalidation/deletion of runs.
 
 ## 5. Non-Functional Requirements
@@ -191,7 +270,8 @@ This system stores, manages and supports the analysis of benchmark results.
   - Token scopes: `read`, `annotate` (read + tags/annotations, used by MCP) and
     `write` (ingestion, including the tags a run is created with). Deletion and
     invalidation are **not** possible with any token; they are only available in
-    the web UI.
+    the web UI. The same holds for saving, restoring and deleting charts and
+    dashboards (FR-26). Listing and running them is possible with every scope.
   - Tokens are created and revoked in the web UI and stored only as hashes.
 - **NFR-3 Volume:**
   - 1–5 large runs per day, or a few dozen small ones (e.g. one run per variant
@@ -215,8 +295,10 @@ This system stores, manages and supports the analysis of benchmark results.
   | Full run-vs-run comparison | < 30 s, with progress indicator |
   | Ingest one case execution with all samples/series | < 10 s |
 
+  The trend and the comparison are measured on the built-in charts (FR-27).
+
 - **NFR-7 Long operations:** operations that may take longer than a few seconds
-  (comparisons, exports) show progress in the UI. In the API they either stream
+  (running a chart, exports) show progress in the UI. In the API they either stream
   results or run as jobs that can be polled.
 - **NFR-8 Backup/restore** of the database and the attachment volume. Because hard delete
   is immediate (FR-10), backups are the only way to recover deleted runs. Backup
