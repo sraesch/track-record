@@ -348,7 +348,8 @@ The settings that the sections above leave open, as
   of two or more values, and `clamp`, with their argument counts checked
   when it is read; metric expressions keep rejecting attribute names. The
   unit of a square root (`sqrt(px^2)`) reads back as that unit in a later
-  derive. The units of
+  derive, as do units built from custom units with spaces
+  (`render passes*render passes`). The units of
   parameters and derived attributes come from the data, so a run checks the
   expression for each frame: a frame whose units do not fit, or for which
   the expression has no value, does not get the attribute, as one without
