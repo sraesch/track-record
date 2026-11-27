@@ -57,6 +57,7 @@ cargo run -p track-record-server -- serve
 | `TR_MAX_BODY_BYTES` | 256 MiB | Maximum JSON request body |
 | `TR_DATABASE_MAX_CONNECTIONS` | `16` | Pool size |
 | `TR_MCP_ALLOWED_HOSTS` | empty | Comma-separated `Host` values accepted on `/mcp` (`host` or `host:port`); empty disables the check |
+| `TR_CHART_MAX_POINTS` | `10000000` | Points one run of a chart may hold in memory, over all its sources (ADR 0022) |
 | `RUST_LOG` | `info` | Log filter; logs are JSON |
 
 The server does not migrate the database. It refuses to start if a migration

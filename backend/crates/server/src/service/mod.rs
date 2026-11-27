@@ -6,6 +6,7 @@ pub mod analysis;
 pub mod annotations;
 pub mod attachments;
 pub mod catalog;
+pub mod charts;
 pub mod derived;
 pub mod ingest;
 pub mod lifecycle;
