@@ -5188,7 +5188,7 @@
           },
           "parameters": {
             "type": "object",
-            "description": "Flat object of numbers, strings and booleans. Types are kept."
+            "description": "Flat object of numbers, strings and booleans. Types are kept. Names\ncannot contain a backtick (`` ` ``), which expressions use to quote\nnames."
           },
           "scenario": {
             "$ref": "#/components/schemas/NamedDefinition"

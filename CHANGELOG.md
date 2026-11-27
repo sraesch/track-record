@@ -39,6 +39,12 @@ change that they can see.
   endpoints that run charts follow with
   [#30](https://github.com/sraesch/track-record/issues/30).
 
+### Changed
+
+- Uploads reject a parameter whose name contains a backtick (`` ` ``) with
+  `422 validation_failed` (FR-4): expressions quote names in backticks, so
+  such a parameter could not be read in a chart's derive expression.
+
 ### Fixed
 
 - Custom units with spaces (`render passes`) keep their meaning in unit

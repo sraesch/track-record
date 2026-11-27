@@ -384,7 +384,10 @@ The settings that the sections above leave open, as
   empty name is `param.`, part of the family `case`, and can be named
   (``param.`` `` in an expression). A derive reads the attributes of match
   partners like its own, also of a partner named `series` or `derived`
-  (`series.param.width`; `series.fps` stays a metric and is rejected). Status, validity and
+  (`series.param.width`; `series.fps` stays a metric and is rejected).
+  Uploads reject parameter names with a backtick, so every parameter can
+  be written in an expression (`` param.`frame size` ``); the DSL has no
+  escape for a backtick. Status, validity and
   end of a run are read from one row, so they fit together.
 - **Empty results** lose their group levels; nodes that need a level
   (sort of groups) pass an empty result on.

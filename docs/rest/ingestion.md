@@ -162,7 +162,7 @@ Request body `CreateCaseExecution`:
 |---|---|---|---|
 | `scenario` | `NamedDefinition` | yes | Scenario name (non-empty) and definition; versioned like suites |
 | `assets` | `AssetInput`[] | no | Inputs of the test case |
-| `parameters` | object | no | **Flat** object of numbers, strings and booleans. Types are kept: `10` and `"10"` differ |
+| `parameters` | object | no | **Flat** object of numbers, strings and booleans. Types are kept: `10` and `"10"` differ. A name cannot contain a backtick (`` ` ``): chart expressions quote names with it |
 | `parameter_units` | map string → string | no | Units of numeric parameters, e.g. `{"bandwidth": "Mbit/s"}`. Every key must be a numeric parameter |
 
 `AssetInput`:
