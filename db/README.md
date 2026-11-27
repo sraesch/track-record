@@ -91,7 +91,10 @@ db/test.sh /db/tests/04_runs.sql
 ```
 
 Each test file runs in a transaction that is rolled back, so tests are
-independent.
+independent. The exception is `14_revision_concurrency.sql`: it saves
+through two other sessions (`dblink`), whose rows are committed. It runs
+last and deletes them again at its end; if it stops before that, they stay
+until the throwaway container is gone.
 
 ## Schema overview
 
@@ -117,6 +120,10 @@ erDiagram
     run ||--o{ attachment : ""
     run ||--o{ run_tag : ""
     run ||--o{ annotation : ""
+    chart ||--o{ chart_revision : ""
+    dashboard ||--o{ dashboard_revision : ""
+    dashboard ||--o{ dashboard_chart : "current revision places"
+    chart ||--o{ dashboard_chart : ""
 ```
 
 | Area | Tables | Notes |
@@ -128,9 +135,11 @@ erDiagram
 | Dimensions | `sut_version`, `environment`, `client_device`, `asset`, `test_case`, `test_case_asset` | Deduplicated, immutable. Create through `ensure_*`. Numeric parameters can carry a unit (`test_case.parameter_units`). |
 | Results | `run`, `case_execution`, `sample`, `measurement`, `series`, `series_point`, `attachment` | Client UUIDs, immutable. Only run status/end time/validity change. Raw values only: one series per sample and metric, x never decreases. |
 | Editable | `run_tag`, `test_case_tag`, `annotation`, `api_token` | Normal updates and deletes. |
+| Charts | `chart[_revision]`, `dashboard[_revision]`, `dashboard_chart` | Saved charts and dashboards with their history ([ADR 0022](../docs/adr/0022-chart-and-dashboard-designer.md), FR-26). Every save through `save_chart` / `save_dashboard` adds a revision and names the revision it is based on; a save on an old one is rejected. Revisions never change; restoring saves an old revision's content as a new one. `dashboard_chart` holds the saved charts that the current revision of a dashboard places. Delete through `delete_chart` (not while a dashboard places the chart) and `delete_dashboard`, which remove the revisions too. |
 
 Views: `current_case_execution` (hides superseded corrections),
-`current_alias`.
+`current_alias`, `current_chart_revision` and `current_dashboard_revision`
+(the latest revision of each chart and dashboard).
 
 Lifecycle functions: `abort_stale_runs(timeout)`, `run_last_upload_at(run_id)`,
 `delete_run(run_id)`. A run is stale when nothing was uploaded for it within the
@@ -147,7 +156,7 @@ Custom SQLSTATEs raised by the schema, for the backend to map to API errors:
 | Code | Meaning |
 |---|---|
 | `TR001` | Row is immutable (update or truncate rejected) |
-| `TR002` | Delete outside `delete_run()` |
+| `TR002` | Delete outside `delete_run()`, `delete_chart()` or `delete_dashboard()` |
 | `TR003` | Invalid run status transition |
 | `TR004` | Run is not running (new case execution rejected) |
 | `TR005` | Series points don't match `point_count` |
@@ -156,6 +165,8 @@ Custom SQLSTATEs raised by the schema, for the backend to map to API errors:
 | `TR008` | Derived metric is used by other derived metrics (delete rejected) |
 | `TR009` | An upload defines a metric with another unit or value type than it has |
 | `TR010` | Metric has results (delete rejected) |
+| `TR011` | The revision a chart or dashboard save is based on is no longer the latest |
+| `TR012` | Chart is placed by the current revision of a dashboard (delete rejected) |
 
 Standard codes also matter: `23505` (duplicate, e.g. a retried upload),
 `23503` (foreign key), `23514` (check constraint).

@@ -1,6 +1,6 @@
 -- Schema structure: tables, views, types and immutability triggers.
 BEGIN;
-SELECT plan(27);
+SELECT plan(29);
 
 SELECT tables_are('public', ARRAY[
     'suite', 'suite_version', 'scenario', 'scenario_version', 'metric',
@@ -9,10 +9,14 @@ SELECT tables_are('public', ARRAY[
     'sut_version', 'environment', 'client_device', 'asset', 'test_case', 'test_case_asset',
     'run', 'case_execution', 'sample', 'measurement', 'series', 'series_point',
     'attachment', 'run_tag', 'test_case_tag', 'annotation', 'api_token',
+    'chart', 'chart_revision', 'dashboard', 'dashboard_revision', 'dashboard_chart',
     'schema_migration'  -- written by db/migrate.sh, not by a migration
 ]);
 
-SELECT views_are('public', ARRAY['current_alias', 'current_case_execution']);
+SELECT views_are('public', ARRAY[
+    'current_alias', 'current_case_execution',
+    'current_chart_revision', 'current_dashboard_revision'
+]);
 
 SELECT enum_has_labels('run_status', ARRAY['running', 'completed', 'failed', 'aborted']);
 SELECT enum_has_labels('run_trigger', ARRAY['nightly', 'manual', 'ci']);
@@ -36,7 +40,8 @@ SELECT has_trigger(t, 'immutable_rows')
 FROM unnest(ARRAY[
     'suite_version', 'scenario_version', 'alias_version', 'unit',
     'environment', 'test_case', 'case_execution', 'sample',
-    'measurement', 'series', 'series_point', 'attachment'
+    'measurement', 'series', 'series_point', 'attachment',
+    'chart_revision', 'dashboard_revision'
 ]) AS t;
 
 SELECT * FROM finish();

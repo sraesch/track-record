@@ -20,6 +20,13 @@ change that they can see.
   in the MCP tool `list_runs` and in every analysis view. A marked run is
   looked up among all runs, the earliest one counts, and a tag that no run
   has is a `422 validation_failed`.
+- Database tables for saved charts and dashboards with their history
+  (FR-26, [#31](https://github.com/sraesch/track-record/issues/31)):
+  every save adds a revision and is rejected if it is based on one that is
+  no longer the latest (`TR011`). Revisions never change, and restoring
+  saves an old one as a new revision. A chart that the current revision of
+  a dashboard places cannot be deleted (`TR012`). The web UI and the API
+  follow with [#32](https://github.com/sraesch/track-record/issues/32).
 
 ## [0.1.0] - 2026-11-23
 
