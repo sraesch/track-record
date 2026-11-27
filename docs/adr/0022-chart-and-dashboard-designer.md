@@ -385,7 +385,21 @@ The settings that the sections above leave open, as
   the latest revision. Ids are `bigint` identities, as for the other
   definitions ([ADR 0004](0004-database-schema.md)); the built-in charts
   are addressed by their names.
-- **Every save adds a revision.** Revisions never change. Restoring saves
+- Revisions are numbered per chart and dashboard from 1; a save names the
+  number it is based on.
+- A **placement** puts a chart on a dashboard:
+  `{"chart": {"id": 12} | {"builtin": "trends"}, "layout": {...}, "variables": {...}}`.
+  `layout` is the position and size on the grid of the dashboard page.
+  `variables` maps a variable of the chart to a value or to a variable of
+  the dashboard (`{"var": "<name>"}`); a chart variable it leaves out gets
+  the dashboard variable of the same name. A chart can be placed more than
+  once, with other variables. The database checks only the reference to
+  the chart and that a saved one exists; the backend checks the rest.
+- `dashboard_chart` records the saved charts that the **current** revision
+  of each dashboard places. Its foreign key keeps them from being deleted.
+  An old revision may place a chart that was deleted since; restoring it is
+  rejected until the placement is removed.
+- **Every save adds a revision**, also one with unchanged content. Revisions never change. Restoring saves
   the content of an old revision as a new one, so the history only grows.
 - A save names the revision it is based on and is rejected if that is no
   longer the latest (409, `chart_changed`). The app has no user identity,

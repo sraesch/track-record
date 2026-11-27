@@ -211,6 +211,11 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   `rename_metric()` and `delete_metric()` (web UI). Derived metrics are created and changed only through
   `save_derived_metric()`, which keeps them free of cycles, and renamed and
   deleted only through `rename_derived_metric()` / `delete_derived_metric()`.
+- Charts and dashboards are saved only through `save_chart()` /
+  `save_dashboard()`, which add a revision and reject a save on an old one
+  (`TR011`), and deleted only through `delete_chart()` / `delete_dashboard()`.
+  Revisions never change. `dashboard_chart` follows the current revision of
+  a dashboard and keeps a placed chart from being deleted (`TR012`).
 
 ## Tech stack
 
