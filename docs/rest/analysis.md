@@ -21,6 +21,10 @@ same fields as query parameters (FR-11). All given conditions must hold.
 | `sut_commit`, `sut_branch`, `sut_tag`, `sut_build_config` | string \| null | SUT version fields, exact match |
 | `started_after` | timestamp \| null | Measured start at or after this time |
 | `started_before` | timestamp \| null | Measured start before this time |
+| `started_within_days` | integer \| null | At least 1. Measured start within the last N days |
+| `latest_runs` | integer \| null | At least 1. Of the runs that match all other conditions, only the N with the newest measured start |
+| `since_tag` | string \| null | Measured start at or after that of the earliest run with this tag |
+| `since_sut_tag` | string \| null | Measured start at or after that of the earliest run whose SUT version has this tag, e.g. a release |
 | `status` | (`running` \| `completed` \| `failed` \| `aborted`)[] | Any of these statuses |
 | `triggered_by` | `nightly` \| `manual` \| `ci` \| null | Trigger |
 | `shared_environment_id` | integer \| null | Shared environment |
@@ -46,6 +50,30 @@ device filters compare the values **after aliases**. In a query string,
 encode the value: `param=codec%3D%22draco%22`.
 
 An empty filter (`{}` or no `filter`) selects all valid runs.
+
+### Relative selection
+
+A saved view follows new runs (FR-21) when it selects runs relative to now
+or to a marked run instead of by fixed timestamps:
+
+- `started_within_days` counts back from the server's time at the request.
+  Like every time filter it uses the measured start, never the upload time:
+  a run imported today with an old start is not among "the last 7 days".
+- `latest_runs` applies last, after every other condition, case execution
+  filters included. Runs with the same start are ordered by id, as in the
+  run list, so the selection is stable. In `GET /runs`, `limit` and
+  `cursor` page through the selected runs.
+- `since_tag` and `since_sut_tag` take the measured start of a marked run.
+  The mark is looked up among **all** runs, whatever the other conditions
+  say (valid or not, any branch), so `sut_branch=main` with
+  `since_sut_tag=v1.2.0` works although the release run is not on `main`.
+  When several runs have the mark, the earliest one counts, so a release
+  that is measured again later does not shorten the selection. When no run
+  has it, the request fails with `422 validation_failed` naming the tag.
+- All given lower bounds must hold, so the latest of `started_after`,
+  `started_within_days`, `since_tag` and `since_sut_tag` wins.
+- A value below 1 for `started_within_days` or `latest_runs` is a
+  `400 bad_request`.
 
 ## Common fields
 

@@ -38,8 +38,8 @@ use crate::service::annotations::Annotation;
 use crate::service::derived::{self, Prepared};
 use crate::service::query::{Aliases, parameter_dimension};
 use crate::service::runs::{
-    AssetRef, RunFilter, SutVersion, push_case_execution_conditions, push_run_level_conditions,
-    test_case_assets,
+    AssetRef, RunFilter, SutVersion, push_case_execution_conditions, push_latest_runs_condition,
+    push_run_level_conditions, test_case_assets,
 };
 
 /// Percentiles reported when none are requested.
@@ -273,6 +273,7 @@ pub async fn load_dataset(
             "limit and cursor apply to the run list, not to analysis",
         ));
     }
+    let filter = &filter.resolve(pool).await?;
     let mut q = QueryBuilder::<Postgres>::new(
         "SELECT r.id, ce.id, ce.test_case_id, cd.name, ce.device_environment_id, \
                 sa.id, sa.repetition, sa.is_warmup \
@@ -290,6 +291,7 @@ pub async fn load_dataset(
     );
     push_run_level_conditions(&mut q, filter);
     push_case_execution_conditions(&mut q, filter, aliases)?;
+    push_latest_runs_condition(&mut q, filter, aliases)?;
     if !include_warmup {
         q.push(" AND NOT sa.is_warmup");
     }

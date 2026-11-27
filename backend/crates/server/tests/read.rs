@@ -3,6 +3,7 @@
 
 mod common;
 
+use chrono::{DateTime, SecondsFormat, TimeDelta, Utc};
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use track_record_server::db::TokenScope;
@@ -216,6 +217,167 @@ async fn run_filters() {
         )
         .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+/// A measured start `days` before now, in whole seconds.
+fn days_ago(now: DateTime<Utc>, days: i64) -> String {
+    (now - TimeDelta::days(days)).to_rfc3339_opts(SecondsFormat::Secs, true)
+}
+
+/// Creates a run with one case execution on `device`.
+async fn marked_run(
+    write: &Api,
+    app: &TestApp,
+    started_at: &str,
+    device: &str,
+    sut: Value,
+    tags: Value,
+) -> String {
+    let id = Uuid::new_v4();
+    let mut body = run_body(started_at);
+    body["sut_version"] = sut;
+    body["tags"] = tags;
+    let (status, out) = write.put(&app.m(&format!("/runs/{id}")), &body).await;
+    assert_eq!(status, StatusCode::CREATED, "{out}");
+    let (status, out) = write
+        .put(
+            &app.m(&format!("/runs/{id}/case-executions/{}", Uuid::new_v4())),
+            &case_execution_body(device, 10, json!([sample(0, 1.5)])),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{out}");
+    id.to_string()
+}
+
+#[tokio::test]
+async fn relative_run_selection() {
+    let app = app!();
+    let write = app.as_scope(TokenScope::Write).await;
+    let now = Utc::now();
+    let main = json!({"commit": "abc123", "branch": "main", "build_config": "release"});
+    // A release run on its own branch, uploaded now with an old measured start.
+    let a = marked_run(
+        &write,
+        &app,
+        &days_ago(now, 40),
+        "pixel-8",
+        json!({"commit": "rel100", "branch": "release", "build_config": "release",
+               "tag": "v1.0.0"}),
+        json!(["baseline"]),
+    )
+    .await;
+    // A second, later run with the same run tag.
+    let b = marked_run(
+        &write,
+        &app,
+        &days_ago(now, 10),
+        "pixel-8",
+        main.clone(),
+        json!(["baseline"]),
+    )
+    .await;
+    let c = marked_run(
+        &write,
+        &app,
+        &days_ago(now, 2),
+        "pixel-8",
+        main.clone(),
+        json!([]),
+    )
+    .await;
+    // Two runs with the same start: ordered by id, newest (largest) first.
+    let same = days_ago(now, 1);
+    let mut de = vec![
+        marked_run(&write, &app, &same, "iphone-15", main.clone(), json!([])).await,
+        marked_run(&write, &app, &same, "iphone-15", main.clone(), json!([])).await,
+    ];
+    de.sort_by(|x, y| y.cmp(x));
+    let newest = |rest: &[&String]| -> Vec<String> {
+        de.iter().chain(rest.iter().copied()).cloned().collect()
+    };
+
+    let read = app.as_scope(TokenScope::Read).await;
+    let ports = [(read, app.m("/runs")), (app.ui_client(), app.u("/runs"))];
+    for (api, base) in &ports {
+        let q = |query: String| async move {
+            let (status, list) = api.get(&format!("{base}?{query}")).await;
+            assert_eq!(status, StatusCode::OK, "{base}?{query}: {list}");
+            ids(&list)
+        };
+        assert_eq!(q(String::new()).await, newest(&[&c, &b, &a]));
+
+        // Last N days, by measured start: the run uploaded now with an old
+        // start is not among them.
+        assert_eq!(q("started_within_days=7".into()).await, newest(&[&c]));
+        assert_eq!(q("started_within_days=30".into()).await, newest(&[&c, &b]));
+
+        // Latest N runs; ties by id; applied after every other condition.
+        assert_eq!(q("latest_runs=3".into()).await, newest(&[&c]));
+        assert_eq!(q("latest_runs=1".into()).await, vec![de[0].clone()]);
+        assert_eq!(
+            q("latest_runs=2&client_device=pixel-8".into()).await,
+            vec![c.clone(), b.clone()]
+        );
+        assert_eq!(
+            q("latest_runs=2&started_within_days=5".into()).await,
+            de.clone()
+        );
+
+        // Since a marked run: the earliest of several, looked up among all runs.
+        assert_eq!(q("since_tag=baseline".into()).await, newest(&[&c, &b, &a]));
+        assert_eq!(
+            q("since_sut_tag=v1.0.0&sut_branch=main".into()).await,
+            newest(&[&c, &b]),
+            "the release run is not on main but still marks the start"
+        );
+
+        // Combined: all conditions hold, the latest lower bound wins.
+        assert_eq!(
+            q("since_tag=baseline&started_within_days=30".into()).await,
+            newest(&[&c, &b])
+        );
+        assert_eq!(
+            q(format!(
+                "since_sut_tag=v1.0.0&started_after={}",
+                days_ago(now, 5)
+            ))
+            .await,
+            newest(&[&c])
+        );
+        assert_eq!(
+            q(
+                "since_tag=baseline&started_within_days=30&client_device=pixel-8&latest_runs=1"
+                    .into()
+            )
+            .await,
+            vec![c.clone()]
+        );
+
+        // `limit` and `cursor` page through the selected runs.
+        let (_, page) = api.get(&format!("{base}?latest_runs=3&limit=2")).await;
+        assert_eq!(ids(&page), de.clone());
+        let cursor = page["next_cursor"].as_str().expect("a second page");
+        let (_, page) = api
+            .get(&format!("{base}?latest_runs=3&limit=2&cursor={cursor}"))
+            .await;
+        assert_eq!(ids(&page), vec![c.clone()]);
+        assert!(page["next_cursor"].is_null());
+
+        // A mark that no run has is an error that names it.
+        for query in ["since_tag=nope", "since_sut_tag=nope"] {
+            let (status, problem) = api.get(&format!("{base}?{query}")).await;
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{query}");
+            assert_eq!(problem["code"], "validation_failed");
+            assert!(
+                problem["detail"].as_str().unwrap().contains("\"nope\""),
+                "{problem}"
+            );
+        }
+        for query in ["latest_runs=0", "started_within_days=0", "latest_runs=-1"] {
+            let (status, _) = api.get(&format!("{base}?{query}")).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{query}");
+        }
+    }
 }
 
 #[tokio::test]

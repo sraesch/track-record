@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, QueryBuilder};
@@ -70,6 +70,20 @@ pub struct RunFilter {
     pub started_after: Option<DateTime<Utc>>,
     /// Measured start time before this time.
     pub started_before: Option<DateTime<Utc>>,
+    /// Measured start within the last N days (at least 1), counted from the
+    /// server's time at the request.
+    pub started_within_days: Option<i64>,
+    /// Of the runs that match all other conditions, only the N (at least 1)
+    /// with the newest measured start. `limit` and `cursor` page through them.
+    pub latest_runs: Option<i64>,
+    /// Measured start at or after that of the earliest run with this run tag.
+    /// The marked run is looked up among all runs, whatever the other
+    /// conditions say; 422 if no run has the tag.
+    pub since_tag: Option<String>,
+    /// Measured start at or after that of the earliest run whose SUT version
+    /// has this tag, e.g. a release. Looked up among all runs, whatever the
+    /// other conditions say; 422 if no run has the tag.
+    pub since_sut_tag: Option<String>,
     /// Status; repeat for several.
     #[serde(default)]
     pub status: Vec<RunStatus>,
@@ -98,6 +112,70 @@ pub struct RunFilter {
     pub limit: Option<i64>,
     /// `next_cursor` of the previous page.
     pub cursor: Option<String>,
+}
+
+/// Longest `started_within_days` that is applied as given; longer spans
+/// select every run anyway and would leave the range of timestamps.
+const MAX_WITHIN_DAYS: i64 = 1_000_000;
+
+impl RunFilter {
+    /// Checks the relative selection and turns `started_within_days`,
+    /// `since_tag` and `since_sut_tag` into the latest of them and
+    /// `started_after`, which all must hold. The result no longer has those
+    /// three fields; [`push_run_level_conditions`] expects a resolved filter.
+    pub async fn resolve(&self, pool: &PgPool) -> ApiResult<RunFilter> {
+        if self.started_within_days.is_some_and(|n| n < 1) {
+            return Err(ApiError::bad_request(
+                "started_within_days must be at least 1",
+            ));
+        }
+        if self.latest_runs.is_some_and(|n| n < 1) {
+            return Err(ApiError::bad_request("latest_runs must be at least 1"));
+        }
+        let mut bounds: Vec<DateTime<Utc>> = self.started_after.into_iter().collect();
+        if let Some(days) = self.started_within_days {
+            bounds.push(Utc::now() - TimeDelta::days(days.min(MAX_WITHIN_DAYS)));
+        }
+        if let Some(tag) = &self.since_tag {
+            let start: Option<DateTime<Utc>> = sqlx::query_scalar(
+                "SELECT min(r.started_at) FROM run r \
+                 JOIN run_tag t ON t.run_id = r.id WHERE t.tag = $1",
+            )
+            .bind(tag)
+            .fetch_one(pool)
+            .await?;
+            bounds.push(start.ok_or_else(|| {
+                ApiError::invalid(format!("since_tag: no run has the tag {tag:?}"))
+            })?);
+        }
+        if let Some(tag) = &self.since_sut_tag {
+            let start: Option<DateTime<Utc>> = sqlx::query_scalar(
+                "SELECT min(r.started_at) FROM run r \
+                 JOIN sut_version sut ON sut.id = r.sut_version_id WHERE sut.tag = $1",
+            )
+            .bind(tag)
+            .fetch_one(pool)
+            .await?;
+            bounds.push(start.ok_or_else(|| {
+                ApiError::invalid(format!(
+                    "since_sut_tag: no run has a SUT version with the tag {tag:?}"
+                ))
+            })?);
+        }
+        Ok(RunFilter {
+            started_after: bounds.into_iter().max(),
+            started_within_days: None,
+            since_tag: None,
+            since_sut_tag: None,
+            ..self.clone()
+        })
+    }
+
+    fn is_resolved(&self) -> bool {
+        self.started_within_days.is_none()
+            && self.since_tag.is_none()
+            && self.since_sut_tag.is_none()
+    }
 }
 
 /// Parses `name=value` of a parameter filter.
@@ -244,6 +322,7 @@ pub async fn list_runs(pool: &PgPool, filter: &RunFilter) -> ApiResult<RunList> 
     if !(1..=500).contains(&limit) {
         return Err(ApiError::bad_request("limit must be between 1 and 500"));
     }
+    let filter = &filter.resolve(pool).await?;
     let aliases = Aliases::load(pool).await?;
     let mut q = QueryBuilder::<Postgres>::new(RUN_SELECT);
     q.push(" WHERE true");
@@ -272,9 +351,46 @@ pub async fn list_runs(pool: &PgPool, filter: &RunFilter) -> ApiResult<RunList> 
     })
 }
 
-/// Appends the conditions of a run filter. Expects `run r`, `suite s` and
-/// `sut_version sut` in scope.
+/// Appends the conditions of a resolved run filter ([`RunFilter::resolve`]),
+/// `latest_runs` included. Expects `run r`, `suite s` and `sut_version sut`
+/// in scope.
 pub fn push_run_conditions(
+    q: &mut QueryBuilder<'_, Postgres>,
+    f: &RunFilter,
+    aliases: &Aliases,
+) -> ApiResult<()> {
+    push_matching_run_conditions(q, f, aliases)?;
+    push_latest_runs_condition(q, f, aliases)
+}
+
+/// Appends `latest_runs`: of the runs that match all other conditions of the
+/// filter, only the N with the newest measured start (ties by id, as in the
+/// run list). Expects `run r` in scope.
+pub fn push_latest_runs_condition(
+    q: &mut QueryBuilder<'_, Postgres>,
+    f: &RunFilter,
+    aliases: &Aliases,
+) -> ApiResult<()> {
+    let Some(n) = f.latest_runs else {
+        return Ok(());
+    };
+    q.push(
+        " AND r.id IN (SELECT r.id FROM run r \
+          JOIN suite_version sv ON sv.id = r.suite_version_id \
+          JOIN suite s ON s.id = sv.suite_id \
+          JOIN sut_version sut ON sut.id = r.sut_version_id \
+          WHERE true",
+    );
+    push_matching_run_conditions(q, f, aliases)?;
+    q.push(" ORDER BY r.started_at DESC, r.id DESC LIMIT ")
+        .push_bind(n)
+        .push(")");
+    Ok(())
+}
+
+/// The conditions of a filter except `latest_runs`: run-level ones, and a
+/// current case execution that matches the others.
+fn push_matching_run_conditions(
     q: &mut QueryBuilder<'_, Postgres>,
     f: &RunFilter,
     aliases: &Aliases,
@@ -301,8 +417,10 @@ pub fn push_run_conditions(
     Ok(())
 }
 
-/// Appends the conditions of a filter that apply to the run itself.
+/// Appends the conditions of a resolved filter that apply to the run itself,
+/// without `latest_runs`.
 pub fn push_run_level_conditions(q: &mut QueryBuilder<'_, Postgres>, f: &RunFilter) {
+    debug_assert!(f.is_resolved(), "run filter not resolved");
     match f.validity {
         Validity::Valid => q.push(" AND r.is_valid"),
         Validity::Invalid => q.push(" AND NOT r.is_valid"),

@@ -21,6 +21,10 @@ Query parameters: the [run filter](analysis.md#run-filter) plus paging.
 | `sut_commit`, `sut_branch`, `sut_tag`, `sut_build_config` | string | SUT version fields, exact match |
 | `started_after` | timestamp | Measured start at or after this time |
 | `started_before` | timestamp | Measured start before this time |
+| `started_within_days` | integer ≥ 1 | Measured start within the last N days; see [Relative selection](analysis.md#relative-selection) |
+| `latest_runs` | integer ≥ 1 | Only the N matching runs with the newest measured start; `limit` and `cursor` page through them |
+| `since_tag` | string | Measured start at or after that of the earliest run with this tag |
+| `since_sut_tag` | string | Measured start at or after that of the earliest run whose SUT version has this tag |
 | `status` | `running` \| `completed` \| `failed` \| `aborted`, repeatable | Any of these statuses |
 | `triggered_by` | `nightly` \| `manual` \| `ci` | Trigger |
 | `shared_environment_id` | integer | Shared environment |
