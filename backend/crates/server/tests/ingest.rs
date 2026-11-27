@@ -499,3 +499,50 @@ async fn parameters_keep_their_json_type() {
     // Same parameters, same test case: 10 (seeded) and 10 again.
     assert_eq!(sizes.len(), 2);
 }
+
+#[tokio::test]
+async fn a_stored_parameter_name_with_a_backtick_can_be_retried() {
+    let app = app!();
+    let api = app.as_scope(TokenScope::Write).await;
+    let (run_id, seeded) = seed_run(&api, &app, "dev", "2026-11-20T22:00:00Z").await;
+    let mut body = case_execution_body("dev", 0, json!([]));
+    body["test_case"]["parameters"]["tick`count"] = json!(3);
+
+    // Stored by a release before the rule: the test case and case
+    // execution as that release wrote them.
+    let legacy = Uuid::new_v4();
+    let test_case: i64 = sqlx::query_scalar(
+        "SELECT ensure_test_case(ensure_scenario_version($1, $2), \
+                ARRAY[ensure_asset('engine.glb', 'v1', NULL)], $3, $4)",
+    )
+    .bind(body["test_case"]["scenario"]["name"].as_str())
+    .bind(&body["test_case"]["scenario"]["definition"])
+    .bind(&body["test_case"]["parameters"])
+    .bind(&body["test_case"]["parameter_units"])
+    .fetch_one(&app.pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO case_execution (id, run_id, test_case_id, client_device_id, \
+                                     device_environment_id) \
+         SELECT $1, run_id, $2, client_device_id, device_environment_id \
+         FROM case_execution WHERE id = $3",
+    )
+    .bind(legacy)
+    .bind(test_case)
+    .bind(seeded)
+    .execute(&app.pool)
+    .await
+    .unwrap();
+
+    // An identical retry is still a 200; a new case execution is a 422.
+    let url = |id: Uuid| app.m(&format!("/runs/{run_id}/case-executions/{id}"));
+    let (status, resp) = api.put(&url(legacy), &body).await;
+    assert_eq!(status, StatusCode::OK, "{resp}");
+    let (status, resp) = api.put(&url(Uuid::new_v4()), &body).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{resp}");
+    assert!(
+        resp["detail"].as_str().unwrap().contains("backtick"),
+        "{resp}"
+    );
+}

@@ -358,10 +358,18 @@ fn next_batch(counts: &[usize], start: usize, limit: usize, room: usize) -> Resu
             return Err(i);
         }
         if n > room {
-            // No room for the point a sample without inputs may make: it is
-            // a batch of its own, and the budget fails only if it makes one
-            // (it may have no value, or lack the metric).
-            return Ok(if i == start { i + 1 } else { i });
+            // No room for the point a sample without inputs may make: the
+            // samples without inputs from here are a batch, and the budget
+            // fails at the first that makes a point (one may have no value,
+            // or lack the metric). Their inputs are scalars.
+            if i > start {
+                return Ok(i);
+            }
+            let end = counts[i..]
+                .iter()
+                .position(|&c| c > 0)
+                .map_or(counts.len(), |p| i + p);
+            return Ok(end);
         }
         if i > start && points.saturating_add(n) > limit {
             return Ok(i);
@@ -609,7 +617,8 @@ mod tests {
         assert_eq!(cost(0), 1);
         // Without room, a sample without inputs is a batch of its own: the
         // budget fails only if it makes a point.
-        assert_eq!(next_batch(&[0, 0], 0, 1_000, 0), Ok(1));
+        assert_eq!(next_batch(&[0, 0], 0, 1_000, 0), Ok(2));
+        assert_eq!(next_batch(&[0, 0, 4, 0], 0, 1_000, 0), Ok(2));
         assert_eq!(next_batch(&[0, 0, 0], 1, 1, 1), Ok(2));
         assert_eq!(next_batch(&[0, 0, 0], 2, 1_000, 0), Ok(3));
     }
@@ -627,7 +636,7 @@ mod tests {
         assert_eq!(next_batch(&counts, 1, 400, 400), Err(1));
         // With no room, a sample without inputs is a batch of its own; one
         // with inputs fails.
-        assert_eq!(next_batch(&counts, 3, 0, 0), Ok(4));
+        assert_eq!(next_batch(&counts, 3, 0, 0), Ok(5));
         assert_eq!(next_batch(&counts, 5, 0, 0), Err(5));
         assert_eq!(next_batch(&[], 0, 10, 10), Ok(0));
     }

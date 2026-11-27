@@ -255,17 +255,23 @@ fn micros(t: DateTime<Utc>) -> DateTime<Utc> {
     t.trunc_subsecs(6)
 }
 
+/// Chart expressions read parameters by name, quoting names with other
+/// characters in backticks (``param.`frame size` ``); a name with a backtick
+/// could not be written there (ADR 0022). Checked only for new case
+/// executions: earlier releases stored such names, and an identical retry
+/// of one stays a 200 (FR-3).
+fn check_parameter_names(tc: &TestCaseInput) -> ApiResult<()> {
+    match tc.parameters.keys().find(|name| name.contains('`')) {
+        Some(name) => Err(ApiError::invalid(format!(
+            "parameter {name:?}: a parameter name cannot contain a backtick (`)"
+        ))),
+        None => Ok(()),
+    }
+}
+
 fn validate_test_case(tc: &TestCaseInput) -> ApiResult<()> {
     require_name("test_case.scenario.name", &tc.scenario.name)?;
     for (name, value) in &tc.parameters {
-        // Chart expressions read parameters by name, quoting names with
-        // other characters in backticks (``param.`frame size` ``); a name
-        // with a backtick could not be written there (ADR 0022).
-        if name.contains('`') {
-            return Err(ApiError::invalid(format!(
-                "parameter {name:?}: a parameter name cannot contain a backtick (`)"
-            )));
-        }
         if !(value.is_number() || value.is_string() || value.is_boolean()) {
             return Err(ApiError::invalid(format!(
                 "parameter {name:?} must be a number, string or boolean"
@@ -673,6 +679,9 @@ pub async fn create_case_execution(
             .bind(ce_id)
             .fetch_one(&mut **tx)
             .await?;
+    if !exists {
+        check_parameter_names(&req.test_case)?;
+    }
     let inserted = !exists
         && sqlx::query(
             "INSERT INTO case_execution (id, run_id, test_case_id, client_device_id, \
@@ -939,11 +948,11 @@ mod tests {
         assert!(validate_test_case(&tc(serde_json::json!({"n": [1]}), &[])).is_err());
         assert!(validate_test_case(&tc(serde_json::json!({"s": "a"}), &[("s", "MB")])).is_err());
         assert!(validate_test_case(&tc(serde_json::json!({}), &[("n", "MB")])).is_err());
-        assert!(validate_test_case(&tc(serde_json::json!({"tick`count": 3}), &[])).is_err());
-        assert!(validate_test_case(&tc(serde_json::json!({"`": "a"}), &[])).is_err());
+        assert!(check_parameter_names(&tc(serde_json::json!({"tick`count": 3}), &[])).is_err());
+        assert!(check_parameter_names(&tc(serde_json::json!({"`": "a"}), &[])).is_err());
         // Spaces, dots and an empty name are fine.
         assert!(
-            validate_test_case(&tc(
+            check_parameter_names(&tc(
                 serde_json::json!({"frame size": 1, "a.b": 2, "": 3}),
                 &[]
             ))
