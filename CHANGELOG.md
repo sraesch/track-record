@@ -11,6 +11,16 @@ change that they can see.
 
 ## [Unreleased]
 
+### Added
+
+- Relative run selection in the run filter (FR-11,
+  [#25](https://github.com/sraesch/track-record/issues/25)):
+  `started_within_days`, `latest_runs`, `since_tag` and `since_sut_tag`, so
+  a saved view can follow new runs. They work in `GET /runs` on both ports,
+  in the MCP tool `list_runs` and in every analysis view. A marked run is
+  looked up among all runs, the earliest one counts, and a tag that no run
+  has is a `422 validation_failed`.
+
 ## [0.1.0] - 2026-11-23
 
 ### Added

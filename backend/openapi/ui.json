@@ -1424,6 +1424,44 @@
             }
           },
           {
+            "name": "started_within_days",
+            "in": "query",
+            "description": "Measured start within the last N days (at least 1), counted from the\nserver's time at the request.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "latest_runs",
+            "in": "query",
+            "description": "Of the runs that match all other conditions, only the N (at least 1)\nwith the newest measured start. `limit` and `cursor` page through them.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "since_tag",
+            "in": "query",
+            "description": "Measured start at or after that of the earliest run with this run tag.\nThe marked run is looked up among all runs, whatever the other\nconditions say; 422 if no run has the tag.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since_sut_tag",
+            "in": "query",
+            "description": "Measured start at or after that of the earliest run whose SUT version\nhas this tag, e.g. a release. Looked up among all runs, whatever the\nother conditions say; 422 if no run has the tag.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "status",
             "in": "query",
             "description": "Status; repeat for several.",
@@ -4157,6 +4195,14 @@
             ],
             "description": "`next_cursor` of the previous page."
           },
+          "latest_runs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Of the runs that match all other conditions, only the N (at least 1)\nwith the newest measured start. `limit` and `cursor` page through them."
+          },
           "limit": {
             "type": [
               "integer",
@@ -4201,6 +4247,20 @@
             ],
             "format": "int64"
           },
+          "since_sut_tag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Measured start at or after that of the earliest run whose SUT version\nhas this tag, e.g. a release. Looked up among all runs, whatever the\nother conditions say; 422 if no run has the tag."
+          },
+          "since_tag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Measured start at or after that of the earliest run with this run tag.\nThe marked run is looked up among all runs, whatever the other\nconditions say; 422 if no run has the tag."
+          },
           "started_after": {
             "type": [
               "string",
@@ -4216,6 +4276,14 @@
             ],
             "format": "date-time",
             "description": "Measured start time before this time."
+          },
+          "started_within_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Measured start within the last N days (at least 1), counted from the\nserver's time at the request."
           },
           "status": {
             "type": "array",

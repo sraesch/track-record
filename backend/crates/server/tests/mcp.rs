@@ -221,6 +221,19 @@ async fn read_tools_return_what_rest_returns() {
     let (_, rest) = read.get(&app.m("/runs?client_device=pixel-8")).await;
     assert_eq!(runs, rest);
     assert_eq!(runs["runs"][0]["id"], json!(run_a));
+    let runs = call(&client, "list_runs", json!({"latest_runs": 1})).await;
+    let (_, rest) = read.get(&app.m("/runs?latest_runs=1")).await;
+    assert_eq!(runs, rest);
+    assert_eq!(runs["runs"].as_array().unwrap().len(), 1);
+    assert_eq!(runs["runs"][0]["id"], json!(run_b));
+    let runs = call(&client, "list_runs", json!({"since_tag": "nightly"})).await;
+    assert_eq!(runs["runs"].as_array().unwrap().len(), 2);
+    let runs = call(&client, "list_runs", json!({"started_within_days": 1})).await;
+    assert_eq!(
+        runs["runs"],
+        json!([]),
+        "the seeded runs started on 2026-11-01 and 02"
+    );
 
     let run = call(&client, "get_run", json!({"run_id": run_b})).await;
     let (_, rest) = read.get(&app.m(&format!("/runs/{run_b}"))).await;
@@ -309,6 +322,12 @@ async fn tool_errors_carry_the_api_error_code() {
     let err = call_err(&client, "get_run", json!({"run_id": Uuid::new_v4()})).await;
     assert_eq!(err["code"], "not_found");
     assert_eq!(err["status"], 404);
+
+    let err = call_err(&client, "list_runs", json!({"since_sut_tag": "nope"})).await;
+    assert_eq!(
+        (err["code"].as_str(), err["status"].as_i64()),
+        (Some("validation_failed"), Some(422))
+    );
 
     let err = call_err(&client, "aggregates", json!({"metric": "nope"})).await;
     assert_eq!(err["status"], 422, "{err}");

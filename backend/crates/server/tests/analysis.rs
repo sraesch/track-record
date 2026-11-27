@@ -3,6 +3,7 @@
 
 mod common;
 
+use chrono::{SecondsFormat, TimeDelta, Utc};
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use track_record_server::db::TokenScope;
@@ -1133,4 +1134,149 @@ async fn export_round_trips() {
         )
         .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn analysis_views_use_relative_run_selection() {
+    let app = app!();
+    let write = app.as_scope(TokenScope::Write).await;
+    let read = app.as_scope(TokenScope::Read).await;
+    let ui = app.ui_client();
+    let now = Utc::now();
+    let ago = |days: i64| (now - TimeDelta::days(days)).to_rfc3339_opts(SecondsFormat::Secs, true);
+    let run = |started_at: String, sut: Value, tags: Value| {
+        let write = write.clone();
+        let url = app.m("/runs");
+        async move {
+            let id = Uuid::new_v4();
+            let mut body = run_body(&started_at);
+            body["sut_version"] = sut;
+            body["tags"] = tags;
+            let (status, b) = write.put(&format!("{url}/{id}"), &body).await;
+            assert_eq!(status, StatusCode::CREATED, "{b}");
+            id
+        }
+    };
+    let main = json!({"commit": "abc", "branch": "main"});
+    let r1 = run(
+        ago(40),
+        json!({"commit": "rel", "branch": "release", "tag": "v1.0.0"}),
+        json!(["baseline"]),
+    )
+    .await;
+    let r2 = run(ago(10), main.clone(), json!(["baseline"])).await;
+    let r3 = run(ago(2), main.clone(), json!([])).await;
+    let r4 = run(ago(1), main.clone(), json!([])).await;
+    for (r, v) in [(r1, 1.0), (r2, 2.0), (r3, 3.0)] {
+        add_ce(&write, &app, r, Ce::default(), json!([s(0, v, false)])).await;
+    }
+    // The newest run has no case execution on pixel-8.
+    let iphone = Ce {
+        device: "iphone",
+        ..Default::default()
+    };
+    add_ce(&write, &app, r4, iphone, json!([s(0, 4.0, false)])).await;
+
+    let agg = |filter: Value| {
+        let ui = ui.clone();
+        let url = app.u("/analysis/aggregates");
+        async move {
+            let (status, out) = ui
+                .post(&url, &json!({"metric": "load_time", "filter": filter}))
+                .await;
+            (status, out)
+        }
+    };
+    let runs_of = |out: &Value| -> Vec<Uuid> {
+        let mut runs: Vec<Uuid> = out["groups"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{out}"))
+            .iter()
+            .map(|g| g["run"]["id"].as_str().unwrap().parse().unwrap())
+            .collect();
+        runs.sort_by_key(|r| [r1, r2, r3, r4].iter().position(|x| x == r));
+        runs
+    };
+    let selected = |filter: Value| {
+        let agg = &agg;
+        async move {
+            let (status, out) = agg(filter.clone()).await;
+            assert_eq!(status, StatusCode::OK, "{filter}: {out}");
+            runs_of(&out)
+        }
+    };
+
+    assert_eq!(selected(json!({})).await, vec![r1, r2, r3, r4]);
+    assert_eq!(
+        selected(json!({"started_within_days": 30})).await,
+        vec![r2, r3, r4]
+    );
+    assert_eq!(selected(json!({"latest_runs": 2})).await, vec![r3, r4]);
+    assert_eq!(
+        selected(json!({"latest_runs": 2, "client_device": "pixel-8"})).await,
+        vec![r2, r3],
+        "latest_runs applies after the case execution conditions"
+    );
+    assert_eq!(
+        selected(json!({"since_tag": "baseline"})).await,
+        vec![r1, r2, r3, r4],
+        "the earliest marked run"
+    );
+    assert_eq!(
+        selected(json!({"since_sut_tag": "v1.0.0", "sut_branch": "main"})).await,
+        vec![r2, r3, r4]
+    );
+    assert_eq!(
+        selected(
+            json!({"since_tag": "baseline", "started_within_days": 5, "latest_runs": 1,
+                        "client_device": "pixel-8"})
+        )
+        .await,
+        vec![r3]
+    );
+    let (status, out) = agg(json!({"since_tag": "nope"})).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(out["code"], "validation_failed");
+    let (status, _) = agg(json!({"latest_runs": 0})).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // The same filter in a comparison and a trend, on the machine port.
+    let (status, events) = ndjson(
+        &read,
+        &app.m("/analysis/compare"),
+        &json!({"metric": "load_time", "dimension": "run",
+                "filter": {"latest_runs": 2, "client_device": "pixel-8"}}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{events:?}");
+    assert_eq!(events[0]["values"], json!([r2.to_string(), r3.to_string()]));
+    let (status, problem) = read
+        .post(
+            &app.m("/analysis/compare"),
+            &json!({"metric": "load_time", "dimension": "run",
+                    "filter": {"since_sut_tag": "nope"}}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{problem}");
+
+    let (_, ces) = read
+        .get(&app.m(&format!("/runs/{r3}/case-executions")))
+        .await;
+    let test_case_id = ces[0]["test_case"]["id"].as_i64().unwrap();
+    let (status, out) = read
+        .post(
+            &app.m("/analysis/trend"),
+            &json!({"test_case_id": test_case_id, "client_device": "pixel-8",
+                    "metric": "load_time", "filter": {"since_sut_tag": "v1.0.0",
+                    "started_within_days": 30}}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{out}");
+    let points: Vec<&str> = out["points"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["run"]["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(points, vec![r2.to_string(), r3.to_string()]);
 }
