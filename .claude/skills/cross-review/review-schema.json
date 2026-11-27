@@ -1,0 +1,118 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict",
+    "summary",
+    "findings",
+    "prior"
+  ],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "approve",
+        "changes_requested"
+      ],
+      "description": "approve only if no blocking finding is open: no new blocking finding and no earlier one still_open."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Two to five sentences: what the change does and the overall assessment."
+    },
+    "findings": {
+      "type": "array",
+      "description": "New findings of this round. An empty list is a valid answer.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "severity",
+          "file",
+          "line",
+          "title",
+          "details",
+          "failure_scenario",
+          "suggestion"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "R<round>-<n>, e.g. R2-1."
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "nit"
+            ]
+          },
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Repository-relative path."
+          },
+          "line": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "1-based line in the current working tree."
+          },
+          "title": {
+            "type": "string",
+            "description": "The claim in one line."
+          },
+          "details": {
+            "type": "string"
+          },
+          "failure_scenario": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Concrete input or state and the wrong result. Required for blocking findings."
+          },
+          "suggestion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "prior": {
+      "type": "array",
+      "description": "One entry per finding of earlier rounds listed in the author's notes. Empty in round 1.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "comment"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "resolved",
+              "rebuttal_accepted",
+              "still_open"
+            ]
+          },
+          "comment": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
