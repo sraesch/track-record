@@ -99,6 +99,10 @@ impl Graph {
                                     "{name:?} is not an input name: use letters, digits and _, \
                                      starting with a letter"
                                 )
+                            } else if name == "x" {
+                                "x cannot name an input: a combine keeps the x values of series \
+                                 in the column x"
+                                    .to_owned()
                             } else if attributes::is_prefix(name) {
                                 format!(
                                     "{name:?} cannot name an input: attributes start with it \

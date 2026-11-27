@@ -57,6 +57,9 @@ pub enum Expect {
     /// The value of a filter condition: a text, number, boolean or time, or
     /// a list of them.
     Value,
+    /// A field of a run filter: the type the field table gives, and the
+    /// values the server's run filter takes ([`filter::check`]).
+    Field(&'static str),
 }
 
 impl Expect {
@@ -72,6 +75,7 @@ impl Expect {
     /// setting that takes this.
     pub fn accepts(self, ty: VarType, list: bool) -> bool {
         match self {
+            Expect::Field(name) => filter::type_of(name).accepts(ty, list),
             Expect::Type { ty: t, list: l } => t == ty && l == list,
             Expect::Value => matches!(
                 ty,
@@ -87,6 +91,7 @@ impl fmt::Display for Expect {
             Expect::Type { ty, list: false } => f.write_str(ty.as_str()),
             Expect::Type { ty, list: true } => write!(f, "a list of {}", ty.as_str()),
             Expect::Value => f.write_str("a text, number, boolean or time"),
+            Expect::Field(name) => filter::type_of(name).fmt(f),
         }
     }
 }
@@ -106,6 +111,10 @@ pub fn fits(expect: Expect, value: &Value) -> Result<(), String> {
             Value::Array(items) => items.iter().try_for_each(fits_scalar),
             v => fits_scalar(v),
         },
+        Expect::Field(name) => {
+            fits(filter::type_of(name), value)?;
+            filter::check(name, value)
+        }
     }
 }
 
@@ -308,8 +317,8 @@ pub fn check_variables(spec: &Spec) -> Vec<Problem> {
     for node in &spec.nodes {
         let mut kind = node.kind.clone();
         kind.visit(&mut |path, expect, slot| {
-            if let Some(name) = slot.var() {
-                match spec.variable(name) {
+            if let Some(name) = slot.var().map(str::to_owned) {
+                match spec.variable(&name) {
                     None => problems.push(Problem::setting(
                         &node.id,
                         path,
@@ -318,9 +327,24 @@ pub fn check_variables(spec: &Spec) -> Vec<Problem> {
                     Some(v) if !expect.accepts(v.ty, v.list) => {
                         problems.push(Problem::setting(&node.id, path, mismatch(v, expect)));
                     }
+                    // The type of a variable is wider than some settings
+                    // (`number` for a count): the default must fit this one.
+                    Some(Variable {
+                        default: Some(default),
+                        ..
+                    }) => {
+                        let default = default.clone();
+                        if let Err(e) = fits(expect, &default).and_then(|()| slot.bind(&default)) {
+                            problems.push(Problem::setting(
+                                &node.id,
+                                path,
+                                format!("the default of variable {name:?} does not fit: {e}"),
+                            ));
+                        }
+                    }
                     Some(_) => {}
                 }
-            } else if (expect == Expect::Value || path.starts_with("filter."))
+            } else if matches!(expect, Expect::Value | Expect::Field(_))
                 && let Some(value) = slot.literal()
                 && let Err(e) = fits(expect, &value)
             {

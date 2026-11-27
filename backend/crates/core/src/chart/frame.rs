@@ -32,11 +32,13 @@ impl Column {
 }
 
 /// The value of an attribute. Parameters keep their JSON type: `10` is not
-/// `"10"`.
+/// `"10"`. Numbers stay JSON numbers, so that integers beyond the precision
+/// of `f64` stay apart, and they compare as the analysis compares
+/// parameters (`serde_json::Value` equality).
 #[derive(Debug, Clone, PartialEq)]
 pub enum AttrValue {
     Bool(bool),
-    Number(f64),
+    Number(serde_json::Number),
     Text(String),
     Time(DateTime<Utc>),
     List(Vec<AttrValue>),
@@ -48,7 +50,7 @@ impl AttrValue {
     pub fn from_json(value: &Value) -> Option<AttrValue> {
         match value {
             Value::Bool(b) => Some(AttrValue::Bool(*b)),
-            Value::Number(n) => n.as_f64().map(AttrValue::Number),
+            Value::Number(n) => Some(AttrValue::Number(n.clone())),
             Value::String(s) => Some(AttrValue::Text(s.clone())),
             Value::Array(items) => items
                 .iter()
@@ -56,6 +58,20 @@ impl AttrValue {
                 .collect::<Option<Vec<_>>>()
                 .map(AttrValue::List),
             Value::Null | Value::Object(_) => None,
+        }
+    }
+
+    /// A number computed by the graph, e.g. by a derive node. `None` for
+    /// NaN and infinities, which are no value.
+    pub fn number(value: f64) -> Option<AttrValue> {
+        serde_json::Number::from_f64(value).map(AttrValue::Number)
+    }
+
+    /// The value as a number, for arithmetic and numeric order.
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            AttrValue::Number(n) => n.as_f64(),
+            _ => None,
         }
     }
 }
@@ -298,8 +314,17 @@ mod tests {
     fn json_values_keep_their_type() {
         assert_eq!(
             AttrValue::from_json(&serde_json::json!(10)),
-            Some(AttrValue::Number(10.0))
+            Some(AttrValue::Number(10.into()))
         );
+        // Integers beyond f64 stay apart.
+        let big = |s: &str| AttrValue::from_json(&serde_json::from_str(s).unwrap());
+        assert_ne!(big("9007199254740992"), big("9007199254740993"));
+        assert_eq!(
+            big("9007199254740993").unwrap().as_f64(),
+            Some(9007199254740992.0)
+        );
+        assert_eq!(AttrValue::number(2.5).unwrap().as_f64(), Some(2.5));
+        assert_eq!(AttrValue::number(f64::NAN), None);
         assert_eq!(
             AttrValue::from_json(&serde_json::json!("10")),
             Some(AttrValue::Text("10".into()))

@@ -878,3 +878,158 @@ fn a_malformed_spec_reports_no_shapes() {
     assert!(report.nodes.is_empty());
     assert_eq!(report.problems.len(), 1);
 }
+
+// Review of #39 ------------------------------------------------------------------------
+
+#[test]
+fn defaults_get_the_value_checks_of_their_settings() {
+    let p = problems(json!({
+      "format": 1,
+      "variables": [{"name": "points", "type": "number", "default": 1},
+                    {"name": "confidence", "type": "number", "default": 1.5},
+                    {"name": "runs", "type": "number", "default": 2.5},
+                    {"name": "latest", "type": "number", "default": 0}],
+      "nodes": [
+        {"id": "runs", "type": "source", "metric": "series.fps",
+         "filter": {"latest_runs": {"var": "latest"}}},
+        {"id": "grid", "type": "resample", "input": "runs", "points": {"var": "points"}},
+        {"id": "stats", "type": "reduce", "input": "grid", "column": "y",
+         "functions": ["mean"], "confidence": {"var": "confidence"}},
+        {"id": "latest", "type": "select_latest", "input": "stats", "runs": {"var": "runs"}},
+        {"id": "chart", "type": "table", "input": "latest", "columns": ["mean"]}
+      ]
+    }));
+    assert_problem(&p, Some("grid"), Some("points"), "2 to 10000 points, not 1");
+    assert_problem(&p, Some("stats"), Some("confidence"), "between 0 and 1");
+    assert_problem(
+        &p,
+        Some("latest"),
+        Some("runs"),
+        "default of variable \"runs\" does not fit",
+    );
+    assert_problem(&p, Some("runs"), Some("filter.latest_runs"), "at least 1");
+}
+
+#[test]
+fn run_filter_values_are_checked_as_the_server_reads_them() {
+    let p = problems(spec_with(json!([
+        {"id": "s", "type": "source", "metric": "bytes",
+         "filter": {"latest_runs": 1.5, "run_id": ["not-a-uuid"], "status": ["unknown"]}}
+    ])));
+    assert_problem(
+        &p,
+        Some("s"),
+        Some("filter.latest_runs"),
+        "whole number of at least 1",
+    );
+    assert_problem(&p, Some("s"), Some("filter.run_id"), "not a run id");
+    assert_problem(&p, Some("s"), Some("filter.status"), "not one of running");
+}
+
+#[test]
+fn flattening_a_match_needs_equal_columns() {
+    let pairs = |b_metric: &str| {
+        json!({"format": 1, "nodes": [
+            {"id": "a", "type": "source", "metric": "load_time"},
+            {"id": "b", "type": "source", "metric": b_metric},
+            {"id": "pairs", "type": "match", "inputs": {"a": "a", "b": "b"}},
+            {"id": "flat", "type": "flatten", "input": "pairs"},
+            {"id": "stats", "type": "reduce", "input": "flat", "functions": ["mean"]},
+            {"id": "chart", "type": "table", "input": "stats", "columns": ["mean"]}
+        ]})
+    };
+    let v = validation(pairs("bytes"));
+    assert_problem(
+        &v.problems,
+        Some("flat"),
+        Some("levels"),
+        "y in ms) and b (y in B)",
+    );
+    assert!(!v.shapes.contains_key("stats"));
+    let v = validation(pairs("load_ms"));
+    assert!(v.problems.is_empty(), "{:#?}", v.problems);
+    assert_eq!(cols(&v.shapes["stats"])[0], ("mean", Some("ms")));
+}
+
+#[test]
+fn an_empty_unit_declares_dimensionless() {
+    let p = problems(spec_with(json!([
+        {"id": "s", "type": "source", "metric": "load_time", "unit": ""}
+    ])));
+    assert_problem(&p, Some("s"), Some("metric"), "cannot be converted");
+    let v = validation(spec_with(json!([
+        {"id": "s", "type": "source", "metric": "score", "unit": ""}
+    ])));
+    assert_eq!(cols(&v.shapes["s"]), [("y", Some(""))]);
+}
+
+#[test]
+fn combine_keeps_x_of_a_series_input_whatever_its_name() {
+    let v = validation(json!({"format": 1, "nodes": [
+        {"id": "limit", "type": "source", "metric": "bytes"},
+        {"id": "series", "type": "source", "metric": "series.received"},
+        {"id": "pairs", "type": "match", "inputs": {"a": "limit", "b": "series"}},
+        {"id": "share", "type": "combine", "input": "pairs",
+         "expressions": [{"name": "share", "expression": "b / a", "unit": ""}]},
+        {"id": "chart", "type": "line", "input": "share", "x": "x", "y": "share"}
+    ]}));
+    assert!(v.problems.is_empty(), "{:#?}", v.problems);
+    assert_eq!(
+        cols(&v.shapes["share"]),
+        [
+            ("x", Some("s")),
+            ("a", Some("B")),
+            ("b", Some("B")),
+            ("share", Some(""))
+        ]
+    );
+    let p = problems(json!({"format": 1, "nodes": [
+        {"id": "time", "type": "source", "metric": "series.fps"},
+        {"id": "size", "type": "source", "metric": "series.by_size"},
+        {"id": "pairs", "type": "match", "inputs": {"a": "time", "b": "size"}},
+        {"id": "both", "type": "combine", "input": "pairs", "expressions": []},
+        {"id": "chart", "type": "table", "input": "both", "columns": ["a"]}
+    ]}));
+    assert_problem(
+        &p,
+        Some("both"),
+        None,
+        "x of a is in \"s\" and x of b in \"B\"",
+    );
+}
+
+#[test]
+fn x_cannot_name_a_match_input() {
+    let p = malformed(spec_with(json!([
+        {"id": "m", "type": "match", "inputs": {"a": "runs", "x": "runs"}}
+    ])));
+    assert_problem(&p, Some("m"), Some("inputs.x"), "x cannot name an input");
+}
+
+#[test]
+fn bounds_and_comparisons_have_the_unit_of_their_value() {
+    let v = |viz: Value| {
+        problems(json!({"format": 1, "nodes": [
+            {"id": "a", "type": "source", "metric": "load_time"},
+            {"id": "b", "type": "source", "metric": "bytes"},
+            {"id": "pairs", "type": "match", "inputs": {"a": "a", "b": "b"}},
+            {"id": "both", "type": "combine", "input": "pairs", "expressions": []},
+            viz
+        ]}))
+    };
+    let p = v(json!({"id": "chart", "type": "line", "input": "both",
+                     "x": "run.started_at", "y": "a", "low": "b", "high": "a"}));
+    assert_eq!(p.len(), 1, "{p:#?}");
+    assert_problem(
+        &p,
+        Some("chart"),
+        Some("low"),
+        "b is in \"B\" and y (a) in \"ms\"",
+    );
+    let p = v(json!({"id": "chart", "type": "bar", "input": "both",
+                     "category": "device.name", "value": "a", "high": "b"}));
+    assert_problem(&p, Some("chart"), Some("high"), "cannot be converted");
+    let p = v(json!({"id": "chart", "type": "value", "input": "both",
+                     "value": "a", "compare": "b"}));
+    assert_problem(&p, Some("chart"), Some("compare"), "cannot be converted");
+}

@@ -127,12 +127,13 @@ pub fn validate(
     catalogue: &UnitCatalogue,
 ) -> Validation {
     let mut problems = check_variables(spec);
-    for node in &spec.nodes {
+    // Literals and defaults get the same value checks as bound values.
+    let bound = spec.bind_defaults();
+    for node in &bound.nodes {
         for (setting, message) in node.kind.check_values() {
             problems.push(Problem::setting(&node.id, setting, message));
         }
     }
-    let bound = spec.bind_defaults();
     let mut shapes: Vec<Option<Shape>> = vec![None; spec.nodes.len()];
     for &i in graph.order() {
         let node = &bound.nodes[i];
@@ -359,7 +360,34 @@ fn infer(
                     k.min(depth)
                 }
             };
-            shape.levels.truncate(depth - remove);
+            for level in shape.levels.drain(depth - remove..) {
+                let Level::Match { inputs } = level else {
+                    continue;
+                };
+                // The frames of all inputs end up in one list: they need the
+                // same columns, as a reduce or concatenate would need them.
+                let (a, others) = inputs.split_first().expect("a match has inputs");
+                if let Some(other) = others
+                    .iter()
+                    .find(|o| !same_columns(&a.columns, &o.columns))
+                {
+                    cx.problem(
+                        "levels",
+                        format!(
+                            "flattening the match puts the frames of {} ({}) and {} ({}) into one \
+                             list, but they have different columns: combine them instead",
+                            a.name,
+                            show_columns(&a.columns),
+                            other.name,
+                            show_columns(&other.columns)
+                        ),
+                    );
+                    return None;
+                }
+                for o in others {
+                    shape.attributes.extend(o.attributes.iter().cloned());
+                }
+            }
             Some(shape)
         }
         NodeKind::Sort(n) => {
@@ -424,7 +452,7 @@ fn source(cx: &mut Cx, env: &mut dyn Env, s: &SourceNode) -> Option<Shape> {
         }
     };
     let declared = match &s.unit {
-        Some(Setting::Value(u)) if !u.is_empty() => Some(u.as_str()),
+        Some(Setting::Value(u)) => Some(u.as_str()),
         _ => None,
     };
     let checked = match dsl::check::check(&expr, env, cx.catalogue, declared) {
@@ -569,6 +597,24 @@ fn combine(cx: &mut Cx, n: &CombineNode, input: &Shape) -> Option<Shape> {
         );
         return None;
     };
+    // A frame with one point and no x applies to every point of the others,
+    // so x comes from the inputs that are series, whichever their names.
+    let mut xs = inputs
+        .iter()
+        .filter_map(|mi| mi.columns.iter().find(|c| c.name == "x").map(|c| (mi, c)));
+    if let Some((first, x)) = xs.next() {
+        for (mi, other) in xs {
+            if let (Some(u), Some(v)) = (&x.unit, &other.unit)
+                && !cx.catalogue.convertible(u, v)
+            {
+                cx.node_problem(format!(
+                    "x of {} is in {u:?} and x of {} in {v:?}, which cannot be converted",
+                    first.name, mi.name
+                ));
+            }
+        }
+        columns.push(x.clone());
+    }
     for mi in inputs {
         let values: Vec<&ColumnShape> = mi.columns.iter().filter(|c| c.name != "x").collect();
         match values.as_slice() {
@@ -626,6 +672,35 @@ fn visualization(cx: &mut Cx, kind: &NodeKind, input: &Shape) {
             cx.role(input, name, v, *kind);
         }
     }
+    // Bounds and comparisons are drawn on the axis of the value they
+    // belong to, so their units must convert to its unit.
+    for (role, of) in [
+        ("low", "y"),
+        ("high", "y"),
+        ("low", "value"),
+        ("high", "value"),
+        ("compare", "value"),
+    ] {
+        let column = |name: &str| {
+            viz.roles
+                .iter()
+                .find(|(n, ..)| *n == name)
+                .and_then(|(_, s, _)| s.value())
+                .and_then(|c| input.column(c))
+        };
+        if let (Some(c), Some(main)) = (column(role), column(of))
+            && let (Some(u), Some(v)) = (&c.unit, &main.unit)
+            && !cx.catalogue.convertible(u, v)
+        {
+            cx.problem(
+                role,
+                format!(
+                    "{} is in {u:?} and {of} ({}) in {v:?}, which cannot be converted",
+                    c.name, main.name
+                ),
+            );
+        }
+    }
     for (name, setting, kind) in &viz.lists {
         if let Setting::Value(list) = setting {
             for (i, v) in list.iter().enumerate() {
@@ -669,6 +744,30 @@ fn visualization(cx: &mut Cx, kind: &NodeKind, input: &Shape) {
             );
         }
     }
+}
+
+/// True if two inputs of a match have the same columns: names, and units
+/// where both are known.
+fn same_columns(a: &[ColumnShape], b: &[ColumnShape]) -> bool {
+    a.len() == b.len()
+        && a.iter().zip(b).all(|(x, y)| {
+            x.name == y.name
+                && match (&x.unit, &y.unit) {
+                    (Some(u), Some(v)) => u == v,
+                    _ => true,
+                }
+        })
+}
+
+fn show_columns(columns: &[ColumnShape]) -> String {
+    let shown: Vec<String> = columns
+        .iter()
+        .map(|c| match c.unit.as_deref() {
+            Some("") | None => c.name.clone(),
+            Some(u) => format!("{} in {u}", c.name),
+        })
+        .collect();
+    shown.join(", ")
 }
 
 /// True if the input has `<input>.<name>` for some input of a match that
