@@ -360,8 +360,10 @@ The settings that the sections above leave open, as
   have at most 256 characters (chained derives such as `attr.a * attr.a`
   double it); a longer one fails the node and asks for a declared `unit`.
 - **reduce** and **combine with functions** compute over the values of a
-  column (`column`, by default the only one that is not `x` or a count),
-  converted to the unit of the first frame. No value is counted, never
+  column (`column`, by default the only one that is not `x` or a count,
+  per frame, so inside a match each input's own), converted to the unit of
+  the first frame; a value the conversion takes out of range is no value.
+  No value is counted, never
   computed with (FR-12a): the sum of no values is no value, the geomean of
   a negative value is no value (0 with a 0), `first` and `last` skip no
   value, and the stddev and confidence interval of one value are no value.
@@ -370,7 +372,8 @@ The settings that the sections above leave open, as
   new frame keeps the attributes the frames share, and each point the
   other attributes of its frame, so that `run.started_at` can be the x of a
   line. combine with functions keeps the attributes that every frame with
-  a value has the same at a point.
+  a value has the same at a point, and the x of series without points
+  where the points come from frames without x.
 - **resample** puts the frames of each innermost group on one grid of
   `points` (200 by default) from `from` to `to`, by default the range of x
   of the group, and interpolates every other column (FR-19). x is
@@ -411,7 +414,9 @@ The settings that the sections above leave open, as
   a match group (a group, then a concatenate or reduce) keeps the input of
   its frames. Units are checked per group, with the units that group has,
   also in a group without points (from its columns and frame attributes),
-  so that an expression is not accepted only because a group is empty.
+  so that an expression is not accepted only because a group is empty. A
+  name the group lacks (a missing partner) takes its unit over the inputs,
+  so that the names it has keep theirs.
 - **Budget at run time:** the run counts the points of its sources, of
   every result that a node still needs, and of the copies a result gets
   for a second reader. resample and match, which make

@@ -696,8 +696,8 @@ fn align(id: &str, frames: &[Frame], catalogue: &UnitCatalogue) -> Result<Aligne
         len = 1;
     }
     // Series without points still have their x, without values where only
-    // scalars give the points.
-    if base.is_none() {
+    // scalars or frames without x give the points.
+    if x.is_none() {
         x = frames.iter().find_map(|f| {
             f.column("x")
                 .map(|c| (f.columns[c].clone(), vec![None; len]))
@@ -879,15 +879,19 @@ fn combine_functions(
     let unit = unit.map(|u| u.1).unwrap_or_default();
     let outputs = function_columns(functions, &unit);
     let mut values: Vec<Vec<Option<f64>>> = vec![Vec::with_capacity(al.len); outputs.len()];
+    // The value of frame `k` at point `i` in the unit of the first; one
+    // that a conversion takes out of range is no value, here and for the
+    // attributes the point shares.
+    let read = |k: usize, i: usize| {
+        let (c, f) = reads[k];
+        al.value(&frames, k, c, i)
+            .map(|v| v * f)
+            .filter(|v| v.is_finite())
+    };
     let mut at = Vec::with_capacity(frames.len());
     for i in 0..al.len {
         at.clear();
-        at.extend(
-            reads
-                .iter()
-                .enumerate()
-                .map(|(k, (c, f))| al.value(&frames, k, *c, i).map(|v| v * f)),
-        );
+        at.extend((0..frames.len()).map(|k| read(k, i)));
         let s = stats::summarize(&at, ps, DEFAULT_CONFIDENCE);
         for ((_, what), out) in outputs.iter().zip(&mut values) {
             out.push(compute(what, &s, &at));
@@ -909,7 +913,7 @@ fn combine_functions(
     {
         common.retain(|name, _| !p.contains_key(name));
     }
-    let has_value = |k: usize, i: usize| al.value(&frames, k, reads[k].0, i).is_some();
+    let has_value = |k: usize, i: usize| read(k, i).is_some();
     let points = shared_point_attrs(&frames, &al, &common, &has_value);
     let mut frame = Frame::new(common, columns, values);
     frame.point_attrs = points;
@@ -1019,6 +1023,10 @@ struct Formula<'a> {
     /// The unit of the column where no point gives one: the declared unit,
     /// or the unit of the expression over the columns of the inputs.
     default_unit: Option<String>,
+    /// For each name, its unit over the columns of the inputs and the
+    /// fixed attributes, where that is known: the unit of a name that a
+    /// group lacks, such as an attribute of a missing partner.
+    template_units: Vec<Option<String>>,
 }
 
 impl<'a> Formula<'a> {
@@ -1051,32 +1059,34 @@ impl<'a> Formula<'a> {
             refs,
             checked: HashMap::new(),
             default_unit: e.unit.clone(),
+            template_units: Vec::new(),
         };
         // Over columns and fixed attributes, which have no unit, the unit
         // is known before any point: the unit of a column where no point
         // gives one. Only a fallback; points are checked with their units.
-        if f.default_unit.is_none() {
-            let fixed = |name: &str| {
-                let name = attributes::unqualified(name);
-                attributes::FIXED
-                    .iter()
-                    .any(|(n, ..)| *n == name)
-                    .then(String::new)
-            };
-            let units: Option<Vec<String>> = f
-                .refs
+        let fixed = |name: &str| {
+            let name = attributes::unqualified(name);
+            attributes::FIXED
                 .iter()
-                .map(|r| match r {
-                    Ref::Column { input, column } => templates
-                        .get(&names[*input])?
-                        .iter()
-                        .find(|c| &c.name == column)
-                        .map(|c| c.unit.clone()),
-                    Ref::Partner { attr, .. } => fixed(attr),
-                    Ref::Own(name) => fixed(name),
-                    Ref::Absent => None,
-                })
-                .collect();
+                .any(|(n, ..)| *n == name)
+                .then(String::new)
+        };
+        f.template_units = f
+            .refs
+            .iter()
+            .map(|r| match r {
+                Ref::Column { input, column } => templates
+                    .get(&names[*input])?
+                    .iter()
+                    .find(|c| &c.name == column)
+                    .map(|c| c.unit.clone()),
+                Ref::Partner { attr, .. } => fixed(attr),
+                Ref::Own(name) => fixed(name),
+                Ref::Absent => None,
+            })
+            .collect();
+        if f.default_unit.is_none() {
+            let units: Option<Vec<String>> = f.template_units.iter().cloned().collect();
             if let Some(units) = units
                 && f.check(id, &units, catalogue).is_ok()
             {
@@ -1309,17 +1319,31 @@ impl Combiner<'_> {
         // attributes of this group, else the fallback of the expression.
         // These units are the ones a point of this group would have, so
         // they are checked as a point's are: whether the expression is
-        // accepted must not depend on whether the group has points.
+        // accepted must not depend on whether the group has points. A name
+        // that the group lacks (a missing partner) takes its unit over the
+        // inputs, so the names the group has keep theirs; that check only
+        // gives a unit, it does not fail the node, as those units need not
+        // be this group's.
         if unit.is_none() {
+            let mut own = true;
             let group: Option<Vec<String>> = self.exprs[e]
                 .refs
                 .iter()
-                .map(|r| self.frame_unit(r, frames, of, a))
+                .zip(&self.exprs[e].template_units)
+                .map(|(r, t)| {
+                    self.frame_unit(r, frames, of, a).or_else(|| {
+                        own = false;
+                        t.clone()
+                    })
+                })
                 .collect();
             if let Some(units) = group {
                 let f = &mut self.exprs[e];
-                f.check(id, &units, catalogue)?;
-                unit = Some(f.checked[&units].signature.unit.clone());
+                match f.check(id, &units, catalogue) {
+                    Ok(()) => unit = Some(f.checked[&units].signature.unit.clone()),
+                    Err(err) if own => return Err(err),
+                    Err(_) => {}
+                }
             }
         }
         let unit = unit

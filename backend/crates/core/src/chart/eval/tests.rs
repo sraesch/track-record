@@ -2143,6 +2143,20 @@ fn an_empty_series_with_a_scalar_keeps_x() {
     assert_eq!(c.columns[0], Column::x("s", "time"));
     assert_eq!(col(c, "x"), [None]);
     assert_eq!(col(c, "mean"), [Some(2.0)]);
+    // As with a frame of several points without x.
+    let out = combined(
+        json!({"functions": ["mean"]}),
+        Tree::Frames(vec![series_frame(&[], "s", &[], &[]), {
+            let mut f = frame(&[], &[Some(2.0), Some(4.0)]);
+            f.columns[0].unit = "fps".into();
+            f
+        }]),
+    )
+    .unwrap();
+    let [c] = frames(&out) else { panic!() };
+    assert_eq!(c.columns[0], Column::x("s", "time"));
+    assert_eq!(col(c, "x"), [None, None]);
+    assert_eq!(col(c, "mean"), [Some(2.0), Some(4.0)]);
 }
 
 #[test]
@@ -2292,6 +2306,36 @@ fn units_are_checked_within_a_group() {
 }
 
 #[test]
+fn a_group_without_a_partner_keeps_the_units_it_has() {
+    let in_unit = |source: &str, w: i32, unit: &str| {
+        let mut f = case_frame(source, "r", num(w), &[Some(4.0)]);
+        f.columns[0].unit = unit.into();
+        f.attrs
+            .insert("sample.repetition".into(), Attr::new(num(2)));
+        f
+    };
+    let tree = pairs(
+        vec![in_unit("runs", 10, "s"), in_unit("runs", 20, "ms")],
+        vec![in_unit("ref", 10, "s")],
+        "keep",
+    );
+    let out = with_expressions(
+        json!([{"name": "e", "expression": "a * b.sample.repetition"}]),
+        tree,
+    )
+    .unwrap();
+    let fs = frames(&out);
+    let unit = |f: &Frame| f.columns[f.column("e").unwrap()].unit.clone();
+    assert_eq!(
+        (col(&fs[0], "e"), unit(&fs[0])),
+        (vec![Some(8.0)], "s".into())
+    );
+    // No partner, so no value; the unit is that of a here, not of a in
+    // another group.
+    assert_eq!((col(&fs[1], "e"), unit(&fs[1])), (vec![None], "ms".into()));
+}
+
+#[test]
 fn a_match_group_names_the_attributes_only_names() {
     let a = Tree::Frames(vec![frame(&[("run.id", text("r1"))], &[Some(1.0)])]);
     let b = Tree::Frames(vec![frame(&[("run.id", text("r0"))], &[Some(2.0)])]);
@@ -2424,6 +2468,16 @@ fn a_point_shares_the_attributes_of_the_frames_with_a_value_there() {
     let [c] = frames(&out) else { panic!() };
     assert_eq!(c.point_attr(0, "run.id").unwrap().value, text("r1"));
     assert_eq!(c.point_attr(1, "run.id").unwrap().value, text("r2"));
+    // A value that the conversion takes out of range is no value, also for
+    // the attributes: only r1 gives the mean.
+    let r1 = frame(&[("run.id", text("r1"))], &[Some(1.0)]);
+    let mut r2 = frame(&[("run.id", text("r2"))], &[Some(1e308)]);
+    r2.columns[0].unit = "s".into();
+    let out = combined(json!({"functions": ["mean"]}), Tree::Frames(vec![r1, r2])).unwrap();
+    let [c] = frames(&out) else { panic!() };
+    assert_eq!(col(c, "mean"), [Some(1.0)]);
+    assert_eq!(col(c, "n_no_value"), [Some(1.0)]);
+    assert_eq!(c.point_attr(0, "run.id").unwrap().value, text("r1"));
 }
 
 #[test]

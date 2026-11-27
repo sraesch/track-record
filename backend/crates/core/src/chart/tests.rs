@@ -1353,6 +1353,30 @@ fn a_reduce_inside_a_match_updates_the_columns_of_its_inputs() {
 }
 
 #[test]
+fn a_reduce_inside_a_match_reads_the_column_of_each_input() {
+    // b is reduced before the match, so its only column is mean in B; a
+    // reduce without a column reads a's y and b's mean.
+    let p = problems(json!({"format": 1, "nodes": [
+        {"id": "runs", "type": "source", "metric": "load_time"},
+        {"id": "ref", "type": "source", "metric": "bytes"},
+        {"id": "ref_mean", "type": "reduce", "input": "ref", "functions": ["mean"]},
+        {"id": "pairs", "type": "match", "inputs": {"a": "runs", "b": "ref_mean"},
+         "except": ["run", "sample"]},
+        {"id": "by_source", "type": "group", "input": "pairs", "by": ["source"]},
+        {"id": "stats", "type": "reduce", "input": "by_source", "functions": ["mean"]},
+        {"id": "sum", "type": "combine", "input": "stats",
+         "expressions": [{"name": "d", "expression": "a.mean + b.mean"}]},
+        {"id": "chart", "type": "table", "input": "sum", "columns": ["d"]}
+    ]}));
+    assert_problem(
+        &p,
+        Some("sum"),
+        Some("expressions[0].expression"),
+        "compatible units",
+    );
+}
+
+#[test]
 fn a_reduce_below_a_deeper_match_updates_its_inputs() {
     let p = problems(json!({"format": 1, "nodes": [
         {"id": "runs", "type": "source", "metric": "load_time"},

@@ -668,7 +668,8 @@ fn reduce(cx: &mut Cx, n: &ReduceNode, input: &Shape) -> Option<Shape> {
     let mut shape = input.clone();
     shape.levels.pop();
     shape.columns = columns;
-    merged_inside_match(&mut shape, &n.functions, &column.name, false);
+    let named = n.column.as_ref().map(|_| column.name.as_str());
+    merged_inside_match(&mut shape, &n.functions, named, false);
     Some(shape)
 }
 
@@ -676,7 +677,7 @@ fn reduce(cx: &mut Cx, n: &ReduceNode, input: &Shape) -> Option<Shape> {
 /// inside a match group, merged again), the frames of every input of every
 /// match have the columns of the functions, in the unit of that input's
 /// column.
-fn merged_inside_match(shape: &mut Shape, functions: &[Function], column: &str, x: bool) {
+fn merged_inside_match(shape: &mut Shape, functions: &[Function], column: Option<&str>, x: bool) {
     // Every match level above describes the frames, which all have the
     // new columns.
     let inputs = shape.levels.iter_mut().flat_map(|level| match level {
@@ -684,11 +685,23 @@ fn merged_inside_match(shape: &mut Shape, functions: &[Function], column: &str, 
         Level::Group { .. } => &mut [],
     });
     for mi in inputs {
-        let unit = mi
-            .columns
-            .iter()
-            .find(|c| c.name == column)
-            .and_then(|c| c.unit.clone());
+        // The column the node reads in the frames of this input: the one
+        // it names, else, as in evaluation, the input's only column other
+        // than x and the counts.
+        let read = match column {
+            Some(name) => mi.columns.iter().find(|c| c.name == name),
+            None => {
+                let mut values = mi
+                    .columns
+                    .iter()
+                    .filter(|c| c.name != "x" && !is_count(&c.name));
+                match (values.next(), values.next()) {
+                    (Some(one), None) => Some(one),
+                    _ => None,
+                }
+            }
+        };
+        let unit = read.and_then(|c| c.unit.clone());
         let mut columns: Vec<ColumnShape> = Vec::new();
         if x {
             columns.extend(mi.columns.iter().find(|c| c.name == "x").cloned());
@@ -736,7 +749,8 @@ fn combine(cx: &mut Cx, n: &CombineNode, input: &Shape) -> Option<Shape> {
             }
         }
         shape.columns = columns;
-        merged_inside_match(&mut shape, functions, &column.name, true);
+        let named = n.column.as_ref().map(|_| column.name.as_str());
+        merged_inside_match(&mut shape, functions, named, true);
         return Some(shape);
     }
     let Some(Level::Match { inputs }) = last else {
