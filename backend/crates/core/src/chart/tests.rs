@@ -1268,6 +1268,42 @@ fn partners_get_the_attributes_derived_after_a_match() {
 }
 
 #[test]
+fn a_match_within_a_match_is_rejected() {
+    // Matching the members of a pair to a reference before combining the
+    // pair would replace their input names (a, b).
+    let p = problems(json!({"format": 1, "nodes": [
+        {"id": "runs", "type": "source", "metric": "load_time"},
+        {"id": "other", "type": "source", "metric": "load_time"},
+        {"id": "ref", "type": "source", "metric": "load_time"},
+        {"id": "pairs", "type": "match", "inputs": {"a": "runs", "b": "other"},
+         "except": ["run", "sample"]},
+        {"id": "inner", "type": "match", "inputs": {"a": "pairs", "b": "ref"},
+         "except": ["run", "sample"]},
+        {"id": "ratio", "type": "combine", "input": "inner",
+         "expressions": [{"name": "r", "expression": "a / b"}]},
+        {"id": "both", "type": "combine", "input": "ratio",
+         "expressions": [{"name": "d", "expression": "a.r - b.r"}]},
+        {"id": "chart", "type": "table", "input": "both", "columns": ["d"]}
+    ]}));
+    assert_problem(&p, Some("inner"), None, "a match within a match");
+    // Once the first match is combined, its output can be matched again.
+    let p = problems(json!({"format": 1, "nodes": [
+        {"id": "runs", "type": "source", "metric": "load_time"},
+        {"id": "ref", "type": "source", "metric": "load_time"},
+        {"id": "pairs", "type": "match", "inputs": {"a": "runs", "b": "ref"},
+         "except": ["run", "sample"]},
+        {"id": "ratio", "type": "combine", "input": "pairs",
+         "expressions": [{"name": "r", "expression": "a / b"}]},
+        {"id": "again", "type": "match", "inputs": {"a": "ratio", "b": "ref"},
+         "except": ["run", "sample"]},
+        {"id": "both", "type": "combine", "input": "again",
+         "expressions": [{"name": "d", "expression": "a.r * b"}]},
+        {"id": "chart", "type": "table", "input": "both", "columns": ["d"]}
+    ]}));
+    assert!(p.is_empty(), "{p:#?}");
+}
+
+#[test]
 fn a_partner_name_used_again_replaces_the_earlier_partner() {
     // a carries b.attr.old from the first combine; the second combine
     // pairs it with a fresh b that has no attr.old, so b.attr.old is gone.

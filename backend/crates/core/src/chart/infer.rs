@@ -439,7 +439,7 @@ fn infer(
             }
             Some(input.clone())
         }
-        NodeKind::Match(n) => Some(match_node(cx, n, inputs)),
+        NodeKind::Match(n) => match_node(cx, n, inputs),
         NodeKind::Reduce(n) => reduce(cx, n, input),
         NodeKind::Concatenate(_) => {
             if matches!(input.levels.last(), Some(Level::Match { .. })) {
@@ -605,7 +605,21 @@ impl Env for FixedAttributes {
     }
 }
 
-fn match_node(cx: &mut Cx, n: &MatchNode, inputs: &[(Option<&str>, &Shape)]) -> Shape {
+fn match_node(cx: &mut Cx, n: &MatchNode, inputs: &[(Option<&str>, &Shape)]) -> Option<Shape> {
+    // Frames know the one match input they belong to; a match inside the
+    // group of another would replace it, and the outer combine would lose
+    // its partners. Nested matches are not supported.
+    if let Some((name, _)) = inputs
+        .iter()
+        .find(|(_, s)| s.levels.iter().any(|l| matches!(l, Level::Match { .. })))
+    {
+        cx.node_problem(format!(
+            "input {} still has the groups of an earlier match, and a match within a match \
+             is not supported: combine that match first",
+            name.unwrap_or("a")
+        ));
+        return None;
+    }
     let a = inputs[0].1;
     cx.key_list(a, "except", n.except.as_ref());
     cx.key_list(a, "only", n.only.as_ref());
@@ -620,7 +634,7 @@ fn match_node(cx: &mut Cx, n: &MatchNode, inputs: &[(Option<&str>, &Shape)]) -> 
             })
             .collect(),
     });
-    shape
+    Some(shape)
 }
 
 /// Columns of functions over `column`: counts have no unit, the others the

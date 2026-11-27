@@ -390,7 +390,9 @@ The settings that the sections above leave open, as
   keys do: `10` equals `10.0`, and the same value in two units is two keys.
   Each frame of `a` becomes a group of itself and its partners; two frames
   of another input with one key are an error. `except: ["run", "sample"]`
-  pairs the results of runs with a reference run.
+  pairs the results of runs with a reference run. Nested matches are not
+  supported: an input that still has the groups of a match is rejected
+  until that match is combined.
 - **combine** lines up the frames of a group point by point: frames with x
   need the same x of the same dimension (equal in the same unit, equal up
   to rounding after a conversion; a conversion that overflows equals
@@ -422,7 +424,9 @@ The settings that the sections above leave open, as
   every result that a node still needs, and of the copies a result gets
   for a second reader. resample and match, which make
   points, check what is left before they allocate; a run over the budget
-  fails at the node that goes over it.
+  fails at the node that goes over it. The budget limits what the run
+  holds between nodes; a node may briefly hold its input and its output,
+  bounded by what the budget already allowed.
   A unit it only passes on, from an attribute or declared, may be longer.
 - **Sources:** the value of `asset.<name>` is the asset's version when the
   case has one asset of that name and it has only a version (`"v1"`). One
