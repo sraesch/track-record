@@ -13,7 +13,8 @@
 use std::fmt;
 
 /// How values between points are obtained (FR-17).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Interp {
     /// Straight line between neighbouring points; no value outside the
     /// series.
