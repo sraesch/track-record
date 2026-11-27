@@ -53,6 +53,10 @@ pub enum Validity {
 /// parameters, metric) match runs with at least one current case execution
 /// that satisfies all of them. Device and parameter filters use the values
 /// after aliases.
+//
+// The sources of charts take these fields too: a new field also goes into
+// `track_record_core::chart::filter::FIELDS` (a test below checks that the
+// table names only fields that exist here).
 #[derive(Debug, Clone, Default, Deserialize, IntoParams, ToSchema, schemars::JsonSchema)]
 #[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
@@ -983,8 +987,37 @@ pub async fn get_series_points(
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use track_record_core::chart::VarType;
+    use track_record_core::chart::filter::FIELDS;
 
     use super::*;
+
+    #[test]
+    fn the_run_filter_of_chart_sources_has_only_fields_of_run_filter() {
+        // One value per field of the table, of its type; enums take one of
+        // their values.
+        let mut fields = serde_json::Map::new();
+        for (name, ty, list) in FIELDS {
+            let one = match (*name, ty) {
+                ("run_id", _) => json!("7c6c5a3e-0c4b-4d4e-9c39-6f1e6c3b8a10"),
+                ("status", _) => json!("completed"),
+                ("triggered_by", _) => json!("ci"),
+                ("validity", _) => json!("all"),
+                ("param", _) => json!("size=10"),
+                (_, VarType::Number) => json!(5),
+                (_, VarType::Time) => json!("2026-11-27T00:00:00Z"),
+                (_, VarType::Boolean) => json!(true),
+                _ => json!("main"),
+            };
+            let value = if *list { json!([one]) } else { one };
+            fields.insert((*name).to_owned(), value);
+        }
+        let filter: RunFilter = serde_json::from_value(fields.into()).unwrap();
+        assert_eq!(filter.sut_branch.as_deref(), Some("main"));
+        assert_eq!(filter.latest_runs, Some(5));
+        assert_eq!(filter.validity, Validity::All);
+        assert_eq!(filter.limit, None);
+    }
 
     #[test]
     fn param_filters_keep_json_types() {

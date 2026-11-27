@@ -293,6 +293,40 @@ frame per case and device with a point per run.
   narrow the filter, or reduce the series in the metric expression
   (`max(series.fps)`).
 
+### Format 1
+
+The settings that the sections above leave open, as
+`track-record-core::chart` reads them:
+
+- **Functions** of reduce and combine are a name (`"mean"`) or an object
+  with a parameter (`{"function": "percentile", "p": 95}`). The column is
+  the name, `p<p>` for a percentile. `ci_low` and `ci_high` use the
+  `confidence` of the reduce node (0.95 by default).
+- **combine** has either `functions` (with `column`) or `expressions`, each
+  `{"name", "expression", "unit"}`.
+- **match** names its inputs in `inputs`:
+  `{"a": "runs", "b": "reference"}`. A name is an identifier and not the
+  start of attribute names (`sut`, `param`, ...), so that `b.sut.id` is
+  clear after a combine.
+- **Visualizations** assign group levels with `levels` (outermost first;
+  `["panel", "color"]` by default), convert units and use log scales with
+  `axes` (`{"y": {"unit": "s", "log": true}}`). `line` marks changes with
+  `marks` and shows annotations with `annotations`; `table` marks
+  differences to matched partners with `differs`.
+- **Variables** are `{"name", "type", "list", "default"}`. A variable stands
+  for a whole setting or for one field of a run filter, not for an element
+  of a list or for the structure of a node (inputs, conditions, functions,
+  expressions). These settings can take one: the metric, filter, filter
+  fields, units and `include_warmup` of a source; condition values; keys
+  (`by`, `except`, `only`); `runs`, `points`, `from`, `to`, `confidence`;
+  `column`; and the roles, role lists and axis units of visualizations.
+- **Validation** infers for every node its group levels, its columns with
+  their units, and the attributes its frames and points can have. A setting
+  that is a variable is checked with its default; without one, what depends
+  on it is known only when the chart runs. Until the DSL reads attribute
+  and input names in derive and combine expressions, the unit of an
+  expression column is the declared one.
+
 ### Evaluation
 
 - Charts run **on the server**, in a new `service::charts` that the REST

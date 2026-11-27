@@ -31,7 +31,7 @@ pub const MAX_DEPTH: usize = 64;
 pub const MAX_COMPOSITION_DEPTH: usize = 32;
 
 /// Byte range in the source.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 pub struct Span {
     pub start: usize,
     pub end: usize,

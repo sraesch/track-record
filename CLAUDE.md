@@ -95,6 +95,13 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   (parse, unit check, evaluation) lives in `track-record-core::dsl` without
   I/O; `service::derived` loads definitions and sample inputs. The metric of
   every analysis view is a DSL expression.
+- Charts ([ADR 0022](docs/adr/0022-chart-and-dashboard-designer.md), section
+  "Format 1"): the frame model, the spec and its checks live in
+  `track-record-core::chart` without I/O. Well-formed is `Spec::from_json` +
+  `Graph::new`, valid is `chart::validate` (units of metrics through the
+  DSL's `Env`), and `Spec::bind` puts in the values of variables. A source's
+  run filter is the field table `chart::filter::FIELDS`; a new `RunFilter`
+  field goes there too.
 - Derived metrics have no versions
   ([ADR 0017](docs/adr/0017-derived-metrics-without-versions.md)): `PUT`
   creates one or changes its definition, and `derived.<name>` is resolved by
