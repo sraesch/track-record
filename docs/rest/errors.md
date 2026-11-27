@@ -56,7 +56,7 @@ started arrive as an `error` event in the stream instead; an
 | `invalid_query` | 400 | A query parameter has the wrong type or an unknown value, or is unknown |
 | `invalid_request_body` | 400, 415, 422 | 400: the body is not valid JSON. 415: `Content-Type` is not `application/json`. 422: the JSON does not match the schema (missing or unknown field, wrong type, unknown enum value) or the body is larger than the limit |
 | `bad_request` | 400 | An option is out of range or inconsistent, e.g. `limit must be between 1 and 500`, `invalid cursor`, `max_points must be at least 2`, `percentiles must be at most 20 values between 0 and 100`, `give either expression or name` |
-| `validation_failed` | 422 | A validation rule failed, e.g. an empty name, a parameter that is not a scalar, a measurement that does not fit its value type, an annotation with more than one target. `detail` names the rule |
+| `validation_failed` | 422 | A validation rule failed, e.g. an empty name, a parameter that is not a scalar or whose name contains a backtick, a measurement that does not fit its value type, an annotation with more than one target. `detail` names the rule |
 | `internal` | 500 | Unexpected server error |
 
 ### Ingestion

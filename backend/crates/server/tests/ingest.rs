@@ -445,6 +445,17 @@ async fn request_bodies_are_validated() {
         api.put(&ce_url, &unit_on_string).await.0,
         StatusCode::UNPROCESSABLE_ENTITY
     );
+    // A parameter name cannot contain a backtick: expressions quote names
+    // with it.
+    let mut backtick = case_execution_body("dev", 1, json!([]));
+    backtick["test_case"]["parameters"]["tick`count"] = json!(3);
+    let (status, resp) = api.put(&ce_url, &backtick).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{resp}");
+    assert_eq!(resp["code"], "validation_failed");
+    assert!(
+        resp["detail"].as_str().unwrap().contains("backtick"),
+        "{resp}"
+    );
     // Integer metrics need integral values.
     let mut fractional = case_execution_body("dev", 1, json!([sample(0, 1.0)]));
     fractional["samples"][0]["measurements"]["frames"] = json!(1.5);

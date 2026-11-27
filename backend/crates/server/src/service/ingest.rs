@@ -74,7 +74,9 @@ pub struct TestCaseInput {
     pub scenario: NamedDefinition,
     #[serde(default)]
     pub assets: Vec<AssetInput>,
-    /// Flat object of numbers, strings and booleans. Types are kept.
+    /// Flat object of numbers, strings and booleans. Types are kept. Names
+    /// cannot contain a backtick (`` ` ``), which expressions use to quote
+    /// names.
     #[serde(default)]
     #[schema(value_type = Object)]
     pub parameters: Map<String, Value>,
@@ -256,6 +258,14 @@ fn micros(t: DateTime<Utc>) -> DateTime<Utc> {
 fn validate_test_case(tc: &TestCaseInput) -> ApiResult<()> {
     require_name("test_case.scenario.name", &tc.scenario.name)?;
     for (name, value) in &tc.parameters {
+        // Chart expressions read parameters by name, quoting names with
+        // other characters in backticks (``param.`frame size` ``); a name
+        // with a backtick could not be written there (ADR 0022).
+        if name.contains('`') {
+            return Err(ApiError::invalid(format!(
+                "parameter {name:?}: a parameter name cannot contain a backtick (`)"
+            )));
+        }
         if !(value.is_number() || value.is_string() || value.is_boolean()) {
             return Err(ApiError::invalid(format!(
                 "parameter {name:?} must be a number, string or boolean"
@@ -929,6 +939,16 @@ mod tests {
         assert!(validate_test_case(&tc(serde_json::json!({"n": [1]}), &[])).is_err());
         assert!(validate_test_case(&tc(serde_json::json!({"s": "a"}), &[("s", "MB")])).is_err());
         assert!(validate_test_case(&tc(serde_json::json!({}), &[("n", "MB")])).is_err());
+        assert!(validate_test_case(&tc(serde_json::json!({"tick`count": 3}), &[])).is_err());
+        assert!(validate_test_case(&tc(serde_json::json!({"`": "a"}), &[])).is_err());
+        // Spaces, dots and an empty name are fine.
+        assert!(
+            validate_test_case(&tc(
+                serde_json::json!({"frame size": 1, "a.b": 2, "": 3}),
+                &[]
+            ))
+            .is_ok()
+        );
     }
 
     #[test]
