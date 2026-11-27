@@ -394,9 +394,10 @@ The settings that the sections above leave open, as
 - **combine** lines up the frames of a group point by point: frames with x
   need the same x of the same dimension (equal in the same unit, equal up
   to rounding after a conversion; a conversion that overflows equals
-  nothing), frames without x the same number of
-  points. A frame with one point and no x applies to every point, and a
-  frame without points is no value at every point. Anything else fails the
+  nothing), frames without x the same number of points. A frame with one
+  point and no x applies to every point, and a frame without points is no
+  value at every point; its x, which the result may keep, must still be
+  of the same dimension. Anything else fails the
   node and asks for a resample first; resampling is never implicit.
 - **combine expressions** use the grammar, scalar functions and unit rules
   of derive, and a bare name is a name too. `<input>` is the only column of

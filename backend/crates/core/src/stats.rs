@@ -31,17 +31,7 @@ pub fn summarize(values: &[Option<f64>], percentiles: &[f64], confidence: f64) -
     v.sort_by(f64::total_cmp);
     let n = v.len();
     let mean = (n > 0).then(|| mean_sorted(&v));
-    let stddev = (n > 1).then(|| {
-        let m = mean.unwrap_or(0.0);
-        // Scaled by the largest deviation, so that squares of large values
-        // do not overflow.
-        let scale = v.iter().map(|x| (x - m).abs()).fold(0.0f64, f64::max);
-        if scale == 0.0 {
-            return 0.0;
-        }
-        let sum = v.iter().map(|x| ((x - m) / scale).powi(2)).sum::<f64>();
-        scale * (sum / (n - 1) as f64).sqrt()
-    });
+    let stddev = (n > 1).then(|| stddev_sorted(&v));
     let ci = match (mean, stddev) {
         (Some(m), Some(s)) => {
             let t = t_quantile(0.5 + confidence / 2.0, (n - 1) as f64);
@@ -70,12 +60,45 @@ pub fn summarize(values: &[Option<f64>], percentiles: &[f64], confidence: f64) -
 fn mean_sorted(v: &[f64]) -> f64 {
     let n = v.len() as f64;
     let sum = neumaier(v.iter().copied());
-    if sum.is_finite() {
-        return sum / n;
+    let mean = if sum.is_finite() {
+        sum / n
+    } else {
+        // The sum overflows; the mean of finite values does not.
+        let scale = largest(v);
+        scale * (neumaier(v.iter().map(|x| x / scale)) / n)
+    };
+    // Rounding never takes it beyond the values.
+    mean.clamp(v[0], v[v.len() - 1])
+}
+
+/// Sample standard deviation of sorted finite values (at least two).
+/// Computed on the values scaled by a power of two, which is exact, so
+/// that neither the deviations nor their squares overflow; the result is
+/// that of the unscaled values. One beyond the range of `f64` is infinite.
+fn stddev_sorted(v: &[f64]) -> f64 {
+    let n = v.len() as f64;
+    let p = power_of_two_at_least(largest(v));
+    let m = neumaier(v.iter().map(|x| x / p)) / n;
+    // Scaled by the largest deviation too, so that small deviations keep
+    // their precision when squared.
+    let d = v.iter().map(|x| (x / p - m).abs()).fold(0.0f64, f64::max);
+    if d == 0.0 {
+        return 0.0;
     }
-    // The sum overflows; the mean of finite values does not.
-    let scale = largest(v);
-    scale * (neumaier(v.iter().map(|x| x / scale)) / n)
+    let squares = v.iter().map(|x| ((x / p - m) / d).powi(2)).sum::<f64>();
+    p * (d * (squares / (n - 1.0)).sqrt())
+}
+
+/// The smallest power of two at least `x` (a finite, non-negative value),
+/// between 2^-1022 and 2^1023, so that it and its inverse are exact.
+fn power_of_two_at_least(x: f64) -> f64 {
+    let e = if x > 0.0 { x.log2().ceil() as i32 } else { 0 };
+    let e = e.clamp(-1022, 1023);
+    let mut p = 2f64.powi(e);
+    if p < x && e < 1023 {
+        p *= 2.0;
+    }
+    p
 }
 
 /// The largest magnitude of the values.
@@ -113,9 +136,12 @@ pub fn sum(values: &[Option<f64>]) -> Option<f64> {
     if sum.is_finite() {
         return Some(sum);
     }
-    // An intermediate sum overflowed; the total may not.
-    let scale = largest(&v);
-    Some(scale * neumaier(v.iter().map(|x| x / scale))).filter(|s| s.is_finite())
+    // An intermediate sum overflowed; the total may not. Scaling by a power
+    // of two is exact (but for values far below the total, which do not
+    // count in it), so the scaled sum rounds as the true one does and
+    // scaling back overflows only if the total does.
+    let scale = 2f64.powi(64);
+    Some(neumaier(v.iter().map(|x| x / scale)) * scale).filter(|s| s.is_finite())
 }
 
 /// Geometric mean of the values: no value if there are none or one is
@@ -371,6 +397,19 @@ mod tests {
         assert_eq!(s.mean, Some(0.0));
         let expected = 1e308 * 2.0f64.sqrt();
         assert!(close(s.stddev.unwrap(), expected, expected * 1e-12));
+        // The deviation of a large value from the mean overflows unscaled.
+        let s = summarize(
+            &[Some(-1.6e308), Some(1.6e308), Some(1.6e308), Some(1.6e308)],
+            &[],
+            0.95,
+        );
+        assert_eq!(s.mean, Some(8e307));
+        assert!(close(s.stddev.unwrap(), 1.6e308, 1.6e308 * 1e-12));
+        // Small values and the usual case are unchanged.
+        let s = summarize(&[Some(1e-300), Some(3e-300)], &[], 0.95);
+        assert!(close(s.stddev.unwrap(), 2f64.sqrt() * 1e-300, 1e-312));
+        let s = summarize(&[Some(2.0), Some(4.0), Some(4.0), Some(5.0)], &[], 0.95);
+        assert!(close(s.stddev.unwrap(), (4.75f64 / 3.0).sqrt(), 1e-15));
     }
 
     #[test]
@@ -388,6 +427,10 @@ mod tests {
         // An overflow on the way that a later value cancels.
         assert_eq!(sum(&[Some(1e308), Some(1e308), Some(-1e308)]), Some(1e308));
         assert_eq!(sum(&[Some(1e308), Some(-1e308), Some(1e308)]), Some(1e308));
+        // A total of exactly f64::MAX after an overflow on the way.
+        let a = f64::MAX.next_down();
+        let u = f64::MAX - a;
+        assert_eq!(sum(&[Some(a), Some(a), Some(-a), Some(u)]), Some(f64::MAX));
     }
 
     #[test]

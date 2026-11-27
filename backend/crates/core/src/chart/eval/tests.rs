@@ -2273,6 +2273,23 @@ fn x_of_different_dimensions_is_not_one_axis() {
     )
     .unwrap_err();
     assert!(err.message.contains("cpu time"), "{err}");
+    // Also series without points, whose x the result keeps.
+    let mut cpu = series_frame(&[], "s", &[], &[]);
+    cpu.columns[0].dimension = "cpu time".into();
+    let wall = series_frame(&[], "s", &[], &[]);
+    let err = combined(
+        json!({"functions": ["mean"]}),
+        Tree::Frames(vec![wall.clone(), cpu]),
+    )
+    .unwrap_err();
+    assert!(err.message.contains("not one axis"), "{err}");
+    let bytes = series_frame(&[], "B", &[], &[]);
+    let err = combined(
+        json!({"functions": ["mean"]}),
+        Tree::Frames(vec![wall, bytes]),
+    )
+    .unwrap_err();
+    assert!(err.message.contains("cannot be converted"), "{err}");
 }
 
 #[test]

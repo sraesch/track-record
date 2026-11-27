@@ -616,6 +616,41 @@ fn describe(frames: &[Frame], k: usize) -> String {
 /// point; a frame without points is no value at every point. Resampling is
 /// never implicit.
 fn align(id: &str, frames: &[Frame], catalogue: &UnitCatalogue) -> Result<Aligned> {
+    // One axis for all frames with x, also those without points, whose x
+    // the result may keep.
+    let mut axis: Option<(usize, &Column)> = None;
+    for (k, f) in frames.iter().enumerate() {
+        let Some(c) = f.column("x") else { continue };
+        let col = &f.columns[c];
+        let Some((j, first)) = axis else {
+            axis = Some((k, col));
+            continue;
+        };
+        if first.dimension != col.dimension {
+            return Err(Problem::node(
+                id,
+                format!(
+                    "x of {} is {:?} and x of {} {:?}: they are not one axis",
+                    describe(frames, j),
+                    first.dimension,
+                    describe(frames, k),
+                    col.dimension
+                ),
+            ));
+        }
+        if !catalogue.convertible(&col.unit, &first.unit) {
+            return Err(Problem::node(
+                id,
+                format!(
+                    "x of {} is in {:?} and x of {} in {:?}, which cannot be converted",
+                    describe(frames, j),
+                    first.unit,
+                    describe(frames, k),
+                    col.unit
+                ),
+            ));
+        }
+    }
     let mut reads = Vec::with_capacity(frames.len());
     let mut base: Option<usize> = None;
     let mut len = 0;
@@ -655,12 +690,6 @@ fn align(id: &str, frames: &[Frame], catalogue: &UnitCatalogue) -> Result<Aligne
             )));
         }
         match (&x, xc) {
-            (Some((col, _)), Some(c)) if col.dimension != f.columns[c].dimension => {
-                return Err(apart(format!(
-                    "x of one is {:?}, of the other {:?}",
-                    col.dimension, f.columns[c].dimension
-                )));
-            }
             (Some((col, xs)), Some(c)) => {
                 let k = catalogue
                     .conversion_factor(&f.columns[c].unit, &col.unit)
