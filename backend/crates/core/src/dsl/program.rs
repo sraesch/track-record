@@ -364,7 +364,10 @@ pub struct Evaluator<'a> {
     catalogue: &'a UnitCatalogue,
     root: Root,
     raw: References,
-    cache: HashMap<String, Result<Arc<Compiled>, String>>,
+    /// By the units of the inputs, in the order of `raw` (metric units, then
+    /// unit, x unit and x dimension of each series), so that no two
+    /// combinations share a key whatever their units contain.
+    cache: HashMap<Vec<String>, Result<Arc<Compiled>, String>>,
 }
 
 impl<'a> Evaluator<'a> {
@@ -389,24 +392,18 @@ impl<'a> Evaluator<'a> {
     }
 
     pub fn evaluate(&mut self, sample: &SampleData) -> Result<Outcome, EvalError> {
-        let mut key = String::new();
+        let mut key = Vec::with_capacity(self.raw.metrics.len() + 3 * self.raw.series.len());
         for name in &self.raw.metrics {
             let unit = sample
                 .metric_unit(name)
                 .ok_or_else(|| EvalError::Missing(name.clone()))?;
-            key.push_str(&format!("m{}:{name}={unit};", name.len()));
+            key.push(unit);
         }
         for name in &self.raw.series {
             let u = sample
                 .series_units(name)
                 .ok_or_else(|| EvalError::Missing(format!("series.{name}")))?;
-            key.push_str(&format!(
-                "s{}:{name}={}|{}|{};",
-                name.len(),
-                u.unit,
-                u.x_unit,
-                u.x_dimension
-            ));
+            key.extend([u.unit, u.x_unit, u.x_dimension]);
         }
         let compiled = self
             .cache
@@ -522,6 +519,27 @@ mod tests {
             e.evaluate(&sample("B", 1.0)),
             Err(EvalError::Data(_))
         ));
+    }
+
+    #[test]
+    fn units_with_separators_do_not_share_a_check() {
+        let lib = library();
+        let cat = catalogue();
+        let mut e = Evaluator::new(&lib, &cat, root("series.fps", None)).unwrap();
+        let with = |x_unit: &str, x_dimension: &str| {
+            let mut s = sample("s", 1.0);
+            let units = &mut s.series.get_mut("fps").unwrap().1;
+            units.x_unit = x_unit.into();
+            units.x_dimension = x_dimension.into();
+            s
+        };
+        let a = e.evaluate(&with("s", "time|ticks")).unwrap();
+        let b = e.evaluate(&with("s|time", "ticks")).unwrap();
+        assert_eq!(
+            (a.signature.x_unit.as_str(), b.signature.x_unit.as_str()),
+            ("s", "s|time")
+        );
+        assert_eq!(b.signature.x_dimension, "ticks");
     }
 
     #[test]

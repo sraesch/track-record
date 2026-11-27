@@ -46,7 +46,20 @@ change that they can see.
   computes from them, such as `render passes*render passes` or
   `sqrt(...)` of it, read back as the same unit, instead of becoming a
   custom unit of their own that converts to nothing. Spaces around a unit
-  symbol no longer count either (`kB / s` is `kB/s`).
+  symbol no longer count either (`kB / s` is `kB/s`). The same holds for
+  custom units whose names start with a digit (`1000 ops`), and a
+  denominator with `·` is put in parentheses (`m/(s·s)`). A unit whose
+  exponents overflow converts to no other unit.
+- Aliases of numeric parameter values match the exact value (FR-14):
+  integers beyond 2^53 no longer share an alias with their neighbours;
+  `10` still matches `10.0`.
+- Derived metrics and analysis views check an expression once per
+  combination of input units under a key that no unit text can fake: a
+  unit or x dimension containing `|` or `;` no longer reuses the check of
+  another sample (FR-17).
+- Units are read to a nesting of 64 parentheses or square roots; a deeper
+  unit from the data is a custom unit as it is instead of exhausting the
+  server's stack (FR-13a).
 
 ## [0.1.0] - 2026-11-23
 

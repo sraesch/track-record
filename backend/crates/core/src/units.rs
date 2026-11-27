@@ -23,6 +23,10 @@ pub struct CatalogueUnit {
     pub name: String,
 }
 
+/// The mark of a dimension whose exponents overflowed (no base dimension
+/// has this name).
+const OVERFLOW: &str = "!overflow";
+
 /// Product of base dimensions with integer exponents. Empty means
 /// dimensionless.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -47,18 +51,35 @@ impl Dimension {
         d
     }
 
-    // Exponents saturate: units of chained derives can square a dimension
-    // over and over, and a wrapped exponent could make it dimensionless.
+    /// Units of chained derives can square a dimension over and over. An
+    /// exponent that overflows saturates and marks the dimension for good
+    /// (`OVERFLOW`, kept through all later arithmetic), so that it neither
+    /// wraps to another dimension nor cancels to a known one.
     fn add(&mut self, name: &str, exp: i32) {
+        if name == OVERFLOW {
+            self.0.insert(OVERFLOW.to_owned(), 1);
+            return;
+        }
         let entry = self.0.entry(name.to_owned()).or_insert(0);
+        let overflow = entry.checked_add(exp).is_none();
         *entry = entry.saturating_add(exp);
         if *entry == 0 {
             self.0.remove(name);
+        }
+        if overflow {
+            self.0.insert(OVERFLOW.to_owned(), 1);
         }
     }
 
     pub fn is_dimensionless(&self) -> bool {
         self.0.is_empty()
+    }
+
+    /// True if an exponent overflowed, here or in the units it was made
+    /// of: the dimension is not known, and a unit with it converts to no
+    /// other unit.
+    pub fn overflowed(&self) -> bool {
+        self.0.contains_key(OVERFLOW)
     }
 
     pub fn mul(&self, other: &Self) -> Self {
@@ -71,7 +92,17 @@ impl Dimension {
 
     pub fn pow(&self, exp: i32) -> Self {
         let mut d = Self::default();
+        if exp == 0 {
+            return d;
+        }
         for (name, e) in &self.0 {
+            if name == OVERFLOW {
+                d.add(OVERFLOW, 1);
+                continue;
+            }
+            if e.checked_mul(exp).is_none() {
+                d.add(OVERFLOW, 1);
+            }
             d.add(name, e.saturating_mul(exp));
         }
         d
@@ -85,7 +116,10 @@ impl Dimension {
     pub fn sqrt(&self) -> Option<Self> {
         self.0
             .iter()
-            .map(|(name, e)| (e % 2 == 0).then(|| (name.clone(), e / 2)))
+            .map(|(name, e)| match name.as_str() {
+                OVERFLOW => Some((name.clone(), 1)),
+                _ => (e % 2 == 0).then(|| (name.clone(), e / 2)),
+            })
             .collect::<Option<BTreeMap<_, _>>>()
             .map(Self)
     }
@@ -135,7 +169,8 @@ impl ResolvedUnit {
         if self.symbol == other.symbol {
             return Some(1.0);
         }
-        (self.dimension == other.dimension).then(|| self.to_base / other.to_base)
+        (self.dimension == other.dimension && !self.dimension.overflowed())
+            .then(|| self.to_base / other.to_base)
     }
 
     pub fn mul(&self, other: &ResolvedUnit) -> ResolvedUnit {
@@ -183,7 +218,7 @@ impl ResolvedUnit {
 
 fn combine(a: &str, op: char, b: &str) -> String {
     let wrap = |s: &str| {
-        if s.contains(['*', '/']) {
+        if s.contains(['*', '·', '/']) {
             format!("({s})")
         } else {
             s.to_owned()
@@ -279,10 +314,16 @@ impl UnitCatalogue {
     }
 }
 
+/// Deepest nesting of parentheses and square roots the unit parser reads;
+/// a deeper unit is a custom unit as it is. Units come from the data, so
+/// the nesting must not run the parser out of stack.
+const MAX_UNIT_DEPTH: usize = 64;
+
 struct UnitParser<'a> {
     catalogue: &'a UnitCatalogue,
     input: &'a str,
     pos: usize,
+    depth: usize,
 }
 
 impl<'a> UnitParser<'a> {
@@ -291,6 +332,7 @@ impl<'a> UnitParser<'a> {
             catalogue,
             input,
             pos: 0,
+            depth: 0,
         }
     }
 
@@ -363,25 +405,32 @@ impl<'a> UnitParser<'a> {
         Ok(base)
     }
 
+    /// A product inside parentheses or a square root.
+    fn nested(&mut self) -> Result<ResolvedUnit, UnitError> {
+        if self.depth >= MAX_UNIT_DEPTH {
+            return Err(self.err("nested too deeply"));
+        }
+        self.depth += 1;
+        let inner = self.product();
+        self.depth -= 1;
+        inner
+    }
+
     fn atom(&mut self) -> Result<ResolvedUnit, UnitError> {
         match self.peek() {
             Some('(') => {
                 self.bump();
-                let inner = self.product()?;
+                let inner = self.nested()?;
                 if self.peek() != Some(')') {
                     return Err(self.err("missing ')'"));
                 }
                 self.bump();
                 Ok(inner)
             }
-            Some('1') => {
-                self.bump();
-                Ok(ResolvedUnit::dimensionless())
-            }
             // The symbol `ResolvedUnit::sqrt` writes, so that it reads back.
             Some('s') if self.rest().starts_with("sqrt(") => {
                 self.pos += "sqrt(".len();
-                let inner = self.product()?;
+                let inner = self.nested()?;
                 if self.peek() != Some(')') {
                     return Err(self.err("missing ')'"));
                 }
@@ -402,11 +451,13 @@ impl<'a> UnitParser<'a> {
                     }
                     self.bump();
                 }
-                let symbol = self.input[start..self.pos].trim_end();
-                if symbol.is_empty() {
-                    return Err(self.err("expected a unit symbol"));
+                match self.input[start..self.pos].trim_end() {
+                    "" => Err(self.err("expected a unit symbol")),
+                    // `1/s`; a symbol that only starts with 1 (`1000 ops`)
+                    // is a unit of its own.
+                    "1" => Ok(ResolvedUnit::dimensionless()),
+                    symbol => Ok(self.catalogue.resolve_symbol(symbol)),
                 }
-                Ok(self.catalogue.resolve_symbol(symbol))
             }
             None => Err(self.err("expected a unit symbol")),
         }
@@ -521,6 +572,26 @@ pub(crate) mod tests {
             c.resolve("frame ticks").dimension,
             c.resolve("frame").dimension
         );
+        // A name that starts with 1 is a unit of its own, also in products.
+        let ops = c.resolve("1000 ops");
+        assert_eq!(ops.dimension, Dimension::base("custom:1000 ops"));
+        let sq = ops.mul(&ops);
+        assert_eq!(c.resolve(&sq.symbol).dimension, sq.dimension);
+        assert_eq!(
+            c.resolve(&sq.sqrt().unwrap().symbol).dimension,
+            ops.dimension
+        );
+        assert_eq!(c.resolve("1/s").dimension, c.resolve("Hz").dimension);
+        assert_eq!(c.resolve(" 1 / s").dimension, c.resolve("Hz").dimension);
+        // A denominator with `·` is put in parentheses, so it reads back.
+        let m = c.resolve("m");
+        let acc = m.div(&c.resolve("s·s"));
+        assert_eq!(acc.symbol, "m/(s·s)");
+        assert!(approx(
+            c.resolve(&acc.symbol)
+                .conversion_factor(&c.resolve("m/s^2")),
+            1.0
+        ));
     }
 
     #[test]
@@ -530,6 +601,24 @@ pub(crate) mod tests {
         assert_eq!(u.symbol, "a/(b");
         assert!(approx(c.conversion_factor("a/(b", "a/(b"), 1.0));
         assert_eq!(c.conversion_factor("a/(b", "a"), None);
+    }
+
+    #[test]
+    fn deeply_nested_units_are_custom_units() {
+        let c = catalogue();
+        let nested = |n: usize, open: &str| format!("{}s{}", open.repeat(n), ")".repeat(n));
+        let ok = c.resolve(&nested(MAX_UNIT_DEPTH, "("));
+        assert_eq!(ok.dimension, c.resolve("s").dimension);
+        let roots = c.resolve(&nested(6, "sqrt("));
+        assert!(roots.dimension != c.resolve("s").dimension);
+        // Beyond the limit, and far beyond it, the unit is taken as it is.
+        for n in [MAX_UNIT_DEPTH + 1, 100_000] {
+            for open in ["(", "sqrt("] {
+                let deep = nested(n, open);
+                let u = c.resolve(&deep);
+                assert_eq!(u.dimension, Dimension::base(&format!("custom:{deep}")));
+            }
+        }
     }
 
     #[test]
@@ -560,6 +649,31 @@ pub(crate) mod tests {
         assert!(!huge.dimension.is_dimensionless());
         assert_ne!(huge.dimension, s.dimension);
         assert!(!huge.powi(2).dimension.is_dimensionless());
+        // A saturated exponent converts to no other unit, also not to one
+        // with the largest exponent.
+        assert!(huge.dimension.overflowed());
+        let max = c.resolve(&format!("s^{}", i32::MAX));
+        assert_eq!(huge.conversion_factor(&max), None);
+        assert_eq!(
+            c.conversion_factor("((s)^65536)^65536", "((s)^65536)^65537"),
+            None
+        );
+        // The same symbol is the same unit.
+        assert!(approx(huge.conversion_factor(&huge), 1.0));
+        // The mark stays through later arithmetic: dividing the saturated
+        // exponent away gives no dimensionless unit.
+        let cancelled = huge.div(&max);
+        assert!(cancelled.dimension.overflowed());
+        assert!(!cancelled.dimension.is_dimensionless());
+        assert_eq!(
+            cancelled.conversion_factor(&ResolvedUnit::dimensionless()),
+            None
+        );
+        let back = c.resolve(&cancelled.symbol);
+        assert!(back.dimension.overflowed());
+        assert!(huge.mul(&s).sqrt().is_none_or(|u| u.dimension.overflowed()));
+        assert!(huge.powi(-1).dimension.overflowed());
+        assert!(huge.powi(0).dimension.is_dimensionless());
     }
 
     #[test]

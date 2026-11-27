@@ -106,7 +106,8 @@ pub const PREFIXED: &[(&str, Family, AttrType)] = &[
 
 /// Family and type of the attribute `name`, or `None` if there is no such
 /// attribute. Names after a prefix (`param.width`) are not checked: they
-/// come from the data.
+/// come from the data, which allows a parameter with an empty name
+/// (`param.`).
 pub fn lookup(name: &str) -> Option<AttrInfo> {
     if let Some((_, family, ty)) = FIXED.iter().find(|(n, ..)| *n == name) {
         return Some(AttrInfo {
@@ -116,7 +117,7 @@ pub fn lookup(name: &str) -> Option<AttrInfo> {
     }
     PREFIXED
         .iter()
-        .find(|(p, ..)| name.len() > p.len() && name.starts_with(p))
+        .find(|(p, ..)| name.starts_with(p) && (name.len() > p.len() || *p == "param."))
         .map(|(_, family, ty)| AttrInfo {
             family: *family,
             ty: *ty,
@@ -269,7 +270,9 @@ mod tests {
         assert_eq!(lookup("param.width").unwrap().ty, AttrType::Any);
         assert_eq!(lookup("asset.model").unwrap().family, Family::Case);
         assert_eq!(lookup("attr.pixels").unwrap().family, Family::Derived);
-        assert_eq!(lookup("param."), None);
+        assert_eq!(lookup("param.").unwrap().family, Family::Case);
+        assert_eq!(lookup("asset."), None);
+        assert_eq!(lookup("attr."), None);
         assert_eq!(lookup("run"), None);
         assert_eq!(lookup("load_time"), None);
         assert!(is_prefix("sut"));

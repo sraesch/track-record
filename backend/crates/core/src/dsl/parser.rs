@@ -314,23 +314,29 @@ impl Parser {
         if self.peek().0 != Token::Dot {
             return Err(not_an_attribute(&first, span));
         }
-        if first == "series" || first == "derived" {
-            return Err(Diagnostic::new(
-                span,
-                format!(
-                    "{first}.<name> is a metric; this expression computes with attributes such as \
-                     param.width"
-                ),
-            ));
-        }
+        let metric = first == "series" || first == "derived";
         let mut name = first;
         let mut end = span;
+        let mut parts = 1;
         while self.peek().0 == Token::Dot {
             self.bump();
             let (part, part_span) = self.name("an attribute name after '.'")?;
             name.push('.');
             name.push_str(&part);
             end = part_span;
+            parts += 1;
+        }
+        // `series.fps` is a metric; `series.param.width` is an attribute of
+        // a match input named `series`.
+        if metric && parts == 2 {
+            let first = &name[..name.find('.').unwrap_or(name.len())];
+            return Err(Diagnostic::new(
+                span.to(end),
+                format!(
+                    "{first}.<name> is a metric; this expression computes with attributes such as \
+                     param.width"
+                ),
+            ));
         }
         Ok(Expr {
             kind: ExprKind::Attribute(name),
@@ -561,6 +567,13 @@ mod tests {
         assert_eq!(p("series.` fps `"), "series.fps");
         assert_eq!(p("` load time `"), "load time");
         assert_eq!(a("param.` `"), "@param. ");
+        assert_eq!(a("param.``"), "@param.");
+        // A match input may be named series or derived.
+        assert_eq!(a("series.param.width"), "@series.param.width");
+        assert_eq!(a("derived.sample.repetition"), "@derived.sample.repetition");
+        assert!(parse_attributes("series.fps").is_err());
+        assert!(parse_attributes("derived.`x`").is_err());
+        assert!(parse("``").is_err());
         assert!(parse("` `").is_err());
         assert!(parse("series.` `").is_err());
         let e = parse_attributes("max(param.w, param.h) + param.w").unwrap();

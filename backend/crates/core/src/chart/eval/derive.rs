@@ -30,7 +30,9 @@ pub const MAX_UNIT_LEN: usize = 256;
 /// True if the expression made `unit` from the `inputs` units and it is
 /// longer than [`MAX_UNIT_LEN`].
 fn grown(unit: &str, inputs: &[String], declared: Option<&str>) -> bool {
-    unit.len() > MAX_UNIT_LEN && declared != Some(unit) && !inputs.iter().any(|u| u == unit)
+    unit.chars().count() > MAX_UNIT_LEN
+        && declared != Some(unit)
+        && !inputs.iter().any(|u| u == unit)
 }
 
 /// Adds `attr.<name>` to every frame whose attributes the expression can
@@ -126,7 +128,7 @@ impl Deriver<'_> {
                 let checked = check(self.expr, &mut env, self.catalogue, self.declared).ok()?;
                 let unit = &checked.signature.unit;
                 if grown(unit, units, self.declared) {
-                    self.grown.get_or_insert(unit.len());
+                    self.grown.get_or_insert(unit.chars().count());
                     return None;
                 }
                 Some(checked)

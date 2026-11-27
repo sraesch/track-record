@@ -105,8 +105,10 @@ impl Shape {
 fn has(set: &BTreeSet<String>, name: &str) -> bool {
     set.contains(name)
         || set.iter().any(|a| {
-            a.strip_suffix('*')
-                .is_some_and(|p| name.len() > p.len() && name.starts_with(p))
+            a.strip_suffix('*').is_some_and(|p| {
+                name.starts_with(p)
+                    && (name.len() > p.len() || attributes::unqualified(name) == "param.")
+            })
         })
 }
 
@@ -532,7 +534,8 @@ fn derive_expression(cx: &mut Cx, n: &DeriveNode, input: &Shape) {
         let message = match attributes::lookup(attributes::unqualified(&name)) {
             _ if !input.has_attribute(&name) => format!("there is no attribute {name}"),
             Some(info) if matches!(info.ty, AttrType::Number | AttrType::Any) => {
-                known &= attributes::FIXED.iter().any(|(f, ..)| *f == name);
+                let fixed = attributes::unqualified(&name);
+                known &= attributes::FIXED.iter().any(|(f, ..)| *f == fixed);
                 continue;
             }
             _ => format!("{name} is not a number; derive computes with numeric attributes"),
@@ -857,9 +860,9 @@ fn has_partner(shape: &Shape, name: &str) -> bool {
             is_identifier(prefix)
                 && !attributes::is_prefix(prefix)
                 && (rest == name
-                    || rest
-                        .strip_suffix('*')
-                        .is_some_and(|p| name.len() > p.len() && name.starts_with(p)))
+                    || rest.strip_suffix('*').is_some_and(|p| {
+                        name.starts_with(p) && (name.len() > p.len() || p == "param.")
+                    }))
         })
     })
 }

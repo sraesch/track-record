@@ -368,9 +368,23 @@ The settings that the sections above leave open, as
   a SUT version has one tag. The `x` column keeps the x-dimension of the
   series; frames with different ones are not concatenated. A derived series
   without a value is a frame without points. The budget of points is
-  `TR_CHART_MAX_POINTS` (10 million); input series are loaded in batches of
-  at most a million points, and a sample whose input series alone have more
-  points than the budget fails before they are loaded. Status, validity and
+  `TR_CHART_MAX_POINTS` (10 million), a hard limit. It holds the frames
+  made and the input points being loaded: input series are loaded in
+  batches that aim at a million points (a sample with more is a batch of
+  its own) and never take more than the budget has left; a sample without
+  input series counts one point, the one it may make, and is a batch of
+  its own when there is no room for it (the budget fails only if it does
+  make one). The inputs of a sample
+  are dropped once it is evaluated, and a sample whose input series alone
+  have more points than the budget has left fails before they are loaded.
+  Units from the data are read to a nesting of 64 parentheses or square
+  roots; a deeper one is a custom unit as it is. A
+  sample whose x does not fit into the source's `x_unit` as a finite number
+  is excluded, as one whose x unit does not convert. A parameter with an
+  empty name is `param.`, part of the family `case`, and can be named
+  (``param.`` `` in an expression). A derive reads the attributes of match
+  partners like its own, also of a partner named `series` or `derived`
+  (`series.param.width`; `series.fps` stays a metric and is rejected). Status, validity and
   end of a run are read from one row, so they fit together.
 - **Empty results** lose their group levels; nodes that need a level
   (sort of groups) pass an empty result on.

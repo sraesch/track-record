@@ -40,18 +40,19 @@ use crate::service::runs::{AssetRef, RunFilter};
 pub const DEFAULT_MAX_POINTS: usize = 10_000_000;
 
 /// Points of the input series that a source loads at a time.
-pub const BATCH_POINTS: i64 = 1_000_000;
+pub const BATCH_POINTS: usize = 1_000_000;
 
 /// The limits of the sources of one run of a chart.
 #[derive(Debug, Clone, Copy)]
 pub struct Limits {
     /// Samples per source.
     pub max_samples: i64,
-    /// Points over all sources.
+    /// Points over all sources: the frames made and the input points of the
+    /// batch being loaded.
     pub max_points: usize,
-    /// Points of input series loaded at a time; a sample with more is
-    /// loaded alone.
-    pub batch_points: i64,
+    /// Points of input series loaded at a time, at most what the budget has
+    /// left; a sample with more is loaded alone.
+    pub batch_points: usize,
 }
 
 impl Default for Limits {
@@ -84,16 +85,25 @@ impl Budget {
         self.used
     }
 
+    /// Points that may still be loaded.
+    pub fn room(&self) -> usize {
+        self.max.saturating_sub(self.used)
+    }
+
     fn take(&mut self, source: &str, points: usize) -> ApiResult<()> {
         self.used += points;
         if self.used > self.max {
-            return Err(ApiError::invalid(format!(
-                "source {source}: the chart reads more than {} points; narrow the filter of a \
-                 source, or reduce its series in the metric expression, e.g. max(series.fps)",
-                self.max
-            )));
+            return Err(self.exceeded(source));
         }
         Ok(())
+    }
+
+    fn exceeded(&self, source: &str) -> ApiError {
+        ApiError::invalid(format!(
+            "source {source}: the chart reads more than {} points; narrow the filter of a \
+             source, or reduce its series in the metric expression, e.g. max(series.fps)",
+            self.max
+        ))
     }
 }
 
@@ -197,17 +207,38 @@ pub async fn load(
         // The series a chunk reads are loaded in batches of a bounded number
         // of points, so that a source of long series does not hold more
         // than a batch of input points besides the frames it made.
-        for batch in batches(pool, id, chunk, evaluator.inputs(), limits).await? {
+        let counts = point_counts(pool, chunk, evaluator.inputs()).await?;
+        let mut start = 0;
+        while start < chunk.len() {
+            // A batch fits into what the budget has left, so that the input
+            // points of a batch and the frames made so far stay within it.
+            // Inputs are dropped as their sample is evaluated.
+            let room = budget.room();
+            let end =
+                next_batch(&counts, start, limits.batch_points.min(room), room).map_err(|i| {
+                    ApiError::invalid(format!(
+                        "source {id}: sample {} has {} points in the series the metric reads, \
+                         more than the {room} points the chart may still hold; narrow the \
+                         filter of the source, or reduce its series in the metric expression, \
+                         e.g. max(series.fps)",
+                        chunk[i].sample_id, counts[i]
+                    ))
+                })?;
+            let batch = &chunk[start..end];
+            start = end;
             let ids: Vec<Uuid> = batch.iter().map(|s| s.sample_id).collect();
-            let data = derived::load_sample_data(pool, &ids, evaluator.inputs()).await?;
+            let mut data = derived::load_sample_data(pool, &ids, evaluator.inputs()).await?;
             for s in batch {
+                let input = data.remove(&s.sample_id).unwrap_or_default();
                 // A run deleted while the source loads has no attributes
                 // any more; its samples are gone with it, before they are
                 // evaluated, counted or charged to the budget.
                 let Some(attrs) = attrs.of(s) else {
                     continue;
                 };
-                let out = match evaluator.evaluate(&data[&s.sample_id]) {
+                let out = evaluator.evaluate(&input);
+                drop(input);
+                let out = match out {
                     Ok(out) => out,
                     Err(e) => {
                         excluded.record(&e);
@@ -239,10 +270,20 @@ pub async fn load(
                         (vec![y.clone()], vec![vec![v]])
                     }
                     DslValue::Series(None) => (vec![x(), y.clone()], vec![vec![], vec![]]),
-                    DslValue::Series(Some(points)) => {
-                        let f = factor;
+                    DslValue::Series(Some(mut points)) => {
+                        if factor != 1.0 {
+                            for x in &mut points.x {
+                                *x *= factor;
+                            }
+                        }
+                        // A conversion can overflow (1e300 s in ns).
+                        if let Some(x) = points.x.iter().find(|x| !x.is_finite()) {
+                            excluded.record(&EvalError::Data(format!(
+                                "x is {x} in {x_unit:?}, which cannot be shown"
+                            )));
+                            continue;
+                        }
                         budget.take(id, points.len())?;
-                        let points = points.scale_x(f);
                         (
                             vec![x(), y.clone()],
                             vec![
@@ -266,21 +307,15 @@ pub async fn load(
     })
 }
 
-/// Splits `chunk` into batches whose input series have at most
-/// `limits.batch_points` points together, by the point counts stored with
-/// the series. A sample with more is a batch of its own; one whose inputs
-/// alone exceed the points a run may hold fails before it is loaded, as an
-/// expression needs all inputs of a sample at once.
-async fn batches<'a>(
+/// The points of the series the metric reads, per sample of `chunk` (in
+/// its order), by the point counts stored with the series.
+async fn point_counts(
     pool: &PgPool,
-    source: &str,
-    chunk: &'a [SampleRow],
+    chunk: &[SampleRow],
     refs: &References,
-    limits: &Limits,
-) -> ApiResult<Vec<&'a [SampleRow]>> {
-    let max_points = limits.batch_points;
+) -> ApiResult<Vec<usize>> {
     if refs.series.is_empty() {
-        return Ok(vec![chunk]);
+        return Ok(vec![0; chunk.len()]);
     }
     let ids: Vec<Uuid> = chunk.iter().map(|s| s.sample_id).collect();
     let names: Vec<&String> = refs.series.iter().collect();
@@ -295,27 +330,45 @@ async fn batches<'a>(
     .await?
     .into_iter()
     .collect();
-    let mut out = Vec::new();
-    let (mut start, mut points) = (0, 0);
-    for (i, s) in chunk.iter().enumerate() {
-        let n = counts.get(&s.sample_id).copied().unwrap_or(0);
-        if n > limits.max_points as i64 {
-            return Err(ApiError::invalid(format!(
-                "source {source}: sample {} has {n} points in the series the metric reads, more \
-                 than the {} points a chart may hold; narrow the filter of the source",
-                s.sample_id, limits.max_points
-            )));
+    Ok(chunk
+        .iter()
+        .map(|s| {
+            let n = counts.get(&s.sample_id).copied().unwrap_or(0);
+            usize::try_from(n).unwrap_or(usize::MAX)
+        })
+        .collect())
+}
+
+/// What a sample takes of the budget while its batch is loaded: its input
+/// points, at least the one point it makes when it has none (a scalar).
+fn cost(points: usize) -> usize {
+    points.max(1)
+}
+
+/// The end of the batch that starts at `start`: the samples whose input
+/// series (`counts`) take at most `limit` points together ([`cost`]), at
+/// least one. `Err` is a sample that alone takes more than the `room` left
+/// in the budget: it fails before it is loaded, as an expression needs all
+/// inputs of a sample at once.
+fn next_batch(counts: &[usize], start: usize, limit: usize, room: usize) -> Result<usize, usize> {
+    let mut points = 0usize;
+    for (i, &inputs) in counts.iter().enumerate().skip(start) {
+        let n = cost(inputs);
+        if inputs > room {
+            return Err(i);
         }
-        if i > start && points + n > max_points {
-            out.push(&chunk[start..i]);
-            (start, points) = (i, 0);
+        if n > room {
+            // No room for the point a sample without inputs may make: it is
+            // a batch of its own, and the budget fails only if it makes one
+            // (it may have no value, or lack the metric).
+            return Ok(if i == start { i + 1 } else { i });
         }
-        points += n;
+        if i > start && points.saturating_add(n) > limit {
+            return Ok(i);
+        }
+        points = points.saturating_add(n);
     }
-    if start < chunk.len() {
-        out.push(&chunk[start..]);
-    }
-    Ok(out)
+    Ok(counts.len())
 }
 
 /// The attributes of the samples of a data set, built once per run and per
@@ -540,4 +593,42 @@ fn case_attributes(tc: &TestCaseRow) -> Attributes {
         a.insert(format!("param.{name}"), Attr::with_unit(v, unit));
     }
     a
+}
+
+#[cfg(test)]
+mod tests {
+    use super::next_batch;
+
+    #[test]
+    fn a_sample_without_inputs_takes_a_point() {
+        use super::cost;
+        // An empty series before a five-point one: six points with a room
+        // of five, so the second sample does not fit after the first.
+        assert_eq!(next_batch(&[0, 5], 0, 5, 5), Ok(1));
+        assert_eq!(next_batch(&[0, 5], 1, 4, 4), Err(1));
+        assert_eq!(cost(0), 1);
+        // Without room, a sample without inputs is a batch of its own: the
+        // budget fails only if it makes a point.
+        assert_eq!(next_batch(&[0, 0], 0, 1_000, 0), Ok(1));
+        assert_eq!(next_batch(&[0, 0, 0], 1, 1, 1), Ok(2));
+        assert_eq!(next_batch(&[0, 0, 0], 2, 1_000, 0), Ok(3));
+    }
+
+    #[test]
+    fn batches_fit_the_batch_size_and_the_room_left() {
+        let counts = [500, 500, 500, 0, 0, 300];
+        // The batch size is the smaller of the two limits.
+        assert_eq!(next_batch(&counts, 0, 1_000_000, 1_000_000), Ok(6));
+        assert_eq!(next_batch(&counts, 0, 1_000, 1_000), Ok(2));
+        assert_eq!(next_batch(&counts, 2, 600, 600), Ok(5));
+        // A sample over the batch size is a batch of its own.
+        assert_eq!(next_batch(&counts, 0, 100, 1_000), Ok(1));
+        // A sample over the room left fails.
+        assert_eq!(next_batch(&counts, 1, 400, 400), Err(1));
+        // With no room, a sample without inputs is a batch of its own; one
+        // with inputs fails.
+        assert_eq!(next_batch(&counts, 3, 0, 0), Ok(4));
+        assert_eq!(next_batch(&counts, 5, 0, 0), Err(5));
+        assert_eq!(next_batch(&[], 0, 10, 10), Ok(0));
+    }
 }
