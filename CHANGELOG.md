@@ -27,6 +27,17 @@ change that they can see.
   saves an old one as a new revision. A chart that the current revision of
   a dashboard places cannot be deleted (`TR012`). The web UI and the API
   follow with [#32](https://github.com/sraesch/track-record/issues/32).
+- The source and structural nodes of charts (FR-22,
+  [#28](https://github.com/sraesch/track-record/issues/28)): a source loads
+  one frame per sample with every attribute of the sample (aliases applied,
+  invalid runs and warmup samples left out unless asked for, superseded
+  case executions never used, samples without an input counted as
+  excluded), and `filter`, `derive`, `group`, `flatten`, `sort`,
+  `select_latest` and `concatenate` arrange the frames. Derive expressions
+  compute with attributes such as `param.width`. One run of a chart may
+  load at most `TR_CHART_MAX_POINTS` points (10 million by default). The
+  endpoints that run charts follow with
+  [#30](https://github.com/sraesch/track-record/issues/30).
 
 ## [0.1.0] - 2026-11-23
 

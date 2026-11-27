@@ -27,6 +27,9 @@ pub struct Config {
     /// comma-separated, `host` or `host:port`). Empty disables the check;
     /// the API token already keeps browsers out.
     pub mcp_allowed_hosts: Vec<String>,
+    /// Points that one run of a chart may hold in memory, over all its
+    /// sources (`TR_CHART_MAX_POINTS`, ADR 0022).
+    pub chart_max_points: usize,
 }
 
 impl Config {
@@ -72,9 +75,16 @@ impl Config {
                 .filter(|h| !h.is_empty())
                 .map(str::to_owned)
                 .collect(),
+            chart_max_points: parse_number(
+                "TR_CHART_MAX_POINTS",
+                crate::service::charts::source::DEFAULT_MAX_POINTS,
+            )?,
         };
         if config.machine_addr == config.ui_addr {
             bail!("TR_MACHINE_ADDR and TR_UI_ADDR must differ");
+        }
+        if config.chart_max_points == 0 {
+            bail!("TR_CHART_MAX_POINTS must be positive");
         }
         if config.stale_run_timeout.is_zero() || config.stale_run_check_interval.is_zero() {
             bail!("TR_STALE_RUN_TIMEOUT and TR_STALE_RUN_CHECK_INTERVAL must be positive");
@@ -109,6 +119,7 @@ mod tests {
         assert_eq!(c.stale_run_timeout, Duration::from_secs(3600));
         assert_eq!(c.stale_run_check_interval, Duration::from_secs(60));
         assert!(c.mcp_allowed_hosts.is_empty());
+        assert_eq!(c.chart_max_points, 10_000_000);
     }
 
     #[test]

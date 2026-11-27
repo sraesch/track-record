@@ -205,7 +205,7 @@ pub struct Excluded {
 }
 
 impl Excluded {
-    fn record(&mut self, e: &EvalError) {
+    pub fn record(&mut self, e: &EvalError) {
         match e {
             EvalError::Missing(_) => self.missing += 1,
             EvalError::Data(m) => {
@@ -268,6 +268,18 @@ pub async fn load_dataset(
     restrict: &Restrict,
     aliases: &Aliases,
 ) -> ApiResult<Dataset> {
+    load_dataset_up_to(pool, filter, include_warmup, restrict, aliases, MAX_SAMPLES).await
+}
+
+/// [`load_dataset`] with another limit of samples than [`MAX_SAMPLES`].
+pub async fn load_dataset_up_to(
+    pool: &PgPool,
+    filter: &RunFilter,
+    include_warmup: bool,
+    restrict: &Restrict,
+    aliases: &Aliases,
+    max_samples: i64,
+) -> ApiResult<Dataset> {
     if filter.limit.is_some() || filter.cursor.is_some() {
         return Err(ApiError::bad_request(
             "limit and cursor apply to the run list, not to analysis",
@@ -304,12 +316,12 @@ pub async fn load_dataset(
             .push(")");
     }
     q.push(" ORDER BY r.started_at, r.id, ce.id, sa.repetition LIMIT ")
-        .push_bind(MAX_SAMPLES + 1);
+        .push_bind(max_samples + 1);
     let rows: Vec<(Uuid, Uuid, i64, String, i64, Uuid, i32, bool)> =
         q.build_query_as().fetch_all(pool).await?;
-    if rows.len() as i64 > MAX_SAMPLES {
+    if rows.len() as i64 > max_samples {
         return Err(ApiError::invalid(format!(
-            "the filter selects more than {MAX_SAMPLES} samples; narrow it"
+            "the filter selects more than {max_samples} samples; narrow it"
         )));
     }
 

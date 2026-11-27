@@ -46,6 +46,23 @@ impl ApiError {
         }
     }
 
+    /// The same error with `prefix: ` in front of its detail, e.g. the
+    /// node of a chart it belongs to. Internal errors stay as they are.
+    pub fn context(self, prefix: &str) -> Self {
+        match self {
+            Self::Problem {
+                status,
+                code,
+                detail,
+            } => Self::Problem {
+                status,
+                code,
+                detail: format!("{prefix}: {detail}"),
+            },
+            internal => internal,
+        }
+    }
+
     pub fn not_found(detail: impl Into<String>) -> Self {
         Self::new(StatusCode::NOT_FOUND, "not_found", detail)
     }

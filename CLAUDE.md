@@ -102,6 +102,12 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   DSL's `Env`), and `Spec::bind` puts in the values of variables. A source's
   run filter is the field table `chart::filter::FIELDS`; a new `RunFilter`
   field goes there too.
+- What nodes compute is pure code in `track-record-core::chart::eval`
+  (`eval::run` evaluates a bound spec on the trees of its sources). Sources
+  are the only I/O: `service::charts::source` loads one frame per sample
+  with the selection and evaluation the analysis uses. Derive expressions
+  are parsed with `dsl::parse_attributes`, which reads attribute names;
+  metric expressions (`dsl::parse`) keep rejecting them.
 - Derived metrics have no versions
   ([ADR 0017](docs/adr/0017-derived-metrics-without-versions.md)): `PUT`
   creates one or changes its definition, and `derived.<name>` is resolved by
