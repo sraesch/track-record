@@ -20,6 +20,19 @@ use crate::dsl::eval::{EvalError, Inputs, Value, eval};
 use crate::dsl::{Expr, parse_attributes};
 use crate::units::UnitCatalogue;
 
+/// Longest unit a derived attribute may get from its expression. Units of
+/// chained derives multiply (`attr.a * attr.a` repeats the unit of
+/// `attr.a`); a declared unit keeps them short. A unit the expression only
+/// passes on (one of its attributes has it, or it is declared) may be
+/// longer.
+pub const MAX_UNIT_LEN: usize = 256;
+
+/// True if the expression made `unit` from the `inputs` units and it is
+/// longer than [`MAX_UNIT_LEN`].
+fn grown(unit: &str, inputs: &[String], declared: Option<&str>) -> bool {
+    unit.len() > MAX_UNIT_LEN && declared != Some(unit) && !inputs.iter().any(|u| u == unit)
+}
+
 /// Adds `attr.<name>` to every frame whose attributes the expression can
 /// read, and to every point that has attributes of its own for it.
 pub fn derive(id: &str, n: &DeriveNode, tree: Tree, catalogue: &UnitCatalogue) -> Result<Tree> {
@@ -34,9 +47,10 @@ pub fn derive(id: &str, n: &DeriveNode, tree: Tree, catalogue: &UnitCatalogue) -
         declared: n.unit.as_deref(),
         catalogue,
         checked: HashMap::new(),
+        grown: None,
     };
     let name = format!("attr.{}", n.name);
-    map_frames(tree, &mut |mut frames| {
+    let out = map_frames(tree, &mut |mut frames| {
         for f in &mut frames {
             if let Some(attr) = d.value(|a| f.attrs.get(a)) {
                 f.attrs.insert(name.clone(), attr);
@@ -64,7 +78,18 @@ pub fn derive(id: &str, n: &DeriveNode, tree: Tree, catalogue: &UnitCatalogue) -
             }
         }
         Ok(frames)
-    })
+    })?;
+    if let Some(len) = d.grown {
+        return Err(Problem::setting(
+            id,
+            "unit",
+            format!(
+                "the unit of the expression is {len} characters long, more than {MAX_UNIT_LEN}; \
+                 declare a unit"
+            ),
+        ));
+    }
+    Ok(out)
 }
 
 struct Deriver<'a> {
@@ -76,6 +101,8 @@ struct Deriver<'a> {
     /// The checked expression for each combination of the units of its
     /// attributes; `None` if they do not fit it.
     checked: HashMap<Vec<String>, Option<Checked>>,
+    /// The length of a unit the expression grew past [`MAX_UNIT_LEN`].
+    grown: Option<usize>,
 }
 
 impl Deriver<'_> {
@@ -96,7 +123,13 @@ impl Deriver<'_> {
                     names: &self.names,
                     units,
                 };
-                check(self.expr, &mut env, self.catalogue, self.declared).ok()
+                let checked = check(self.expr, &mut env, self.catalogue, self.declared).ok()?;
+                let unit = &checked.signature.unit;
+                if grown(unit, units, self.declared) {
+                    self.grown.get_or_insert(unit.len());
+                    return None;
+                }
+                Some(checked)
             })
             .as_ref()?;
         let mut inputs = AttrInputs {

@@ -47,9 +47,11 @@ impl Dimension {
         d
     }
 
+    // Exponents saturate: units of chained derives can square a dimension
+    // over and over, and a wrapped exponent could make it dimensionless.
     fn add(&mut self, name: &str, exp: i32) {
         let entry = self.0.entry(name.to_owned()).or_insert(0);
-        *entry += exp;
+        *entry = entry.saturating_add(exp);
         if *entry == 0 {
             self.0.remove(name);
         }
@@ -70,7 +72,7 @@ impl Dimension {
     pub fn pow(&self, exp: i32) -> Self {
         let mut d = Self::default();
         for (name, e) in &self.0 {
-            d.add(name, e * exp);
+            d.add(name, e.saturating_mul(exp));
         }
         d
     }
@@ -376,6 +378,18 @@ impl<'a> UnitParser<'a> {
                 self.bump();
                 Ok(ResolvedUnit::dimensionless())
             }
+            // The symbol `ResolvedUnit::sqrt` writes, so that it reads back.
+            Some('s') if self.rest().starts_with("sqrt(") => {
+                self.pos += "sqrt(".len();
+                let inner = self.product()?;
+                if self.peek() != Some(')') {
+                    return Err(self.err("missing ')'"));
+                }
+                self.bump();
+                inner
+                    .sqrt()
+                    .ok_or_else(|| self.err("the unit has no square root"))
+            }
             Some(_) => {
                 let start = self.pos;
                 while let Some(c) = self.rest().chars().next() {
@@ -497,6 +511,19 @@ pub(crate) mod tests {
         let s2 = s.powi(2).sqrt().unwrap();
         assert_eq!(s2.dimension, s.dimension);
         assert!(s.sqrt().is_none());
+        // The symbol of a square root reads back as that unit.
+        let back = c.resolve(&s2.symbol);
+        assert_eq!(s2.symbol, "sqrt((s)^2)");
+        assert_eq!(back.dimension, s.dimension);
+        assert!(approx(c.resolve("sqrt(ms^2)").conversion_factor(&s), 1e-3));
+        assert_ne!(c.resolve("sqrt(s)").dimension, s.dimension);
+        // Exponents saturate instead of overflowing (or wrapping to a
+        // dimensionless unit) when units of chained derives square again
+        // and again.
+        let huge = c.resolve("((s)^65536)^65536");
+        assert!(!huge.dimension.is_dimensionless());
+        assert_ne!(huge.dimension, s.dimension);
+        assert!(!huge.powi(2).dimension.is_dimensionless());
     }
 
     #[test]

@@ -105,6 +105,16 @@ struct Parser {
     attributes: bool,
 }
 
+/// A metric name as written in backquotes, without the spaces around it.
+/// (A parameter key is read verbatim, spaces included.)
+fn metric_name(quoted: &str, span: Span) -> Result<String, Diagnostic> {
+    let name = quoted.trim();
+    if name.is_empty() {
+        return Err(Diagnostic::new(span, "empty metric name"));
+    }
+    Ok(name.to_owned())
+}
+
 impl Parser {
     fn peek(&self) -> &(Token, Span) {
         &self.tokens[self.pos]
@@ -239,7 +249,7 @@ impl Parser {
             Token::Quoted(name) => {
                 self.bump();
                 Ok(Expr {
-                    kind: ExprKind::Metric(name),
+                    kind: ExprKind::Metric(metric_name(&name, span)?),
                     span,
                 })
             }
@@ -254,6 +264,7 @@ impl Parser {
                     Token::Dot => {
                         self.bump();
                         let (inner, inner_span) = self.name("a metric name after '.'")?;
+                        let inner = metric_name(&inner, inner_span)?;
                         let kind = match name.as_str() {
                             "series" => ExprKind::Series(inner),
                             "derived" => ExprKind::Derived(inner),
@@ -385,6 +396,29 @@ impl Parser {
         }
         let close = self.expect(Token::RParen, "',' or ')'")?;
         self.depth -= 1;
+        // The checker counts arguments too, but an expression over
+        // attributes may be checked only when it runs, with the units of a
+        // frame; count them here so that validation reports a wrong count.
+        if self.attributes {
+            let (lo, hi) = match name.as_str() {
+                "abs" | "log10" | "sqrt" => (1, 1),
+                // With one argument they reduce a series; attributes are
+                // scalars.
+                "min" | "max" => (2, 16),
+                _ => (3, 3),
+            };
+            if !(lo..=hi).contains(&args.len()) {
+                let expected = match (lo, hi) {
+                    (1, 1) => "1 argument".to_owned(),
+                    (lo, hi) if lo == hi => format!("{lo} arguments"),
+                    (lo, hi) => format!("{lo} to {hi} arguments"),
+                };
+                return Err(Diagnostic::new(
+                    name_span.to(close),
+                    format!("{name} takes {expected}, not {}", args.len()),
+                ));
+            }
+        }
         Ok(Expr {
             kind: ExprKind::Call {
                 name,
@@ -522,6 +556,13 @@ mod tests {
             "(@param.frame size / 2[px])"
         );
         assert_eq!(a("b.param.width"), "@b.param.width");
+        // Parameter keys are read verbatim; metric names are trimmed.
+        assert_eq!(a("param.` width`"), "@param. width");
+        assert_eq!(p("series.` fps `"), "series.fps");
+        assert_eq!(p("` load time `"), "load time");
+        assert_eq!(a("param.` `"), "@param. ");
+        assert!(parse("` `").is_err());
+        assert!(parse("series.` `").is_err());
         let e = parse_attributes("max(param.w, param.h) + param.w").unwrap();
         let names: Vec<String> = e.attributes().into_iter().map(|(n, _)| n).collect();
         assert_eq!(names, ["param.w", "param.h", "param.w"]);

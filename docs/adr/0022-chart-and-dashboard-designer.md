@@ -331,28 +331,48 @@ The settings that the sections above leave open, as
 - **Order of values:** group orders its subgroups, and sort its frames,
   groups or points, by value: numbers, then times, texts, booleans and
   lists. Numbers compare by value, as the analysis compares parameters:
-  `10` equals `10.0`. Frames without a value for a key form the last
-  subgroup; missing values sort last, also with `desc`. The subgroups of a
-  family are keyed by its attributes in the order of the table above, then
-  `asset.*` and `param.*` by name.
+  `10` equals `10.0`, exactly also for integers beyond the precision of
+  `f64`. Keys compare value and unit, so a parameter of `10 Mbit/s` and one
+  of `10 kbit/s` are two cases. Frames without a value for a key form the
+  last subgroup; missing values sort last, also with `desc`. A group key
+  holds the attributes `by` names, also without a value, and of the
+  attributes a family stands for those the frames have, in the order of
+  the table above, then `asset.*` and `param.*` by name.
 - **filter:** a missing attribute and no value meet no condition, `!=` and
   `not in` included. On `run.tags`, `=` means the list contains the value,
   `in` that it contains one of the values, and `!=` and `not in` the
   opposite. Comparisons take numbers and times (RFC 3339).
 - **select_latest:** frames, or points, without `run.id` are dropped.
 - **derive:** the expression reads attributes by name (`param.width`) and
-  calls only the scalar functions `abs`, `log10`, `sqrt`, `min`, `max` and
-  `clamp`; metric expressions keep rejecting attribute names. The units of
+  calls only the scalar functions `abs`, `log10`, `sqrt`, `min` and `max`
+  of two or more values, and `clamp`, with their argument counts checked
+  when it is read; metric expressions keep rejecting attribute names. The
+  unit of a square root (`sqrt(px^2)`) reads back as that unit in a later
+  derive. The units of
   parameters and derived attributes come from the data, so a run checks the
   expression for each frame: a frame whose units do not fit, or for which
   the expression has no value, does not get the attribute, as one without
   an input. Validation checks units only where all attributes are fixed
   ones, which have none. After a concatenate, points with attributes of
-  their own get a value of their own.
-- **Sources:** the value of `asset.<name>` is the asset's version, its
-  content hash, or both as `version (hash)`; `sut.tag` is a text, as a SUT
-  version has one tag. A derived series without a value is a frame without
-  points. The budget of points is `TR_CHART_MAX_POINTS` (10 million).
+  their own get a value of their own. A unit the expression builds may
+  have at most 256 characters (chained derives such as `attr.a * attr.a`
+  double it); a longer one fails the node and asks for a declared `unit`.
+  A unit it only passes on, from an attribute or declared, may be longer.
+- **Sources:** the value of `asset.<name>` is the asset's version when the
+  case has one asset of that name and it has only a version (`"v1"`). One
+  asset with a content hash is a list of `version=<version>` and
+  `hash=<content hash>` (`["version=v1", "hash=abc"]`), and several assets
+  of one name are a list of such lists, so that distinct assets never give
+  the same value. `sut.tag` is a text, as
+  a SUT version has one tag. The `x` column keeps the x-dimension of the
+  series; frames with different ones are not concatenated. A derived series
+  without a value is a frame without points. The budget of points is
+  `TR_CHART_MAX_POINTS` (10 million); input series are loaded in batches of
+  at most a million points, and a sample whose input series alone have more
+  points than the budget fails before they are loaded. Status, validity and
+  end of a run are read from one row, so they fit together.
+- **Empty results** lose their group levels; nodes that need a level
+  (sort of groups) pass an empty result on.
 
 ### Evaluation
 

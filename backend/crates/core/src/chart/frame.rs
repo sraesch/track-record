@@ -16,11 +16,15 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
-/// A column of a frame: its name and unit (`""` for none).
+/// A column of a frame: its name and unit (`""` for none). The `x` of a
+/// series also keeps its dimension (`time`, `bytes`, ...): two x columns in
+/// the same unit but of different dimensions are different columns.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Column {
     pub name: String,
     pub unit: String,
+    /// The x-dimension of a series' `x`; `""` for other columns.
+    pub dimension: String,
 }
 
 impl Column {
@@ -28,6 +32,15 @@ impl Column {
         Self {
             name: name.into(),
             unit: unit.into(),
+            dimension: String::new(),
+        }
+    }
+
+    /// The `x` column of a series with its unit and dimension.
+    pub fn x(unit: impl Into<String>, dimension: impl Into<String>) -> Self {
+        Self {
+            dimension: dimension.into(),
+            ..Self::new("x", unit)
         }
     }
 }
@@ -116,15 +129,44 @@ impl AttrValue {
     }
 }
 
+/// Compares two JSON numbers exactly: integers as integers, an integer and
+/// a float without rounding the integer, and `-0.0` equal to `0`.
 fn cmp_numbers(a: &serde_json::Number, b: &serde_json::Number) -> Ordering {
-    if let (Some(x), Some(y)) = (a.as_i64(), b.as_i64()) {
-        return x.cmp(&y);
+    match (integer(a), integer(b)) {
+        (Some(x), Some(y)) => x.cmp(&y),
+        (Some(x), None) => cmp_int_float(x, b.as_f64().unwrap_or(0.0)),
+        (None, Some(y)) => cmp_int_float(y, a.as_f64().unwrap_or(0.0)).reverse(),
+        (None, None) => {
+            let (x, y) = (a.as_f64().unwrap_or(0.0), b.as_f64().unwrap_or(0.0));
+            // JSON numbers are finite, so only the sign of zero can differ.
+            x.partial_cmp(&y).unwrap_or(Ordering::Equal)
+        }
     }
-    if let (Some(x), Some(y)) = (a.as_u64(), b.as_u64()) {
-        return x.cmp(&y);
+}
+
+fn integer(n: &serde_json::Number) -> Option<i128> {
+    n.as_i64()
+        .map(i128::from)
+        .or_else(|| n.as_u64().map(i128::from))
+}
+
+/// The order of an integer and a finite float, exactly.
+fn cmp_int_float(i: i128, f: f64) -> Ordering {
+    // Floats at or beyond ±2^127 lie beyond every i64 or u64.
+    const LIMIT: f64 = 170_141_183_460_469_231_731_687_303_715_884_105_728.0;
+    if f >= LIMIT {
+        return Ordering::Less;
     }
-    let (x, y) = (a.as_f64().unwrap_or(0.0), b.as_f64().unwrap_or(0.0));
-    x.total_cmp(&y)
+    if f <= -LIMIT {
+        return Ordering::Greater;
+    }
+    let whole = f.trunc();
+    // A float of at most 2^127 in magnitude with no fraction is an exact
+    // i128.
+    match i.cmp(&(whole as i128)) {
+        Ordering::Equal => 0.0f64.partial_cmp(&(f - whole)).unwrap_or(Ordering::Equal),
+        o => o,
+    }
 }
 
 /// Orders optional values with the missing ones last, also when `desc`
@@ -295,9 +337,10 @@ impl Frame {
 /// A group below the root: its key and its members.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Group {
-    /// The attributes the group was formed by, with their values. `None`
-    /// for frames without a value for the attribute.
-    pub key: Vec<(String, Option<AttrValue>)>,
+    /// The attributes the group was formed by, with their values and units.
+    /// An attribute the key names is `None` for frames without a value; of
+    /// the attributes a family stands for, only those the frames have.
+    pub key: Vec<(String, Option<Attr>)>,
     pub tree: Tree,
 }
 
@@ -398,7 +441,10 @@ mod tests {
         assert_eq!(flat.depth(), 0);
         let nested = Tree::Groups(vec![
             Group {
-                key: vec![("run.id".into(), Some(AttrValue::Text("r1".into())))],
+                key: vec![(
+                    "run.id".into(),
+                    Some(Attr::new(AttrValue::Text("r1".into()))),
+                )],
                 tree: flat.clone(),
             },
             Group {
@@ -424,6 +470,30 @@ mod tests {
         let big = |s: &str| AttrValue::from_json(&serde_json::from_str(s).unwrap()).unwrap();
         assert_eq!(
             big("9007199254740992").total_cmp(&big("9007199254740993")),
+            Ordering::Less
+        );
+        // Exact across integers and floats, and -0.0 is 0.
+        let around = [
+            big("9007199254740992.0"),
+            big("9007199254740993"),
+            big("9007199254740994.0"),
+        ];
+        assert_eq!(around[0].total_cmp(&around[1]), Ordering::Less);
+        assert_eq!(around[1].total_cmp(&around[2]), Ordering::Less);
+        assert_eq!(around[1].total_cmp(&around[0]), Ordering::Greater);
+        assert!(!around[0].same(&around[1]));
+        assert!(j(serde_json::json!(-0.0)).same(&j(serde_json::json!(0))));
+        assert!(j(serde_json::json!(-0.0)).same(&j(serde_json::json!(0.0))));
+        assert_eq!(
+            j(serde_json::json!(2.5)).total_cmp(&j(serde_json::json!(2))),
+            Ordering::Greater
+        );
+        assert_eq!(
+            j(serde_json::json!(-2.5)).total_cmp(&j(serde_json::json!(-2))),
+            Ordering::Less
+        );
+        assert_eq!(
+            big("18446744073709551615").total_cmp(&j(serde_json::json!(1e300))),
             Ordering::Less
         );
         let mut values = [

@@ -209,11 +209,11 @@ fn filter_compares_times_and_reads_lists_as_contains() {
 fn filter_on_points_reads_columns_and_removes_what_becomes_empty() {
     let tree = Tree::Groups(vec![
         Group {
-            key: vec![("device.name".into(), Some(text("a")))],
+            key: vec![("device.name".into(), Some(Attr::new(text("a"))))],
             tree: Tree::Frames(vec![frame(&[], &[Some(1.0), None, Some(5.0)])]),
         },
         Group {
-            key: vec![("device.name".into(), Some(text("b")))],
+            key: vec![("device.name".into(), Some(Attr::new(text("b"))))],
             tree: Tree::Frames(vec![frame(&[], &[Some(0.5)])]),
         },
     ]);
@@ -283,8 +283,8 @@ fn group_orders_subgroups_by_key_and_keeps_the_order_of_frames() {
     assert_eq!(
         keys,
         [
-            vec![("device.name".to_owned(), Some(text("a")))],
-            vec![("device.name".to_owned(), Some(text("b")))],
+            vec![("device.name".to_owned(), Some(Attr::new(text("a"))))],
+            vec![("device.name".to_owned(), Some(Attr::new(text("b"))))],
             // Frames without a value form a subgroup of their own, last.
             vec![("device.name".to_owned(), None)],
         ]
@@ -311,8 +311,8 @@ fn group_orders_subgroups_by_key_and_keeps_the_order_of_frames() {
     assert_eq!(
         g[0].key,
         vec![
-            ("device.name".to_owned(), Some(text("a"))),
-            ("param.w".to_owned(), Some(num(1))),
+            ("device.name".to_owned(), Some(Attr::new(text("a")))),
+            ("param.w".to_owned(), Some(Attr::with_unit(num(1), "px"))),
         ]
     );
 
@@ -320,6 +320,87 @@ fn group_orders_subgroups_by_key_and_keeps_the_order_of_frames() {
     let out = structure::group("g2", &node::<GroupNode>(json!({"by": ["param.w"]})), out).unwrap();
     assert_eq!(out.depth(), 2);
     out.check().unwrap();
+}
+
+#[test]
+fn group_keeps_cases_with_the_same_value_in_different_units_apart() {
+    let mut kbit = frame(&[("param.bw", num(10))], &[Some(2.0)]);
+    kbit.attrs.get_mut("param.bw").unwrap().unit = "kbit/s".into();
+    let fs = vec![frame(&[("param.bw", num(10))], &[Some(1.0)]), kbit];
+    let out = structure::group(
+        "g",
+        &node::<GroupNode>(json!({"by": ["case"]})),
+        Tree::Frames(fs),
+    )
+    .unwrap();
+    let g = groups(&out);
+    assert_eq!(g.len(), 2, "{g:#?}");
+    let unit = |g: &Group| g.key[0].1.as_ref().unwrap().unit.clone();
+    assert_eq!(
+        (unit(&g[0]), unit(&g[1])),
+        ("kbit/s".to_owned(), "px".to_owned())
+    );
+}
+
+#[test]
+fn group_keys_name_what_the_spec_names_and_what_families_find() {
+    // An attribute the key names is in every key, also when no frame has it.
+    let fs = vec![frame(&[("device.name", text("a"))], &[Some(1.0)])];
+    let out = structure::group(
+        "g",
+        &node::<GroupNode>(json!({"by": ["sut.tag", "device.name"]})),
+        Tree::Frames(fs),
+    )
+    .unwrap();
+    assert_eq!(
+        groups(&out)[0].key,
+        vec![
+            ("sut.tag".to_owned(), None),
+            ("device.name".to_owned(), Some(Attr::new(text("a")))),
+        ]
+    );
+
+    // A family stands for the attributes the frames have; a frame without
+    // one of them sorts after those with it, as a missing value does.
+    let fs = vec![
+        frame(&[("param.a", num(1))], &[Some(1.0)]),
+        frame(&[("param.b", num(1))], &[Some(2.0)]),
+        frame(&[("param.a", num(1)), ("param.b", num(1))], &[Some(3.0)]),
+        frame(&[("param.a", num(0))], &[Some(4.0)]),
+    ];
+    let out = structure::group(
+        "g",
+        &node::<GroupNode>(json!({"by": ["case"]})),
+        Tree::Frames(fs),
+    )
+    .unwrap();
+    let firsts: Vec<f64> = groups(&out)
+        .iter()
+        .map(|g| ys(&frames(&g.tree)[0])[0].unwrap())
+        .collect();
+    assert_eq!(firsts, [4.0, 3.0, 1.0, 2.0]);
+    let names: Vec<Vec<&str>> = groups(&out)
+        .iter()
+        .map(|g| g.key.iter().map(|(n, _)| n.as_str()).collect())
+        .collect();
+    assert_eq!(names[1], ["param.a", "param.b"]);
+    assert_eq!(names[3], ["param.b"]);
+}
+
+#[test]
+fn an_empty_result_passes_through_nodes_that_need_levels() {
+    let (spec, graph) = bound_spec(json!([
+        {"id": "runs", "type": "source", "metric": "load_time"},
+        {"id": "d", "type": "group", "input": "runs", "by": ["device.name"]},
+        {"id": "r", "type": "group", "input": "d", "by": ["run.id"]},
+        {"id": "f", "type": "flatten", "input": "r"},
+        {"id": "s", "type": "sort", "input": "f", "target": "groups",
+         "by": [{"key": "device.name"}]},
+        {"id": "chart", "type": "table", "input": "s", "columns": ["y"]}
+    ]));
+    let sources = BTreeMap::from([("runs".to_owned(), Tree::default())]);
+    let out = run(&spec, &graph, sources, None, &catalogue()).unwrap();
+    assert!(out.frames().is_empty());
 }
 
 // flatten --------------------------------------------------------------------------------
@@ -410,11 +491,11 @@ fn sort_orders_frames_groups_and_points() {
         tree,
     )
     .unwrap();
-    assert_eq!(groups(&out)[0].key[0].1, Some(text("b")));
+    assert_eq!(groups(&out)[0].key[0].1, Some(Attr::new(text("b"))));
     let err = structure::sort(
         "s",
         &node::<SortNode>(json!({"target": "groups", "by": [{"key": "device.name"}]})),
-        Tree::Frames(vec![]),
+        Tree::Frames(vec![frame(&[], &[Some(1.0)])]),
     )
     .unwrap_err();
     assert_eq!(err.setting.as_deref(), Some("target"));
@@ -518,7 +599,7 @@ fn concatenate_merges_each_innermost_group_and_points_keep_their_attributes() {
     let c = sample("r3", 3, &[4.0]);
     let tree = Tree::Groups(vec![
         Group {
-            key: vec![("device.name".into(), Some(text("d")))],
+            key: vec![("device.name".into(), Some(Attr::new(text("d"))))],
             tree: Tree::Frames(vec![a, b]),
         },
         Group {
@@ -636,6 +717,77 @@ fn derive_computes_an_attribute_with_units() {
         frames(&out)[0].attrs["attr.half"],
         Attr::new(AttrValue::number(2.5).unwrap())
     );
+}
+
+#[test]
+fn a_derived_unit_reads_back_in_the_next_derive() {
+    let mut f = frame(&[("param.area", num(9))], &[Some(1.0)]);
+    f.attrs.get_mut("param.area").unwrap().unit = "px^2".into();
+    let out = derived(
+        json!({"name": "side", "expression": "sqrt(param.area)"}),
+        Tree::Frames(vec![f]),
+    )
+    .unwrap();
+    let out = derived(
+        json!({"name": "width", "expression": "attr.side + 1[px]"}),
+        out,
+    )
+    .unwrap();
+    let f = &frames(&out)[0];
+    assert_eq!(f.attrs["attr.width"].value.as_f64(), Some(4.0));
+    // `+` gives the unit of its first operand, which converts to px.
+    let unit = &f.attrs["attr.width"].unit;
+    assert_eq!(unit, "sqrt(px^2)");
+    assert_eq!(catalogue().conversion_factor(unit, "px"), Some(1.0));
+}
+
+#[test]
+fn chained_derives_cannot_grow_units_without_bound() {
+    let mut tree = Tree::Frames(vec![frame(&[("param.w", num(1))], &[Some(1.0)])]);
+    tree = derived(json!({"name": "a0", "expression": "param.w"}), tree).unwrap();
+    let mut failed = None;
+    for i in 1..20 {
+        let spec = json!({"name": format!("a{i}"), "expression": format!("attr.a{} * attr.a{}", i - 1, i - 1)});
+        match derived(spec, tree.clone()) {
+            Ok(t) => tree = t,
+            Err(e) => {
+                failed = Some((i, e));
+                break;
+            }
+        }
+    }
+    let (i, err) = failed.expect("the unit grows past the limit");
+    assert!(i < 10, "stopped at {i}");
+    assert_eq!(err.setting.as_deref(), Some("unit"));
+    assert!(err.message.contains("declare a unit"), "{err}");
+    // A declared unit keeps it short.
+    let unit = format!("px^{}", 1u64 << i);
+    let spec = json!({"name": "x", "expression": format!("attr.a{} * attr.a{}", i - 1, i - 1), "unit": unit});
+    let out = derived(spec, tree).unwrap();
+    assert_eq!(frames(&out)[0].attrs["attr.x"].unit, unit);
+}
+
+#[test]
+fn a_long_unit_that_a_derive_passes_on_is_kept() {
+    let long = "x".repeat(derive::MAX_UNIT_LEN + 1);
+    let mut f = frame(&[], &[Some(1.0)]);
+    f.attrs
+        .insert("param.w".into(), Attr::with_unit(num(2), long.clone()));
+    let tree = Tree::Frames(vec![f]);
+    for spec in [
+        json!({"name": "a", "expression": "param.w * 3"}),
+        json!({"name": "a", "expression": "param.w", "unit": long}),
+    ] {
+        let out = derived(spec, tree.clone()).unwrap();
+        assert_eq!(frames(&out)[0].attrs["attr.a"].unit, long);
+    }
+    // Made by the expression, it is too long.
+    let err = derived(
+        json!({"name": "a", "expression": "param.w * param.w"}),
+        tree,
+    )
+    .unwrap_err();
+    assert_eq!(err.setting.as_deref(), Some("unit"));
 }
 
 #[test]

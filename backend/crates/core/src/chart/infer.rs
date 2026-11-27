@@ -143,6 +143,15 @@ pub fn validate(
             .map(|(name, j)| shapes[*j].as_ref().map(|s| (name.as_deref(), s)))
             .collect();
         let Some(inputs) = inputs else {
+            // What does not depend on the input is checked anyway.
+            if let NodeKind::Derive(n) = &node.kind {
+                let mut cx = Cx {
+                    id: &node.id,
+                    problems: &mut problems,
+                    catalogue,
+                };
+                derive_syntax(&mut cx, n);
+            }
             continue;
         };
         let mut cx = Cx {
@@ -514,12 +523,8 @@ fn source(cx: &mut Cx, env: &mut dyn Env, s: &SourceNode) -> Option<Shape> {
 /// and derived attributes come from the data; the run checks them per
 /// frame.
 fn derive_expression(cx: &mut Cx, n: &DeriveNode, input: &Shape) {
-    if n.expression.trim().is_empty() {
-        return; // reported with the values
-    }
-    let expr = match dsl::parse_attributes(&n.expression) {
-        Ok(expr) => expr,
-        Err(d) => return cx.expression("expression", &d),
+    let Some(expr) = derive_syntax(cx, n) else {
+        return;
     };
     let mut known = true;
     let mut ok = true;
@@ -542,6 +547,20 @@ fn derive_expression(cx: &mut Cx, n: &DeriveNode, input: &Shape) {
     if let Err(diagnostics) = dsl::check::check(&expr, &mut env, cx.catalogue, n.unit.as_deref()) {
         for d in &diagnostics {
             cx.expression("expression", d);
+        }
+    }
+}
+
+/// Parses the expression of a derive node and reports a syntax error.
+fn derive_syntax(cx: &mut Cx, n: &DeriveNode) -> Option<dsl::Expr> {
+    if n.expression.trim().is_empty() {
+        return None; // reported with the values
+    }
+    match dsl::parse_attributes(&n.expression) {
+        Ok(expr) => Some(expr),
+        Err(d) => {
+            cx.expression("expression", &d);
+            None
         }
     }
 }
