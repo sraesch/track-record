@@ -245,7 +245,7 @@ fn cmp_keys(key: &Key, a: &[(String, Option<Attr>)], b: &[(String, Option<Attr>)
 /// Orders attributes by value, then unit, so that the same value in two
 /// units (a parameter of `10 Mbit/s` and one of `10 kbit/s`) are two keys.
 /// Missing ones go last.
-fn cmp_attrs(a: Option<&Attr>, b: Option<&Attr>) -> Ordering {
+pub(crate) fn cmp_attrs(a: Option<&Attr>, b: Option<&Attr>) -> Ordering {
     cmp_missing_last(a.map(|x| &x.value), b.map(|x| &x.value), false)
         .then_with(|| a.map(|x| x.unit.as_str()).cmp(&b.map(|x| x.unit.as_str())))
 }

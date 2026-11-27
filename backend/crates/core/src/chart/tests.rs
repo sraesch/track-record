@@ -1158,3 +1158,93 @@ fn attributes_of_match_partners_are_checked_like_their_own() {
     ));
     assert!(p.is_empty(), "{p:#?}");
 }
+
+#[test]
+fn the_unit_of_a_combine_expression_is_inferred() {
+    let spec = |expressions: Value| {
+        json!({"format": 1, "nodes": [
+            {"id": "runs", "type": "source", "metric": "load_time"},
+            {"id": "ref", "type": "source", "metric": "load_time"},
+            {"id": "pairs", "type": "match", "inputs": {"a": "runs", "b": "ref"},
+             "except": ["run", "sample"]},
+            {"id": "both", "type": "combine", "input": "pairs", "expressions": expressions},
+            {"id": "chart", "type": "table", "input": "both", "columns": ["a"]}
+        ]})
+    };
+    let v = validation(spec(json!([
+        {"name": "diff", "expression": "a - b"},
+        {"name": "ratio", "expression": "a / b"},
+        {"name": "pct", "expression": "a / b", "unit": "%"},
+        {"name": "reps", "expression": "a / b.sample.repetition"},
+        // A parameter has its unit in the data: known when the chart runs.
+        {"name": "per_px", "expression": "a / param.width"},
+    ])));
+    assert!(v.problems.is_empty(), "{:#?}", v.problems);
+    assert_eq!(
+        cols(&v.shapes["both"]),
+        [
+            ("a", Some("ms")),
+            ("b", Some("ms")),
+            ("diff", Some("ms")),
+            ("ratio", Some("ms/ms")),
+            ("pct", Some("%")),
+            ("reps", Some("ms")),
+            ("per_px", None)
+        ]
+    );
+
+    let p = problems(spec(json!([
+        {"name": "e1", "expression": "a + c"},
+        {"name": "e2", "expression": "a + run.id"},
+        {"name": "e3", "expression": "b.mean"},
+        {"name": "e4", "expression": "a + 1[s/B]"},
+        {"name": "e5", "expression": "a + b.run.nope"},
+        {"name": "e6", "expression": "rate(a)"},
+    ])));
+    let at = |i: usize| format!("expressions[{i}].expression");
+    assert_problem(&p, Some("both"), Some(&at(0)), "unknown name c");
+    assert!(
+        p.iter()
+            .any(|x| x.span == Some(crate::dsl::Span::new(4, 5)))
+    );
+    assert_problem(&p, Some("both"), Some(&at(1)), "run.id is not a number");
+    assert_problem(&p, Some("both"), Some(&at(2)), "b has no column mean");
+    assert_problem(&p, Some("both"), Some(&at(3)), "");
+    assert_problem(&p, Some("both"), Some(&at(4)), "b has no column run.nope");
+    assert_problem(
+        &p,
+        Some("both"),
+        Some(&at(5)),
+        "not a function of attributes",
+    );
+}
+
+#[test]
+fn the_input_named_a_comes_first_in_a_match() {
+    let v = validation(json!({"format": 1, "nodes": [
+        {"id": "runs", "type": "source", "metric": "load_time"},
+        {"id": "bytes", "type": "source", "metric": "bytes"},
+        {"id": "score", "type": "source", "metric": "score"},
+        {"id": "pairs", "type": "match", "inputs": {"A": "bytes", "B": "score", "a": "runs"}},
+        {"id": "both", "type": "combine", "input": "pairs",
+         "expressions": [{"name": "e", "expression": "a + 1[s]"}]},
+        {"id": "chart", "type": "table", "input": "both", "columns": ["a"]}
+    ]}));
+    assert!(v.problems.is_empty(), "{:#?}", v.problems);
+    let Level::Match { inputs } = &v.shapes["pairs"].levels[0] else {
+        panic!("a match level")
+    };
+    assert_eq!(
+        inputs.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(),
+        ["a", "A", "B"]
+    );
+    assert_eq!(
+        v.shapes["pairs"].column("y").unwrap().unit.as_deref(),
+        Some("ms")
+    );
+    assert_eq!(cols(&v.shapes["both"])[0], ("a", Some("ms")));
+    assert_eq!(
+        v.shapes["both"].column("e").unwrap().unit.as_deref(),
+        Some("ms")
+    );
+}

@@ -9,6 +9,7 @@
 //! a run of a valid spec fails only where the data does not fit, e.g.
 //! frames with different columns in a concatenate.
 
+pub mod compute;
 pub mod derive;
 pub mod structure;
 
@@ -69,6 +70,15 @@ pub fn run(
             NodeKind::Source(_) => sources
                 .remove(&node.id)
                 .ok_or_else(|| Problem::node(&node.id, "the data of this source was not loaded"))?,
+            NodeKind::Combine(n) => {
+                let tree = inputs
+                    .into_iter()
+                    .next()
+                    .map(|(_, t)| t)
+                    .unwrap_or_default();
+                let names = match_names(spec, graph, i);
+                compute::combine(&node.id, n, tree, names.as_deref(), catalogue)?
+            }
             kind => evaluate(&node.id, kind, inputs, catalogue)?,
         };
         debug_assert!(out.check().is_ok(), "{}: {:?}", node.id, out.check());
@@ -77,13 +87,47 @@ pub fn run(
     Ok(results[target].take().expect("the target was evaluated"))
 }
 
-/// Evaluates one node other than a source on its inputs.
+/// The names of the inputs of the match whose level a combine at node `i`
+/// merges, `a` first: the match it reads through nodes that keep the
+/// levels of their input.
+fn match_names(spec: &Spec, graph: &Graph, i: usize) -> Option<Vec<String>> {
+    let mut j = graph.inputs(i).first()?.1;
+    loop {
+        match &spec.nodes[j].kind {
+            NodeKind::Match(_) => {
+                return Some(
+                    graph
+                        .inputs(j)
+                        .iter()
+                        .map(|(name, _)| name.clone().unwrap_or_else(|| "a".into()))
+                        .collect(),
+                );
+            }
+            NodeKind::Filter(_)
+            | NodeKind::Derive(_)
+            | NodeKind::Sort(_)
+            | NodeKind::SelectLatest(_)
+            | NodeKind::Resample(_) => j = graph.inputs(j).first()?.1,
+            _ => return None,
+        }
+    }
+}
+
+/// Evaluates one node other than a source or a combine on its inputs.
+/// Inputs come with the names of a match's inputs, `a` first.
 fn evaluate(
     id: &str,
     kind: &NodeKind,
     inputs: Vec<(Option<String>, Tree)>,
     catalogue: &UnitCatalogue,
 ) -> Result<Tree> {
+    if let NodeKind::Match(n) = kind {
+        let named = inputs
+            .into_iter()
+            .map(|(name, t)| (name.unwrap_or_else(|| "a".into()), t))
+            .collect();
+        return compute::match_frames(id, n, named);
+    }
     let mut inputs = inputs.into_iter().map(|(_, t)| t);
     let input = inputs
         .next()
@@ -97,12 +141,10 @@ fn evaluate(
         NodeKind::Sort(n) => structure::sort(id, n, input),
         NodeKind::SelectLatest(n) => structure::select_latest(id, n, input),
         NodeKind::Concatenate(_) => structure::concatenate(id, input),
-        NodeKind::Resample(_) | NodeKind::Match(_) | NodeKind::Reduce(_) | NodeKind::Combine(_) => {
-            Err(Problem::node(
-                id,
-                format!("{} nodes cannot be evaluated yet", kind.type_name()),
-            ))
-        }
+        NodeKind::Resample(n) => compute::resample(id, n, input),
+        NodeKind::Reduce(n) => compute::reduce(id, n, input, catalogue),
+        NodeKind::Combine(n) => compute::combine(id, n, input, None, catalogue),
+        NodeKind::Match(_) => unreachable!("matched above"),
         // The visualization draws what reaches it.
         NodeKind::Line(_)
         | NodeKind::Scatter(_)

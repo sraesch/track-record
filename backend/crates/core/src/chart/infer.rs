@@ -19,8 +19,8 @@ use super::attributes::{self, AttrType, Family};
 use super::graph::Graph;
 use super::problem::Problem;
 use super::spec::{
-    CombineNode, DEFAULT_LEVELS, DeriveNode, FlattenLevels, MatchNode, NodeKind, On, ReduceNode,
-    RoleKind, SortTarget, SourceNode, Spec, is_identifier,
+    CombineNode, DEFAULT_LEVELS, DeriveNode, Expression, FlattenLevels, MatchNode, NodeKind, On,
+    ReduceNode, RoleKind, SortTarget, SourceNode, Spec, is_identifier,
 };
 use super::variables::{Setting, check_variables};
 use crate::dsl::check::{Env, Kind};
@@ -723,9 +723,8 @@ fn combine(cx: &mut Cx, n: &CombineNode, input: &Shape) -> Option<Shape> {
             );
             continue;
         }
-        // The unit of the expression is inferred once expressions can read
-        // the inputs (#29); until then it is the declared one.
-        columns.push(ColumnShape::new(&e.name, e.unit.clone()));
+        let unit = combine_expression(cx, i, e, inputs, input);
+        columns.push(ColumnShape::new(&e.name, unit));
     }
     let mut attributes = inputs[0].attributes.clone();
     for mi in &inputs[1..] {
@@ -734,6 +733,154 @@ fn combine(cx: &mut Cx, n: &CombineNode, input: &Shape) -> Option<Shape> {
     shape.columns = columns;
     shape.attributes = attributes;
     Some(shape)
+}
+
+/// Checks an expression of a combine: its syntax, that its names are
+/// columns of the inputs or numeric attributes, and, where all their units
+/// are known, its units. Returns the unit of its column: inferred where it
+/// could be checked, else the declared one, else not known.
+fn combine_expression(
+    cx: &mut Cx,
+    i: usize,
+    e: &Expression,
+    inputs: &[MatchInput],
+    input: &Shape,
+) -> Option<String> {
+    let setting = format!("expressions[{i}].expression");
+    if e.expression.trim().is_empty() {
+        return e.unit.clone(); // reported with the values
+    }
+    let expr = match dsl::parse_columns(&e.expression) {
+        Ok(expr) => expr,
+        Err(d) => {
+            cx.expression(&setting, &d);
+            return e.unit.clone();
+        }
+    };
+    let mut units: BTreeMap<String, String> = BTreeMap::new();
+    let mut known = true;
+    let mut ok = true;
+    for (name, span) in expr.attributes() {
+        match name_unit(&name, inputs, input) {
+            Ok(Some(unit)) => {
+                units.insert(name, unit);
+            }
+            Ok(None) => known = false,
+            Err(message) => {
+                ok = false;
+                cx.expression(&setting, &Diagnostic::new(span, message));
+            }
+        }
+    }
+    if !ok || !known {
+        return e.unit.clone();
+    }
+    let mut env = NameUnits(units);
+    match dsl::check::check(&expr, &mut env, cx.catalogue, e.unit.as_deref()) {
+        Ok(checked) => Some(checked.signature.unit),
+        Err(diagnostics) => {
+            for d in &diagnostics {
+                cx.expression(&setting, d);
+            }
+            e.unit.clone()
+        }
+    }
+}
+
+/// The unit of a name of a combine expression, as the node resolves it
+/// (`eval::compute`): `<input>` or `<input>.<column>` is a column,
+/// `<other input>.<attribute>` an attribute of that partner, any other
+/// name an attribute of `a`'s point. `Ok(None)` if the unit is not known
+/// before the chart runs.
+fn name_unit(name: &str, inputs: &[MatchInput], input: &Shape) -> Result<Option<String>, String> {
+    let (head, rest) = match name.split_once('.') {
+        Some((h, r)) => (h, Some(r)),
+        None => (name, None),
+    };
+    if let Some(k) = inputs.iter().position(|mi| mi.name == head) {
+        let mi = &inputs[k];
+        let values: Vec<&ColumnShape> = mi.columns.iter().filter(|c| c.name != "x").collect();
+        return match rest {
+            None => match values.as_slice() {
+                [one] => Ok(one.unit.clone()),
+                _ => Err(format!(
+                    "{head} has the columns {}: name one, e.g. {head}.{}",
+                    show_names(&mi.columns),
+                    values.first().map_or("x", |c| c.name.as_str())
+                )),
+            },
+            Some(r) => {
+                if let Some(c) = mi.columns.iter().find(|c| c.name == r) {
+                    return Ok(c.unit.clone());
+                }
+                if k > 0 && has(&mi.attributes, r) {
+                    return numeric_attribute(r);
+                }
+                if k > 0 && attributes::lookup(attributes::unqualified(r)).is_some() {
+                    return Err(format!("{head} has no attribute {r}"));
+                }
+                Err(format!(
+                    "{head} has no column {r}; its columns are {}",
+                    show_names(&mi.columns)
+                ))
+            }
+        };
+    }
+    if input.has_attribute(name) {
+        return numeric_attribute(name);
+    }
+    if attributes::lookup(attributes::unqualified(name)).is_some() {
+        return Err(format!("there is no attribute {name}"));
+    }
+    let names: Vec<&str> = inputs.iter().map(|mi| mi.name.as_str()).collect();
+    Err(format!(
+        "unknown name {name}: name an input ({}), one of its columns (b.mean) or an attribute",
+        names.join(", ")
+    ))
+}
+
+/// The unit of a numeric attribute: none for the fixed ones; parameters
+/// and derived attributes get theirs from the data.
+fn numeric_attribute(name: &str) -> Result<Option<String>, String> {
+    let fixed = attributes::unqualified(name);
+    match attributes::lookup(fixed) {
+        Some(info) if matches!(info.ty, AttrType::Number | AttrType::Any) => Ok(attributes::FIXED
+            .iter()
+            .any(|(f, ..)| *f == fixed)
+            .then(String::new)),
+        _ => Err(format!(
+            "{name} is not a number; combine computes with columns and numeric attributes"
+        )),
+    }
+}
+
+fn show_names(columns: &[ColumnShape]) -> String {
+    let names: Vec<&str> = columns.iter().map(|c| c.name.as_str()).collect();
+    names.join(", ")
+}
+
+/// The units of the names of a combine expression.
+struct NameUnits(BTreeMap<String, String>);
+
+impl Env for NameUnits {
+    fn metric(&self, _: &str) -> Option<String> {
+        None
+    }
+
+    fn series(&self, _: &str) -> Option<crate::dsl::check::SeriesUnits> {
+        None
+    }
+
+    fn derived(&mut self, name: &str) -> Result<crate::dsl::Signature, String> {
+        Err(format!("derived.{name} is a metric, not a column"))
+    }
+
+    fn attribute(&mut self, name: &str) -> Result<String, String> {
+        self.0
+            .get(name)
+            .cloned()
+            .ok_or_else(|| format!("unknown name {name}"))
+    }
 }
 
 fn visualization(cx: &mut Cx, kind: &NodeKind, input: &Shape) {

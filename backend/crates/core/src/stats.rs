@@ -26,10 +26,7 @@ pub struct Summary {
 
 /// Summarizes values. `confidence` is the level of the interval, e.g. 0.95.
 pub fn summarize(values: &[Option<f64>], percentiles: &[f64], confidence: f64) -> Summary {
-    let mut v: Vec<f64> = values
-        .iter()
-        .filter_map(|x| x.filter(|x| x.is_finite()))
-        .collect();
+    let mut v: Vec<f64> = finite(values).collect();
     let n_no_value = values.len() - v.len();
     v.sort_by(f64::total_cmp);
     let n = v.len();
@@ -64,8 +61,13 @@ pub fn summarize(values: &[Option<f64>], percentiles: &[f64], confidence: f64) -
 
 /// Mean with Kahan-Neumaier summation, so long runs of samples stay exact.
 fn mean_sorted(v: &[f64]) -> f64 {
+    neumaier(v.iter().copied()) / v.len() as f64
+}
+
+/// Sum with Kahan-Neumaier summation.
+fn neumaier(values: impl IntoIterator<Item = f64>) -> f64 {
     let (mut sum, mut c) = (0.0f64, 0.0f64);
-    for &x in v {
+    for x in values {
         let t = sum + x;
         if sum.abs() >= x.abs() {
             c += (sum - t) + x;
@@ -74,7 +76,43 @@ fn mean_sorted(v: &[f64]) -> f64 {
         }
         sum = t;
     }
-    (sum + c) / v.len() as f64
+    sum + c
+}
+
+/// The values that are values: finite ones.
+fn finite(values: &[Option<f64>]) -> impl DoubleEndedIterator<Item = f64> + '_ {
+    values.iter().filter_map(|x| x.filter(|x| x.is_finite()))
+}
+
+/// Sum of the values; no value if there are none (FR-12a).
+pub fn sum(values: &[Option<f64>]) -> Option<f64> {
+    let mut v = finite(values).peekable();
+    v.peek()?;
+    Some(neumaier(v)).filter(|s| s.is_finite())
+}
+
+/// Geometric mean of the values: no value if there are none or one is
+/// negative, 0 if one is 0.
+pub fn geomean(values: &[Option<f64>]) -> Option<f64> {
+    let v: Vec<f64> = finite(values).collect();
+    if v.is_empty() || v.iter().any(|x| *x < 0.0) {
+        return None;
+    }
+    if v.contains(&0.0) {
+        return Some(0.0);
+    }
+    let mean_ln = neumaier(v.iter().map(|x| x.ln())) / v.len() as f64;
+    Some(mean_ln.exp()).filter(|g| g.is_finite())
+}
+
+/// The first value, skipping no value.
+pub fn first(values: &[Option<f64>]) -> Option<f64> {
+    finite(values).next()
+}
+
+/// The last value, skipping no value.
+pub fn last(values: &[Option<f64>]) -> Option<f64> {
+    finite(values).next_back()
 }
 
 /// Percentile of sorted values with linear interpolation between closest
@@ -293,6 +331,43 @@ mod tests {
             (s.mean, s.median, s.stddev, s.ci),
             (Some(3.0), Some(3.0), None, None)
         );
+    }
+
+    #[test]
+    fn sums_skip_no_value_and_have_none_without_values() {
+        assert_eq!(
+            sum(&[Some(1.0), None, Some(2.5), Some(f64::NAN)]),
+            Some(3.5)
+        );
+        assert_eq!(sum(&[None, None]), None);
+        assert_eq!(sum(&[]), None);
+        assert_eq!(sum(&[Some(0.0)]), Some(0.0));
+        // Neumaier keeps the small terms.
+        assert_eq!(sum(&[Some(1e16), Some(1.0), Some(-1e16)]), Some(1.0));
+        assert_eq!(sum(&[Some(f64::MAX), Some(f64::MAX)]), None);
+    }
+
+    #[test]
+    fn geomean_has_no_value_for_negatives() {
+        assert!(close(
+            geomean(&[Some(2.0), Some(8.0), None]).unwrap(),
+            4.0,
+            1e-12
+        ));
+        assert_eq!(geomean(&[Some(2.0), Some(0.0)]), Some(0.0));
+        assert_eq!(geomean(&[Some(2.0), Some(-1.0)]), None);
+        assert_eq!(geomean(&[Some(0.0), Some(-1.0)]), None);
+        assert_eq!(geomean(&[None]), None);
+        assert_eq!(geomean(&[]), None);
+    }
+
+    #[test]
+    fn first_and_last_skip_no_value() {
+        let v = [None, Some(1.0), Some(f64::INFINITY), Some(2.0), None];
+        assert_eq!(first(&v), Some(1.0));
+        assert_eq!(last(&v), Some(2.0));
+        assert_eq!(first(&[None]), None);
+        assert_eq!(last(&[]), None);
     }
 
     #[test]

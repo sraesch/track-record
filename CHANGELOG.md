@@ -38,6 +38,13 @@ change that they can see.
   load at most `TR_CHART_MAX_POINTS` points (10 million by default). The
   endpoints that run charts follow with
   [#30](https://github.com/sraesch/track-record/issues/30).
+- The chart nodes that compute values (FR-22, FR-12, FR-12a, FR-13,
+  FR-19, [#29](https://github.com/sraesch/track-record/issues/29)):
+  `reduce` and `combine` with the statistics of the analysis (also `sum`,
+  `geomean`, `first` and `last`), `resample` onto a common grid, `match`
+  of frames with the same key, and `combine` expressions such as
+  `a.mean / b.mean` with units checked and inferred, also when a chart is
+  validated. No value is counted, never computed with.
 
 ### Changed
 

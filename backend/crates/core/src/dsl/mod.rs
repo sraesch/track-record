@@ -21,7 +21,7 @@ use std::fmt;
 
 pub use ast::{Expr, ExprKind, References};
 pub use check::{Checked, Kind, Signature};
-pub use parser::{parse, parse_attributes};
+pub use parser::{parse, parse_attributes, parse_columns};
 
 /// Longest accepted expression, in bytes.
 pub const MAX_SOURCE_LEN: usize = 4096;

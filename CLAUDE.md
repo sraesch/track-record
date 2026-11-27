@@ -108,6 +108,9 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   with the selection and evaluation the analysis uses. Derive expressions
   are parsed with `dsl::parse_attributes`, which reads attribute names;
   metric expressions (`dsl::parse`) keep rejecting them.
+  Combine expressions are parsed with `dsl::parse_columns` (bare names
+  too), resolved to columns and attributes of the match inputs and
+  evaluated per point as derive is (`chart::eval::compute`).
 - Derived metrics have no versions
   ([ADR 0017](docs/adr/0017-derived-metrics-without-versions.md)): `PUT`
   creates one or changes its definition, and `derived.<name>` is resolved by

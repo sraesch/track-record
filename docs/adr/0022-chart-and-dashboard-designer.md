@@ -325,9 +325,10 @@ The settings that the sections above leave open, as
 - **Validation** infers for every node its group levels, its columns with
   their units, and the attributes its frames and points can have. A setting
   that is a variable is checked with its default; without one, what depends
-  on it is known only when the chart runs. Until the DSL reads the input
-  names of combine expressions, the unit of an expression column is the
-  declared one.
+  on it is known only when the chart runs. The unit of a combine
+  expression is inferred where the units of all its names are known
+  (columns, fixed attributes); with parameters or derived attributes it is
+  the declared one until the chart runs.
 - **Order of values:** group orders its subgroups, and sort its frames,
   groups or points, by value: numbers, then times, texts, booleans and
   lists. Numbers compare by value, as the analysis compares parameters:
@@ -358,6 +359,41 @@ The settings that the sections above leave open, as
   their own get a value of their own. A unit the expression builds may
   have at most 256 characters (chained derives such as `attr.a * attr.a`
   double it); a longer one fails the node and asks for a declared `unit`.
+- **reduce** and **combine with functions** compute over the values of a
+  column (`column`, by default the only one that is not `x` or a count),
+  converted to the unit of the first frame. No value is counted, never
+  computed with (FR-12a): the sum of no values is no value, the geomean of
+  a negative value is no value (0 with a 0), `first` and `last` skip no
+  value, and the stddev and confidence interval of one value are no value.
+  reduce adds `n` and `n_no_value`. Its new frame keeps the attributes the
+  frames share, and each point the other attributes of its frame, so that
+  `run.started_at` can be the x of a line. combine with functions keeps
+  the point attributes that all frames share at a point.
+- **resample** puts the frames of each innermost group on one grid of
+  `points` (200 by default) from `from` to `to`, by default the range of x
+  of the group, and interpolates every other column (FR-19). Outside a
+  series and next to no value there is no value. A group without points
+  has no grid.
+- **match** keys a frame by its attributes that `except` leaves, or that
+  `only` names; the family `source` never counts. Keys compare as group
+  keys do: `10` equals `10.0`, and the same value in two units is two keys.
+  Each frame of `a` becomes a group of itself and its partners; two frames
+  of another input with one key are an error. `except: ["run", "sample"]`
+  pairs the results of runs with a reference run.
+- **combine** lines up the frames of a group point by point: frames with x
+  need the same x (in convertible units), frames without x the same number
+  of points. A frame with one point and no x applies to every point, and a
+  frame without points is no value at every point. Anything else fails the
+  node and asks for a resample first; resampling is never implicit.
+- **combine expressions** use the grammar, scalar functions and unit rules
+  of derive, and a bare name is a name too. `<input>` is the only column of
+  an input other than `x`, `<input>.<column>` a column (`a.mean`),
+  `<other input>.<attribute>` an attribute of that partner (`b.run.id`),
+  and any other attribute one of `a`'s point. An input missing from a
+  group (`unmatched: keep`) and no value give no value. Units that do not
+  fit the expression fail the node instead of giving no value, which would
+  look like the no value of FR-12a. The new frame has `a`'s attributes,
+  and each partner's under its name.
   A unit it only passes on, from an attribute or declared, may be longer.
 - **Sources:** the value of `asset.<name>` is the asset's version when the
   case has one asset of that name and it has only a version (`"v1"`). One

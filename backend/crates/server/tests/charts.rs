@@ -365,7 +365,7 @@ async fn a_graph_runs_on_the_frames_of_its_sources() {
     }
 
     // The trend of ADR 0022 up to the samples per run, case and device.
-    let spec = Spec::from_json(&json!({
+    let spec = json!({
         "format": 1,
         "variables": [{"name": "branch", "type": "text", "default": "main"}],
         "nodes": [
@@ -376,24 +376,13 @@ async fn a_graph_runs_on_the_frames_of_its_sources() {
             {"id": "samples", "type": "concatenate", "input": "per_run"},
             // Runs are grouped in the order of their ids; sort them by time.
             {"id": "ordered", "type": "sort", "input": "samples", "by": [{"key": "run.started_at"}]},
-            {"id": "chart", "type": "table", "input": "ordered", "columns": ["y"]}
+            {"id": "stats", "type": "reduce", "input": "ordered",
+             "functions": ["mean", "ci_low", "ci_high"]},
+            {"id": "chart", "type": "line", "input": "stats",
+             "x": "run.started_at", "y": "mean", "low": "ci_low", "high": "ci_high"}
         ]
-    }))
-    .unwrap()
-    .bind(&BTreeMap::new())
-    .unwrap();
-    let graph = Graph::new(&spec).unwrap();
-    let NodeKind::Source(src) = &spec.node("runs").unwrap().kind else {
-        panic!("a source")
-    };
-    let limits = Limits::default();
-    let mut budget = Budget::new(limits.max_points);
-    let loaded = source::load(&app.pool, "runs", src, &limits, &mut budget, &mut |_| {})
-        .await
-        .unwrap();
-    let sources = BTreeMap::from([("runs".to_owned(), loaded.tree)]);
-    let catalogue = catalog::unit_catalogue(&app.pool).await.unwrap();
-    let out = eval::run(&spec, &graph, sources, None, &catalogue).unwrap();
+    });
+    let out = run_chart(&app, &spec, Some("ordered")).await;
 
     // One line per case and device, ordered by key; one frame per run with
     // a point per sample, which keeps the attributes of its sample.
@@ -424,6 +413,117 @@ async fn a_graph_runs_on_the_frames_of_its_sources() {
         !pixel[0].attrs.contains_key("sample.id"),
         "differs per point"
     );
+
+    // The whole trend: a frame per case and device with a point per run.
+    let out = run_chart(&app, &spec, None).await;
+    let [iphone, pixel] = frames(&out) else {
+        panic!("a frame per line: {out:#?}")
+    };
+    assert_eq!(attr(pixel, "device.name"), &text("pixel-8"));
+    assert_eq!(pixel.column_values("mean").unwrap(), [Some(1.5), Some(3.5)]);
+    assert_eq!(pixel.column_values("n").unwrap(), [Some(2.0), Some(2.0)]);
+    let unit = |f: &Frame, c: &str| f.columns[f.column(c).unwrap()].unit.clone();
+    assert_eq!(unit(pixel, "ci_low"), "s");
+    let (low, high) = (
+        pixel.column_values("ci_low").unwrap()[0].unwrap(),
+        pixel.column_values("ci_high").unwrap()[0].unwrap(),
+    );
+    assert!(low < 1.5 && 1.5 < high, "{low} {high}");
+    assert_eq!(
+        pixel.point_attr(1, "run.id").unwrap().value,
+        text(&r2.to_string())
+    );
+    assert!(matches!(
+        pixel.point_attr(0, "run.started_at").unwrap().value,
+        AttrValue::Time(_)
+    ));
+    assert_eq!(iphone.column_values("mean").unwrap(), [Some(5.5)]);
+}
+
+#[tokio::test]
+async fn a_ratio_to_a_reference_run_goes_through_a_match() {
+    let app = app!();
+    let write = app.as_scope(TokenScope::Write).await;
+    let r1 = new_run(&write, &app, "2026-11-01T10:00:00Z").await;
+    let r2 = new_run(&write, &app, "2026-11-02T10:00:00Z").await;
+    for (run, device, ys) in [
+        (r1, "pixel-8", [1.0, 2.0]),
+        (r1, "iphone", [5.0, 6.0]),
+        (r2, "pixel-8", [3.0, 4.5]),
+    ] {
+        let body = case_execution_body(device, 10, json!([sample(0, ys[0]), sample(1, ys[1])]));
+        add_ce(&write, &app, run, &body).await;
+    }
+    // Each source to the mean per run, case and device.
+    let stats = |id: &str, input: &str| {
+        [
+            json!({"id": format!("{id}_lines"), "type": "group", "input": input,
+                   "by": ["case", "device.name"]}),
+            json!({"id": format!("{id}_runs"), "type": "group", "input": format!("{id}_lines"),
+                   "by": ["run.id"]}),
+            json!({"id": format!("{id}_samples"), "type": "concatenate",
+                   "input": format!("{id}_runs")}),
+            json!({"id": format!("{id}_ordered"), "type": "sort",
+                   "input": format!("{id}_samples"), "by": [{"key": "run.started_at"}]}),
+            json!({"id": format!("{id}_stats"), "type": "reduce",
+                   "input": format!("{id}_ordered"), "functions": ["mean"]}),
+        ]
+    };
+    let mut nodes = vec![
+        json!({"id": "runs", "type": "source", "metric": "load_time", "filter": {"suite": "nightly"}}),
+        json!({"id": "ref", "type": "source", "metric": "load_time",
+               "filter": {"run_id": [r1.to_string()]}}),
+    ];
+    nodes.extend(stats("a", "runs"));
+    nodes.extend(stats("b", "ref"));
+    nodes.extend([
+        json!({"id": "pairs", "type": "match", "inputs": {"a": "a_stats", "b": "b_stats"},
+               "except": ["run", "sample"]}),
+        json!({"id": "ratio", "type": "combine", "input": "pairs",
+               "expressions": [{"name": "ratio", "expression": "a.mean / b.mean"}]}),
+        json!({"id": "chart", "type": "line", "input": "ratio",
+               "x": "run.started_at", "y": "ratio"}),
+    ]);
+    let spec = json!({"format": 1, "nodes": nodes});
+    let out = run_chart(&app, &spec, None).await;
+    let [iphone, pixel] = frames(&out) else {
+        panic!("a frame per case and device: {out:#?}")
+    };
+    let ratio = pixel.column("ratio").unwrap();
+    assert_eq!(pixel.values[ratio], [Some(1.0), Some(2.5)]);
+    assert_eq!(iphone.column_values("ratio").unwrap(), [Some(1.0)]);
+    // The ratio of two times has no dimension.
+    let catalogue = catalog::unit_catalogue(&app.pool).await.unwrap();
+    assert!(catalogue.convertible(&pixel.columns[ratio].unit, ""));
+    assert_eq!(
+        pixel.point_attr(1, "run.id").unwrap().value,
+        text(&r2.to_string())
+    );
+    assert_eq!(attr(pixel, "b.run.id"), &text(&r1.to_string()));
+    assert_eq!(attr(pixel, "b.source"), &text("ref"));
+}
+
+/// Binds a spec with the defaults of its variables, loads its sources and
+/// runs it up to `until`, or to its visualization.
+async fn run_chart(app: &TestApp, spec: &Value, until: Option<&str>) -> Tree {
+    let spec = Spec::from_json(spec)
+        .unwrap()
+        .bind(&BTreeMap::new())
+        .unwrap();
+    let graph = Graph::new(&spec).unwrap();
+    let limits = Limits::default();
+    let mut budget = Budget::new(limits.max_points);
+    let mut sources = BTreeMap::new();
+    for n in &spec.nodes {
+        if let NodeKind::Source(src) = &n.kind {
+            let loaded = source::load(&app.pool, &n.id, src, &limits, &mut budget, &mut |_| {})
+                .await
+                .unwrap();
+            sources.insert(n.id.clone(), loaded.tree);
+        }
+    }
+    let catalogue = catalog::unit_catalogue(&app.pool).await.unwrap();
+    eval::run(&spec, &graph, sources, until, &catalogue).unwrap()
 }
 
 #[tokio::test]

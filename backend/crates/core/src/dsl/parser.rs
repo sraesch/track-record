@@ -17,6 +17,9 @@
 //! attributes instead of metrics (`param.width * param.height`, ADR 0022):
 //! `primary` then takes `IDENT ("." name)+` as an attribute, and only the
 //! scalar functions. Metric expressions keep rejecting attribute names.
+//! [`parse_columns`] reads the expressions of a combine node: as
+//! [`parse_attributes`], but a bare identifier is a name too (`a / b`); the
+//! node resolves names to the columns and attributes of its inputs.
 
 use super::ast::{BinOp, Expr, ExprKind, NamedArg};
 use super::lexer::{Token, tokenize};
@@ -24,7 +27,18 @@ use super::{Diagnostic, MAX_DEPTH, MAX_SOURCE_LEN, Span};
 
 /// Parses an expression.
 pub fn parse(src: &str) -> Result<Expr, Diagnostic> {
-    parse_with(src, false)
+    parse_with(src, Mode::Metrics)
+}
+
+/// What the names of an expression are.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    /// Metrics: `load_time`, `series.fps`, `derived.x`.
+    Metrics,
+    /// Attributes with a dot: `param.width`.
+    Attributes,
+    /// Names of a combine node: `a`, `b.mean`, `param.width`.
+    Columns,
 }
 
 /// The functions an expression over attributes can call: those that take
@@ -35,10 +49,18 @@ pub const SCALAR_FUNCTIONS: &[&str] = &["abs", "log10", "sqrt", "min", "max", "c
 /// names are attributes, not metrics, and it calls only
 /// [`SCALAR_FUNCTIONS`].
 pub fn parse_attributes(src: &str) -> Result<Expr, Diagnostic> {
-    parse_with(src, true)
+    parse_with(src, Mode::Attributes)
 }
 
-fn parse_with(src: &str, attributes: bool) -> Result<Expr, Diagnostic> {
+/// Parses an expression of a combine node (`a.mean / b.mean`): as
+/// [`parse_attributes`], except that a bare identifier is a name too. All
+/// names are [`super::ExprKind::Attribute`]s; the node resolves them to
+/// columns and attributes of its inputs.
+pub fn parse_columns(src: &str) -> Result<Expr, Diagnostic> {
+    parse_with(src, Mode::Columns)
+}
+
+fn parse_with(src: &str, mode: Mode) -> Result<Expr, Diagnostic> {
     if src.len() > MAX_SOURCE_LEN {
         return Err(Diagnostic::new(
             Span::new(0, src.len()),
@@ -56,7 +78,8 @@ fn parse_with(src: &str, attributes: bool) -> Result<Expr, Diagnostic> {
         tokens,
         pos: 0,
         depth: 0,
-        attributes,
+        attributes: mode != Mode::Metrics,
+        mode,
     };
     let expr = p.expr()?;
     let (token, span) = p.peek();
@@ -101,8 +124,10 @@ struct Parser {
     tokens: Vec<(Token, Span)>,
     pos: usize,
     depth: usize,
-    /// Names are attributes, not metrics ([`parse_attributes`]).
+    /// Names are attributes, not metrics ([`parse_attributes`],
+    /// [`parse_columns`]).
     attributes: bool,
+    mode: Mode,
 }
 
 /// A metric name as written in backquotes, without the spaces around it.
@@ -311,10 +336,12 @@ impl Parser {
 
     /// An attribute name after its first part: `param.width`, `run.id`.
     fn attribute(&mut self, first: String, span: Span) -> Result<Expr, Diagnostic> {
-        if self.peek().0 != Token::Dot {
+        if self.peek().0 != Token::Dot && self.mode != Mode::Columns {
             return Err(not_an_attribute(&first, span));
         }
-        let metric = first == "series" || first == "derived";
+        // In a combine, `series.y` can be the column of an input named
+        // `series`.
+        let metric = self.mode == Mode::Attributes && (first == "series" || first == "derived");
         let mut name = first;
         let mut end = span;
         let mut parts = 1;
@@ -606,11 +633,37 @@ mod tests {
         );
     }
 
+    #[test]
+    fn column_expressions_read_bare_and_dotted_names() {
+        let c = |src: &str| show(&parse_columns(src).unwrap());
+        assert_eq!(c("a / b"), "(@a / @b)");
+        assert_eq!(c("a.mean - b.`p99.9`"), "(@a.mean - @b.p99.9)");
+        assert_eq!(c("b.param.width * 2"), "(@b.param.width * 2)");
+        // An input may be named series or derived.
+        assert_eq!(c("series.y + derived"), "(@series.y + @derived)");
+        assert_eq!(c("max(a, b, 1[ms])"), "max(@a, @b, 1[ms])");
+        let e = parse_columns("abs(a - b) / a").unwrap();
+        let names: Vec<String> = e.attributes().into_iter().map(|(n, _)| n).collect();
+        assert_eq!(names, ["a", "b", "a"]);
+
+        let err = |src: &str| parse_columns(src).unwrap_err();
+        assert!(
+            err("rate(a)")
+                .message
+                .contains("not a function of attributes")
+        );
+        assert!(err("min(a)").message.contains("2 to 16 arguments"));
+        assert!(err("`load time` + 1").message.contains("not an attribute"));
+        // Without a call, a function name is a name.
+        assert_eq!(c("abs + 1"), "(@abs + 1)");
+    }
+
     proptest! {
         #[test]
         fn parser_never_panics(src in "[a-z0-9_ .,()+*/^=`\\[\\]-]{0,80}") {
             let _ = parse(&src);
             let _ = parse_attributes(&src);
+            let _ = parse_columns(&src);
         }
 
         #[test]

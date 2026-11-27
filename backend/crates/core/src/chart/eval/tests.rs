@@ -1,4 +1,4 @@
-//! Tests of the nodes of #28 and of the evaluation of a graph.
+//! Tests of the nodes (#28, #29) and of the evaluation of a graph.
 
 use std::collections::BTreeMap;
 
@@ -8,7 +8,8 @@ use serde_json::{Value, json};
 use super::*;
 use crate::chart::frame::{Attr, AttrValue, Attributes, Column, Frame, Group, Tree};
 use crate::chart::spec::{
-    DeriveNode, FilterNode, FlattenNode, GroupNode, SelectLatestNode, SortNode,
+    CombineNode, DeriveNode, FilterNode, FlattenNode, GroupNode, MatchNode, ReduceNode,
+    ResampleNode, SelectLatestNode, SortNode,
 };
 use crate::units::tests::catalogue;
 
@@ -953,16 +954,18 @@ fn a_source_with_two_readers_feeds_both() {
         {"id": "chart", "type": "table", "input": "m", "columns": ["y"]}
     ]));
     let source = Tree::Frames(vec![sample("r1", 1, &[1.0]), sample("r2", 2, &[2.0])]);
-    // Both filters read the source; the match is not evaluated yet (#29).
-    let err = run(
+    // Both filters read the source: the match pairs r1 with r2.
+    let out = run(
         &spec,
         &graph,
         BTreeMap::from([("runs".to_owned(), source.clone())]),
         None,
         &catalogue(),
     )
-    .unwrap_err();
-    assert_eq!(err.node.as_deref(), Some("m"));
+    .unwrap();
+    let pair = frames(&groups(&out)[0].tree);
+    assert_eq!(run_ids(pair), ["r1", "r2"]);
+    assert_eq!(pair[1].input.as_deref(), Some("b"));
     let out = run(
         &spec,
         &graph,
@@ -972,4 +975,869 @@ fn a_source_with_two_readers_feeds_both() {
     )
     .unwrap();
     assert_eq!(run_ids(frames(&out)), ["r2"]);
+}
+
+// Computing nodes (#29) ------------------------------------------------------------------
+
+/// The values of a column.
+fn col(f: &Frame, name: &str) -> Vec<Option<f64>> {
+    f.column_values(name)
+        .unwrap_or_else(|| panic!("no column {name} in {:?}", f.columns))
+        .to_vec()
+}
+
+/// Names and units of the columns.
+fn columns(f: &Frame) -> Vec<(&str, &str)> {
+    f.columns
+        .iter()
+        .map(|c| (c.name.as_str(), c.unit.as_str()))
+        .collect()
+}
+
+fn close(a: Option<f64>, b: f64) -> bool {
+    a.is_some_and(|a| (a - b).abs() <= 1e-9 * b.abs().max(1.0))
+}
+
+/// A series in fps over x in `x_unit` (time).
+fn series_frame(list: &[(&str, AttrValue)], x_unit: &str, xs: &[f64], ys: &[Option<f64>]) -> Frame {
+    Frame::new(
+        attrs(list),
+        vec![Column::x(x_unit, "time"), Column::new("y", "fps")],
+        vec![xs.iter().map(|x| Some(*x)).collect(), ys.to_vec()],
+    )
+}
+
+fn reduced(spec: Value, tree: Tree) -> Result<Tree> {
+    compute::reduce("r", &node::<ReduceNode>(spec), tree, &catalogue())
+}
+
+#[test]
+fn reduce_computes_every_function_of_a_frame() {
+    let ys = [
+        Some(2.0),
+        Some(4.0),
+        None,
+        Some(4.0),
+        Some(4.0),
+        Some(5.0),
+        Some(5.0),
+        Some(7.0),
+        Some(9.0),
+    ];
+    let out = reduced(
+        json!({"functions": ["mean", "median", "min", "max", "sum", "stddev",
+                             {"function": "percentile", "p": 95}, "ci_low", "ci_high",
+                             "geomean", "first", "last", "count"],
+               "confidence": 0.9}),
+        Tree::Frames(vec![frame(&[("run.id", text("r1"))], &ys)]),
+    )
+    .unwrap();
+    let [r] = frames(&out) else {
+        panic!("one frame")
+    };
+    assert_eq!(
+        columns(r),
+        [
+            ("mean", "ms"),
+            ("median", "ms"),
+            ("min", "ms"),
+            ("max", "ms"),
+            ("sum", "ms"),
+            ("stddev", "ms"),
+            ("p95", "ms"),
+            ("ci_low", "ms"),
+            ("ci_high", "ms"),
+            ("geomean", "ms"),
+            ("first", "ms"),
+            ("last", "ms"),
+            ("count", ""),
+            ("n", ""),
+            ("n_no_value", "")
+        ]
+    );
+    let s = crate::stats::summarize(&ys, &[95.0], 0.9);
+    let one = |name: &str| {
+        let v = col(r, name);
+        assert_eq!(v.len(), 1);
+        v[0]
+    };
+    assert_eq!(one("mean"), Some(5.0));
+    assert_eq!(one("median"), s.median);
+    assert_eq!((one("min"), one("max")), (Some(2.0), Some(9.0)));
+    assert_eq!(one("sum"), Some(40.0));
+    assert_eq!(one("stddev"), s.stddev);
+    assert_eq!(one("p95"), s.percentiles[0].1);
+    assert_eq!(
+        (one("ci_low"), one("ci_high")),
+        (s.ci.map(|c| c.0), s.ci.map(|c| c.1))
+    );
+    let ln: f64 = ys.iter().flatten().map(|y| y.ln()).sum::<f64>() / 8.0;
+    assert!(close(one("geomean"), ln.exp()));
+    assert_eq!((one("first"), one("last")), (Some(2.0), Some(9.0)));
+    assert_eq!(one("count"), Some(8.0));
+    assert_eq!((one("n"), one("n_no_value")), (Some(8.0), Some(1.0)));
+    // The frame's attributes stay with the frame: there is one.
+    assert_eq!(attr(r, "run.id"), Some(&text("r1")));
+    assert!(r.point_attrs.is_none());
+}
+
+#[test]
+fn reduce_gives_a_point_per_frame_with_its_own_attributes() {
+    let fs = vec![
+        frame(
+            &[
+                ("run.id", text("r1")),
+                ("run.started_at", time(1)),
+                ("param.w", num(10)),
+            ],
+            &[Some(1.0), Some(-3.0)],
+        ),
+        frame(
+            &[
+                ("run.id", text("r2")),
+                ("run.started_at", time(2)),
+                ("param.w", num(10)),
+            ],
+            &[Some(4.0)],
+        ),
+        frame(
+            &[
+                ("run.id", text("r1")),
+                ("run.started_at", time(1)),
+                ("param.w", num(20)),
+            ],
+            &[None],
+        ),
+    ];
+    let grouped =
+        structure::group("g", &node(json!({"by": ["param.w"]})), Tree::Frames(fs)).unwrap();
+    let out = reduced(json!({"functions": ["mean", "stddev", "geomean"]}), grouped).unwrap();
+    let [w10, w20] = frames(&out) else {
+        panic!("one frame per group")
+    };
+    // The group level is gone; the frames keep what they share.
+    assert_eq!(attr(w10, "param.w"), Some(&num(10)));
+    assert_eq!(attr(w10, "run.id"), None);
+    assert_eq!(col(w10, "mean"), [Some(-1.0), Some(4.0)]);
+    // The stddev of one point and the geomean of a negative are no value.
+    assert_eq!(col(w10, "stddev")[1], None);
+    assert_eq!(col(w10, "geomean"), [None, Some(4.0)]);
+    assert_eq!(col(w10, "n"), [Some(2.0), Some(1.0)]);
+    let points = w10.point_attrs.as_ref().unwrap();
+    assert_eq!(points[0]["run.id"].value, text("r1"));
+    assert_eq!(w10.point_attr(1, "run.started_at").unwrap().value, time(2));
+    assert_eq!(w10.point_attr(1, "param.w").unwrap().value, num(10));
+    // A frame of no values: counted, nothing computed.
+    assert_eq!(col(w20, "mean"), [None]);
+    assert_eq!(
+        (col(w20, "n"), col(w20, "n_no_value")),
+        (vec![Some(0.0)], vec![Some(1.0)])
+    );
+    // A single frame shares all its attributes: no point attributes.
+    assert_eq!(attr(w20, "run.id"), Some(&text("r1")));
+    assert!(w20.point_attrs.is_none());
+
+    // An empty list gives no frame.
+    let out = reduced(json!({"functions": ["mean"]}), Tree::Frames(vec![])).unwrap();
+    assert!(frames(&out).is_empty());
+}
+
+#[test]
+fn reduce_converts_units_and_needs_one_column() {
+    let mut s = frame(&[("run.id", text("r2"))], &[Some(0.002)]);
+    s.columns[0].unit = "s".into();
+    let out = reduced(
+        json!({"functions": ["max"]}),
+        Tree::Frames(vec![
+            frame(&[("run.id", text("r1"))], &[Some(1.0)]),
+            s.clone(),
+        ]),
+    )
+    .unwrap();
+    assert_eq!(col(&frames(&out)[0], "max"), [Some(1.0), Some(2.0)]);
+    s.columns[0].unit = "B".into();
+    let err = reduced(
+        json!({"functions": ["max"]}),
+        Tree::Frames(vec![frame(&[], &[Some(1.0)]), s]),
+    )
+    .unwrap_err();
+    assert!(err.message.contains("cannot be converted"), "{err}");
+
+    let mut two = frame(&[], &[Some(1.0)]);
+    two.columns.push(Column::new("z", "ms"));
+    two.values.push(vec![Some(2.0)]);
+    let err = reduced(
+        json!({"functions": ["mean"]}),
+        Tree::Frames(vec![two.clone()]),
+    )
+    .unwrap_err();
+    assert_eq!(err.setting.as_deref(), Some("column"));
+    assert!(err.message.contains("y, z"), "{err}");
+    let err = reduced(
+        json!({"functions": ["mean"], "column": "q"}),
+        Tree::Frames(vec![two.clone()]),
+    )
+    .unwrap_err();
+    assert!(err.message.contains("there is no column \"q\""), "{err}");
+    let out = reduced(
+        json!({"functions": ["mean"], "column": "z"}),
+        Tree::Frames(vec![two]),
+    )
+    .unwrap();
+    assert_eq!(col(&frames(&out)[0], "mean"), [Some(2.0)]);
+}
+
+fn resampled(spec: Value, tree: Tree) -> Result<Tree> {
+    compute::resample("g", &node::<ResampleNode>(spec), tree)
+}
+
+#[test]
+fn resample_puts_the_frames_of_a_group_on_one_grid() {
+    let fs = vec![
+        series_frame(
+            &[("run.id", text("r1"))],
+            "s",
+            &[0.0, 2.0, 4.0],
+            &[Some(0.0), Some(20.0), Some(40.0)],
+        ),
+        series_frame(
+            &[("run.id", text("r2"))],
+            "s",
+            &[1.0, 3.0],
+            &[Some(10.0), None],
+        ),
+    ];
+    let out = resampled(json!({"points": 5}), Tree::Frames(fs.clone())).unwrap();
+    let [a, b] = frames(&out) else { panic!() };
+    assert_eq!(
+        col(a, "x"),
+        [Some(0.0), Some(1.0), Some(2.0), Some(3.0), Some(4.0)]
+    );
+    assert_eq!(col(b, "x"), col(a, "x"));
+    assert_eq!(a.columns[0], Column::x("s", "time"));
+    assert_eq!(
+        col(a, "y"),
+        [Some(0.0), Some(10.0), Some(20.0), Some(30.0), Some(40.0)]
+    );
+    // Before a series, next to no value and after it there is no value.
+    assert_eq!(col(b, "y"), [None, Some(10.0), None, None, None]);
+    assert_eq!(attr(b, "run.id"), Some(&text("r2")));
+
+    let out = resampled(
+        json!({"points": 5, "interp": "step"}),
+        Tree::Frames(fs.clone()),
+    )
+    .unwrap();
+    let [a, b] = frames(&out) else { panic!() };
+    assert_eq!(
+        col(a, "y"),
+        [Some(0.0), Some(0.0), Some(20.0), Some(20.0), Some(40.0)]
+    );
+    assert_eq!(col(b, "y"), [None, Some(10.0), Some(10.0), None, None]);
+
+    // An explicit grid.
+    let out = resampled(json!({"points": 3, "from": 0, "to": 1}), Tree::Frames(fs)).unwrap();
+    assert_eq!(
+        col(&frames(&out)[0], "y"),
+        [Some(0.0), Some(5.0), Some(10.0)]
+    );
+    assert_eq!(col(&frames(&out)[1], "y"), [None, None, Some(10.0)]);
+}
+
+#[test]
+fn resample_grids_each_innermost_group_and_needs_x() {
+    let group = |key: i32, fs: Vec<Frame>| Group {
+        key: vec![("param.w".into(), Some(Attr::with_unit(num(key), "px")))],
+        tree: Tree::Frames(fs),
+    };
+    let mut ordered = series_frame(&[], "s", &[10.0, 20.0], &[Some(1.0), Some(2.0)]);
+    ordered.point_attrs = Some(vec![Attributes::new(), Attributes::new()]);
+    let tree = Tree::Groups(vec![
+        group(
+            1,
+            vec![series_frame(&[], "s", &[0.0, 1.0], &[Some(0.0), Some(1.0)])],
+        ),
+        // Points not in the order of x are put in order; a frame without
+        // points gives no values on the grid.
+        group(
+            2,
+            vec![
+                ordered,
+                series_frame(&[], "s", &[20.0, 10.0], &[Some(4.0), Some(3.0)]),
+                series_frame(&[], "s", &[], &[]),
+            ],
+        ),
+        // Without any points there is no grid.
+        group(3, vec![series_frame(&[], "s", &[], &[])]),
+    ]);
+    let out = resampled(json!({"points": 3}), tree).unwrap();
+    let g = groups(&out);
+    assert_eq!(
+        col(&frames(&g[0].tree)[0], "x"),
+        [Some(0.0), Some(0.5), Some(1.0)]
+    );
+    let second = frames(&g[1].tree);
+    assert_eq!(col(&second[0], "x"), [Some(10.0), Some(15.0), Some(20.0)]);
+    assert_eq!(col(&second[1], "y"), [Some(3.0), Some(3.5), Some(4.0)]);
+    assert_eq!(col(&second[2], "y"), [None, None, None]);
+    assert!(second[0].point_attrs.is_none(), "the points are new");
+    assert!(frames(&g[2].tree)[0].is_empty());
+
+    let err = resampled(json!({}), Tree::Frames(vec![frame(&[], &[Some(1.0)])])).unwrap_err();
+    assert_eq!(err.node.as_deref(), Some("g"));
+    assert!(err.message.contains("x column"), "{err}");
+}
+
+fn matched(spec: Value, inputs: Vec<(&str, Tree)>) -> Result<Tree> {
+    compute::match_frames(
+        "m",
+        &node::<MatchNode>(spec),
+        inputs.into_iter().map(|(n, t)| (n.to_owned(), t)).collect(),
+    )
+}
+
+/// A frame of run `run` with the parameter `w` and the source `source`.
+fn case_frame(source: &str, run: &str, w: AttrValue, ys: &[Option<f64>]) -> Frame {
+    frame(
+        &[
+            ("source", text(source)),
+            ("run.id", text(run)),
+            ("param.w", w),
+        ],
+        ys,
+    )
+}
+
+#[test]
+fn match_pairs_frames_with_the_same_key() {
+    let a = Tree::Frames(vec![
+        case_frame("runs", "r1", num(10), &[Some(1.0)]),
+        case_frame("runs", "r1", num(20), &[Some(2.0)]),
+        case_frame("runs", "r1", num(30), &[Some(3.0)]),
+        case_frame("runs", "r2", num(10), &[Some(4.0)]),
+    ]);
+    // 10 is 10.0; the source is never part of the key.
+    let b = Tree::Frames(vec![
+        case_frame("ref", "ref", AttrValue::number(10.0).unwrap(), &[Some(5.0)]),
+        case_frame("ref", "ref", num(20), &[Some(6.0)]),
+    ]);
+    let out = matched(
+        json!({"except": ["run"]}),
+        vec![("a", a.clone()), ("b", b.clone())],
+    )
+    .unwrap();
+    let g = groups(&out);
+    assert_eq!(g.len(), 3, "the frame of w = 30 has no partner");
+    assert_eq!(
+        g[0].key,
+        [("param.w".to_owned(), Some(Attr::with_unit(num(10), "px")))]
+    );
+    let pair = frames(&g[0].tree);
+    assert_eq!(run_ids(pair), ["r1", "ref"]);
+    assert_eq!(
+        pair.iter().map(|f| f.input.as_deref()).collect::<Vec<_>>(),
+        [Some("a"), Some("b")]
+    );
+    // A partner of several frames of a is in each group.
+    assert_eq!(run_ids(frames(&g[2].tree)), ["r2", "ref"]);
+
+    let out = matched(
+        json!({"except": ["run"], "unmatched": "keep"}),
+        vec![("a", a.clone()), ("b", b.clone())],
+    )
+    .unwrap();
+    assert_eq!(run_ids(frames(&groups(&out)[2].tree)), ["r1"]);
+
+    // With only, other attributes do not count; without except, the runs
+    // differ.
+    let out = matched(
+        json!({"only": ["param.w"]}),
+        vec![("a", a.clone()), ("b", b.clone())],
+    )
+    .unwrap();
+    assert_eq!(groups(&out).len(), 3);
+    let out = matched(json!({}), vec![("a", a.clone()), ("b", b.clone())]).unwrap();
+    assert!(groups(&out).is_empty());
+
+    // The same value in another unit is another key.
+    let mut mm = case_frame("ref", "ref", num(10), &[Some(5.0)]);
+    mm.attrs.get_mut("param.w").unwrap().unit = "mm".into();
+    let out = matched(
+        json!({"except": ["run"]}),
+        vec![("a", a.clone()), ("b", Tree::Frames(vec![mm]))],
+    )
+    .unwrap();
+    assert!(groups(&out).is_empty());
+
+    // Two partners with one key.
+    let twice = Tree::Frames(vec![
+        case_frame("ref", "x", num(10), &[Some(5.0)]),
+        case_frame("ref", "y", num(10), &[Some(6.0)]),
+    ]);
+    let err = matched(
+        json!({"except": ["run"]}),
+        vec![("a", a.clone()), ("b", twice)],
+    )
+    .unwrap_err();
+    assert!(
+        err.message
+            .contains("input b has two frames with the key param.w = 10 px"),
+        "{err}"
+    );
+
+    // The groups of a stay; each frame becomes a group below them.
+    let grouped = structure::group("g", &node(json!({"by": ["run.id"]})), a).unwrap();
+    let out = matched(json!({"except": ["run"]}), vec![("a", grouped), ("b", b)]).unwrap();
+    out.check().unwrap();
+    assert_eq!(out.depth(), 2);
+    assert_eq!(groups(&groups(&out)[0].tree).len(), 2);
+}
+
+fn combined(spec: Value, tree: Tree) -> Result<Tree> {
+    compute::combine("c", &node::<CombineNode>(spec), tree, None, &catalogue())
+}
+
+#[test]
+fn combine_with_functions_works_point_by_point() {
+    let fs = vec![
+        series_frame(
+            &[("run.id", text("r1")), ("device.name", text("d"))],
+            "s",
+            &[0.0, 1.0, 2.0],
+            &[Some(1.0), Some(2.0), Some(3.0)],
+        ),
+        series_frame(
+            &[("run.id", text("r2")), ("device.name", text("d"))],
+            "s",
+            &[0.0, 1.0, 2.0],
+            &[Some(3.0), None, Some(5.0)],
+        ),
+        // x in ms lines up with x in s.
+        series_frame(
+            &[("run.id", text("r3")), ("device.name", text("d"))],
+            "ms",
+            &[0.0, 1000.0, 2000.0],
+            &[Some(5.0), Some(6.0), None],
+        ),
+    ];
+    let out = combined(
+        json!({"functions": ["mean", "median", {"function": "percentile", "p": 90}, "sum", "count"]}),
+        Tree::Frames(fs.clone()),
+    )
+    .unwrap();
+    let [c] = frames(&out) else { panic!() };
+    assert_eq!(
+        columns(c),
+        [
+            ("x", "s"),
+            ("mean", "fps"),
+            ("median", "fps"),
+            ("p90", "fps"),
+            ("sum", "fps"),
+            ("count", "")
+        ]
+    );
+    assert_eq!(col(c, "x"), [Some(0.0), Some(1.0), Some(2.0)]);
+    assert_eq!(col(c, "mean"), [Some(3.0), Some(4.0), Some(4.0)]);
+    assert_eq!(col(c, "median"), [Some(3.0), Some(4.0), Some(4.0)]);
+    assert!(close(col(c, "p90")[0], 4.6));
+    assert_eq!(col(c, "sum"), [Some(9.0), Some(8.0), Some(8.0)]);
+    // No value is left out and not counted.
+    assert_eq!(col(c, "count"), [Some(3.0), Some(2.0), Some(2.0)]);
+    assert_eq!(attr(c, "device.name"), Some(&text("d")));
+    assert_eq!(attr(c, "run.id"), None);
+
+    // A frame with one point and no x applies to every point.
+    let mut with_scalar = fs.clone();
+    with_scalar.push(frame(&[], &[Some(2.0)]));
+    with_scalar
+        .iter_mut()
+        .for_each(|f| f.columns.last_mut().unwrap().unit = "ms".into());
+    let out = combined(
+        json!({"functions": ["min", "max"]}),
+        Tree::Frames(with_scalar),
+    )
+    .unwrap();
+    assert_eq!(
+        col(&frames(&out)[0], "min"),
+        [Some(1.0), Some(2.0), Some(2.0)]
+    );
+
+    // Frames on different x need a resample first.
+    let mut apart = fs.clone();
+    apart[1] = series_frame(
+        &[],
+        "s",
+        &[0.0, 1.5, 2.0],
+        &[Some(1.0), Some(2.0), Some(3.0)],
+    );
+    let err = combined(json!({"functions": ["mean"]}), Tree::Frames(apart)).unwrap_err();
+    assert!(
+        err.message.contains("x values differ") && err.message.contains("resample"),
+        "{err}"
+    );
+    let err = combined(
+        json!({"functions": ["mean"]}),
+        Tree::Frames(vec![
+            fs[0].clone(),
+            frame(&[], &[Some(1.0), Some(2.0), Some(3.0)]),
+        ]),
+    )
+    .unwrap_err();
+    assert!(err.message.contains("one has x"), "{err}");
+}
+
+#[test]
+fn combine_with_functions_keeps_the_point_attributes_the_frames_share() {
+    // Two devices reduced per run: the points are runs.
+    let fs = vec![
+        frame(
+            &[
+                ("device.name", text("d1")),
+                ("run.id", text("r1")),
+                ("run.started_at", time(1)),
+            ],
+            &[Some(1.0)],
+        ),
+        frame(
+            &[
+                ("device.name", text("d1")),
+                ("run.id", text("r2")),
+                ("run.started_at", time(2)),
+            ],
+            &[Some(3.0)],
+        ),
+        frame(
+            &[
+                ("device.name", text("d2")),
+                ("run.id", text("r1")),
+                ("run.started_at", time(1)),
+            ],
+            &[Some(5.0)],
+        ),
+        frame(
+            &[
+                ("device.name", text("d2")),
+                ("run.id", text("r2")),
+                ("run.started_at", time(2)),
+            ],
+            &[Some(7.0)],
+        ),
+    ];
+    let per_device =
+        structure::group("g", &node(json!({"by": ["device.name"]})), Tree::Frames(fs)).unwrap();
+    let stats = reduced(json!({"functions": ["mean"]}), per_device).unwrap();
+    let out = combined(json!({"column": "mean", "functions": ["mean"]}), stats).unwrap();
+    let [c] = frames(&out) else { panic!() };
+    assert_eq!(col(c, "mean"), [Some(3.0), Some(5.0)]);
+    assert_eq!(c.point_attr(1, "run.started_at").unwrap().value, time(2));
+    assert!(c.point_attr(0, "device.name").is_none());
+}
+
+/// Frames of a and b matched on everything but the run.
+fn pairs(a: Vec<Frame>, b: Vec<Frame>, unmatched: &str) -> Tree {
+    matched(
+        json!({"except": ["run"], "unmatched": unmatched}),
+        vec![("a", Tree::Frames(a)), ("b", Tree::Frames(b))],
+    )
+    .unwrap()
+}
+
+fn with_expressions(expressions: Value, tree: Tree) -> Result<Tree> {
+    let names = ["a".to_owned(), "b".to_owned()];
+    compute::combine(
+        "c",
+        &node::<CombineNode>(json!({"expressions": expressions})),
+        tree,
+        Some(&names),
+        &catalogue(),
+    )
+}
+
+#[test]
+fn combine_expressions_compute_per_point_with_units() {
+    let tree = pairs(
+        vec![
+            case_frame("runs", "r1", num(10), &[Some(10.0)]),
+            case_frame("runs", "r1", num(20), &[None]),
+            case_frame("runs", "r1", num(30), &[Some(30.0)]),
+        ],
+        vec![
+            case_frame("ref", "ref", num(10), &[Some(4.0)]),
+            case_frame("ref", "ref", num(20), &[Some(5.0)]),
+        ],
+        "keep",
+    );
+    let out = with_expressions(
+        json!([
+            {"name": "diff", "expression": "a - b"},
+            {"name": "ratio", "expression": "a / b"},
+            {"name": "pct", "expression": "a / b", "unit": "%"},
+            {"name": "in_s", "expression": "max(a, b)", "unit": "s"}
+        ]),
+        tree,
+    )
+    .unwrap();
+    let fs = frames(&out);
+    assert_eq!(fs.len(), 3);
+    assert_eq!(
+        columns(&fs[0]),
+        [
+            ("a", "ms"),
+            ("b", "ms"),
+            ("diff", "ms"),
+            ("ratio", "ms/ms"),
+            ("pct", "%"),
+            ("in_s", "s")
+        ]
+    );
+    assert!(catalogue().convertible("ms/ms", ""));
+    assert_eq!(col(&fs[0], "diff"), [Some(6.0)]);
+    assert_eq!(col(&fs[0], "ratio"), [Some(2.5)]);
+    assert!(close(col(&fs[0], "pct")[0], 250.0));
+    assert!(close(col(&fs[0], "in_s")[0], 0.01));
+    // No value and a missing partner give no value, in the same columns.
+    assert_eq!(col(&fs[1], "diff"), [None]);
+    assert_eq!(columns(&fs[2]), columns(&fs[0]));
+    assert_eq!(col(&fs[2], "b"), [None]);
+    assert_eq!(col(&fs[2], "ratio"), [None]);
+    // a's attributes, and the partner's under its name.
+    assert_eq!(attr(&fs[0], "run.id"), Some(&text("r1")));
+    assert_eq!(attr(&fs[0], "b.run.id"), Some(&text("ref")));
+    assert_eq!(attr(&fs[0], "b.source"), Some(&text("ref")));
+    assert_eq!(attr(&fs[2], "b.run.id"), None);
+    assert!(fs[0].input.is_none());
+}
+
+#[test]
+fn combine_expressions_read_columns_and_attributes_of_the_inputs() {
+    let reduced_a = reduced(
+        json!({"functions": ["mean"]}),
+        Tree::Frames(vec![case_frame(
+            "runs",
+            "r1",
+            num(10),
+            &[Some(4.0), Some(8.0)],
+        )]),
+    )
+    .unwrap();
+    let Tree::Frames(a) = reduced_a else { panic!() };
+    let mut b = case_frame("ref", "ref", num(10), &[Some(3.0)]);
+    b.attrs
+        .insert("sample.repetition".into(), Attr::new(num(2)));
+    let tree = matched(
+        json!({"except": ["run", "sample"]}),
+        vec![("a", Tree::Frames(a)), ("b", Tree::Frames(vec![b]))],
+    )
+    .unwrap();
+    let out = with_expressions(
+        json!([
+            {"name": "ratio", "expression": "a.mean / b"},
+            {"name": "per_rep", "expression": "b / b.sample.repetition"},
+            {"name": "area", "expression": "param.w * b.param.w"}
+        ]),
+        tree.clone(),
+    )
+    .unwrap();
+    let [c] = frames(&out) else { panic!() };
+    assert_eq!(
+        columns(c),
+        [
+            ("a.mean", "ms"),
+            ("a.n", ""),
+            ("a.n_no_value", ""),
+            ("b", "ms"),
+            ("ratio", "ms/ms"),
+            ("per_rep", "ms"),
+            ("area", "px*px")
+        ]
+    );
+    assert_eq!(col(c, "ratio"), [Some(2.0)]);
+    assert_eq!(col(c, "per_rep"), [Some(1.5)]);
+    assert_eq!(col(c, "area"), [Some(100.0)]);
+    assert_eq!(attr(c, "b.sample.repetition"), Some(&num(2)));
+
+    // No expressions: the inputs side by side.
+    let out = with_expressions(json!([]), tree.clone()).unwrap();
+    assert_eq!(
+        columns(&frames(&out)[0]),
+        [
+            ("a.mean", "ms"),
+            ("a.n", ""),
+            ("a.n_no_value", ""),
+            ("b", "ms")
+        ]
+    );
+
+    // Units that do not fit, and names that are not there, are errors.
+    let err = with_expressions(
+        json!([{"name": "e", "expression": "b + param.w"}]),
+        tree.clone(),
+    )
+    .unwrap_err();
+    assert_eq!(err.setting.as_deref(), Some("expressions[0].expression"));
+    assert!(err.span.is_some());
+    let err =
+        with_expressions(json!([{"name": "e", "expression": "1 + c"}]), tree.clone()).unwrap_err();
+    assert!(err.message.contains("unknown name c"), "{err}");
+    assert_eq!(err.span, Some(crate::dsl::Span::new(4, 5)));
+    let err =
+        with_expressions(json!([{"name": "e", "expression": "a + 1"}]), tree.clone()).unwrap_err();
+    assert!(
+        err.message
+            .contains("a has the columns mean, n, n_no_value"),
+        "{err}"
+    );
+    let err = with_expressions(json!([{"name": "e", "expression": "b.mean"}]), tree).unwrap_err();
+    assert!(err.message.contains("b has no column mean"), "{err}");
+}
+
+#[test]
+fn combine_expressions_apply_a_scalar_to_every_point_of_a_series() {
+    let a = series_frame(
+        &[("run.id", text("r1"))],
+        "s",
+        &[0.0, 1.0],
+        &[Some(30.0), Some(60.0)],
+    );
+    let mut b = frame(&[("run.id", text("ref"))], &[Some(30.0)]);
+    b.columns[0].unit = "fps".into();
+    let out = with_expressions(
+        json!([{"name": "rel", "expression": "a / b", "unit": "%"}]),
+        pairs(vec![a], vec![b], "drop"),
+    )
+    .unwrap();
+    let [c] = frames(&out) else { panic!() };
+    assert_eq!(
+        columns(c),
+        [("x", "s"), ("a", "fps"), ("b", "fps"), ("rel", "%")]
+    );
+    assert_eq!(col(c, "b"), [Some(30.0), Some(30.0)]);
+    assert!(close(col(c, "rel")[1], 200.0));
+}
+
+#[test]
+fn the_trend_of_the_adr_runs_end_to_end() {
+    let (spec, graph) = bound_spec(json!([
+        {"id": "runs", "type": "source", "metric": "load_time"},
+        {"id": "lines", "type": "group", "input": "runs", "by": ["case", "device.name"]},
+        {"id": "per_run", "type": "group", "input": "lines", "by": ["run.id"]},
+        {"id": "samples", "type": "concatenate", "input": "per_run"},
+        {"id": "stats", "type": "reduce", "input": "samples",
+         "functions": ["mean", "ci_low", "ci_high"]},
+        {"id": "chart", "type": "line", "input": "stats",
+         "x": "run.started_at", "y": "mean", "low": "ci_low", "high": "ci_high"}
+    ]));
+    let s = |run: &str, day: u32, case: &str, rep: i32, y: f64| {
+        frame(
+            &[
+                ("run.id", text(run)),
+                ("run.started_at", time(day)),
+                ("scenario.name", text(case)),
+                ("scenario.version", num(1)),
+                ("device.name", text("d1")),
+                ("sample.repetition", num(rep)),
+            ],
+            &[Some(y)],
+        )
+    };
+    let source = Tree::Frames(vec![
+        s("r1", 1, "open", 1, 1.0),
+        s("r1", 1, "open", 2, 3.0),
+        s("r2", 2, "open", 1, 2.0),
+        s("r2", 2, "open", 2, 4.0),
+        s("r1", 1, "save", 1, 10.0),
+    ]);
+    let out = run(
+        &spec,
+        &graph,
+        BTreeMap::from([("runs".to_owned(), source)]),
+        None,
+        &catalogue(),
+    )
+    .unwrap();
+    let [open, save] = frames(&out) else {
+        panic!("one frame per case and device")
+    };
+    assert_eq!(attr(open, "scenario.name"), Some(&text("open")));
+    assert_eq!(col(open, "mean"), [Some(2.0), Some(3.0)]);
+    assert_eq!(col(open, "n"), [Some(2.0), Some(2.0)]);
+    let s = crate::stats::summarize(&[Some(1.0), Some(3.0)], &[], 0.95);
+    assert_eq!(col(open, "ci_low")[0], s.ci.map(|c| c.0));
+    assert_eq!(col(open, "ci_high")[0], s.ci.map(|c| c.1));
+    assert_eq!(open.point_attr(1, "run.started_at").unwrap().value, time(2));
+    assert_eq!(col(save, "mean"), [Some(10.0)]);
+    assert_eq!(col(save, "ci_low"), [None]);
+}
+
+#[test]
+fn a_ratio_to_a_reference_runs_end_to_end() {
+    let stats = |id: &str, input: &str| {
+        [
+            json!({"id": format!("{id}_lines"), "type": "group", "input": input,
+                   "by": ["case", "device.name"]}),
+            json!({"id": format!("{id}_runs"), "type": "group", "input": format!("{id}_lines"),
+                   "by": ["run.id"]}),
+            json!({"id": format!("{id}_samples"), "type": "concatenate",
+                   "input": format!("{id}_runs")}),
+            json!({"id": format!("{id}_stats"), "type": "reduce",
+                   "input": format!("{id}_samples"), "functions": ["mean"]}),
+        ]
+    };
+    let mut nodes = vec![
+        json!({"id": "runs", "type": "source", "metric": "load_time"}),
+        json!({"id": "ref", "type": "source", "metric": "load_time"}),
+    ];
+    nodes.extend(stats("a", "runs"));
+    nodes.extend(stats("b", "ref"));
+    nodes.extend([
+        json!({"id": "pairs", "type": "match", "inputs": {"a": "a_stats", "b": "b_stats"},
+               "except": ["run"]}),
+        json!({"id": "ratio", "type": "combine", "input": "pairs",
+               "expressions": [{"name": "ratio", "expression": "a.mean / b.mean"}]}),
+        json!({"id": "chart", "type": "line", "input": "ratio",
+               "x": "run.started_at", "y": "ratio"}),
+    ]);
+    let (spec, graph) = bound_spec(Value::Array(nodes));
+    let s = |run: &str, day: u32, case: &str, y: f64| {
+        frame(
+            &[
+                ("run.id", text(run)),
+                ("run.started_at", time(day)),
+                ("scenario.name", text(case)),
+                ("device.name", text("d1")),
+            ],
+            &[Some(y)],
+        )
+    };
+    let runs = Tree::Frames(vec![
+        s("r1", 1, "open", 4.0),
+        s("r1", 1, "open", 6.0),
+        s("r2", 2, "open", 10.0),
+        s("r1", 1, "save", 3.0),
+        s("r1", 1, "close", 3.0),
+    ]);
+    let reference = Tree::Frames(vec![
+        s("r0", 1, "open", 2.0),
+        s("r0", 1, "open", 3.0),
+        s("r0", 1, "save", 1.5),
+    ]);
+    let out = run(
+        &spec,
+        &graph,
+        BTreeMap::from([("runs".to_owned(), runs), ("ref".to_owned(), reference)]),
+        None,
+        &catalogue(),
+    )
+    .unwrap();
+    // close has no reference and is dropped.
+    let [open, save] = frames(&out) else {
+        panic!("{out:#?}")
+    };
+    assert_eq!(attr(open, "scenario.name"), Some(&text("open")));
+    assert_eq!(col(open, "ratio"), [Some(2.0), Some(4.0)]);
+    assert!(catalogue().convertible(&open.columns[open.column("ratio").unwrap()].unit, ""));
+    assert_eq!(open.point_attr(1, "run.id").unwrap().value, text("r2"));
+    assert_eq!(attr(open, "b.run.id"), Some(&text("r0")));
+    assert_eq!(col(save, "ratio"), [Some(2.0)]);
 }

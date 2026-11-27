@@ -373,7 +373,7 @@ impl Series {
 
 /// x values compare equal if they are the same up to rounding of a unit
 /// conversion.
-fn same_x(a: f64, b: f64) -> bool {
+pub(crate) fn same_x(a: f64, b: f64) -> bool {
     a == b || (a - b).abs() <= 1e-9 * a.abs().max(b.abs())
 }
 
