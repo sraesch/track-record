@@ -17,14 +17,32 @@ pub fn parameter_dimension(name: &str) -> String {
 }
 
 /// Key of a JSON scalar. Numbers compare by value, as in jsonb (`10` equals
-/// `10.0`), strings and booleans by type and value.
+/// `10.0`, integers beyond 2^53 stay apart), strings and booleans by type
+/// and value.
 fn key(value: &Value) -> String {
     match value {
-        Value::Number(n) => format!("n:{}", n.as_f64().unwrap_or(f64::NAN)),
+        Value::Number(n) => format!("n:{}", number_key(n)),
         Value::String(s) => format!("s:{s}"),
         Value::Bool(b) => format!("b:{b}"),
         other => format!("x:{other}"),
     }
+}
+
+/// The exact value of a number: integers as integers (also whole floats,
+/// so `10.0` is `10`), other floats in their shortest form.
+fn number_key(n: &serde_json::Number) -> String {
+    if let Some(i) = n.as_i64() {
+        return i.to_string();
+    }
+    if let Some(u) = n.as_u64() {
+        return u.to_string();
+    }
+    let f = n.as_f64().unwrap_or(f64::NAN);
+    // Whole floats within i128 convert exactly; 2^127 itself does not fit.
+    if f.fract() == 0.0 && f.abs() < 2f64.powi(127) {
+        return (f as i128).to_string();
+    }
+    format!("{f:?}")
 }
 
 /// The current aliases, loaded once per request.
@@ -159,6 +177,36 @@ mod tests {
         assert_eq!(raw, vec!["pixel-8", "pixel-8-a", "pixel-8-old"]);
         // A name that is aliased away does not match itself.
         assert!(a.raw_device_names("pixel-8-a").is_empty());
+    }
+
+    #[test]
+    fn numbers_are_aliased_by_their_exact_value() {
+        let a = aliases(&[
+            ("parameter:width", json!(9007199254740992u64), json!(12)),
+            ("parameter:height", json!(10), json!(20)),
+        ]);
+        let params = json!({"width": 9007199254740993u64, "height": 10.0});
+        assert_eq!(
+            a.resolve_parameters(&params),
+            json!({"width": 9007199254740993u64, "height": 20})
+        );
+        let params = json!({"width": 9007199254740992u64, "height": -0.0});
+        assert_eq!(
+            a.resolve_parameters(&params),
+            json!({"width": 12, "height": -0.0})
+        );
+        assert_eq!(
+            number_key(&serde_json::Number::from_f64(1e300).unwrap()),
+            "1e300"
+        );
+        assert_eq!(
+            number_key(&serde_json::Number::from_f64(-0.0).unwrap()),
+            "0"
+        );
+        assert_eq!(
+            number_key(&serde_json::Number::from_f64(2.5).unwrap()),
+            "2.5"
+        );
     }
 
     #[test]

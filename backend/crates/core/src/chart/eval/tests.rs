@@ -343,6 +343,48 @@ fn group_keeps_cases_with_the_same_value_in_different_units_apart() {
 }
 
 #[test]
+fn a_parameter_with_an_empty_name_is_part_of_the_case() {
+    let fs = vec![
+        frame(&[("param.", num(1))], &[Some(1.0)]),
+        frame(&[("param.", num(2))], &[Some(2.0)]),
+    ];
+    let out = structure::group(
+        "g",
+        &node::<GroupNode>(json!({"by": ["case"]})),
+        Tree::Frames(fs),
+    )
+    .unwrap();
+    let keys: Vec<_> = groups(&out)
+        .iter()
+        .map(|g| {
+            let (name, attr) = &g.key[0];
+            (
+                g.key.len(),
+                name.clone(),
+                attr.as_ref().map(|a| a.value.clone()),
+            )
+        })
+        .collect();
+    assert_eq!(
+        keys,
+        vec![
+            (1, "param.".to_owned(), Some(num(1))),
+            (1, "param.".to_owned(), Some(num(2))),
+        ]
+    );
+    // An expression names it with an empty quoted name.
+    let out = derived(
+        json!({"name": "twice", "expression": "param.`` * 2"}),
+        Tree::Frames(vec![frame(&[("param.", num(3))], &[Some(1.0)])]),
+    )
+    .unwrap();
+    assert_eq!(
+        frames(&out)[0].attrs["attr.twice"].value.as_f64(),
+        Some(6.0)
+    );
+}
+
+#[test]
 fn group_keys_name_what_the_spec_names_and_what_families_find() {
     // An attribute the key names is in every key, also when no frame has it.
     let fs = vec![frame(&[("device.name", text("a"))], &[Some(1.0)])];
@@ -813,6 +855,24 @@ fn a_long_unit_that_a_derive_passes_on_is_kept() {
     )
     .unwrap_err();
     assert_eq!(err.setting.as_deref(), Some("unit"));
+}
+
+#[test]
+fn the_unit_limit_counts_characters() {
+    let micro = "µ".repeat(70);
+    let mut f = frame(&[], &[Some(1.0)]);
+    f.attrs
+        .insert("param.w".into(), Attr::with_unit(num(2), micro.clone()));
+    // 141 characters, 281 bytes.
+    let out = derived(
+        json!({"name": "a", "expression": "param.w * param.w"}),
+        Tree::Frames(vec![f]),
+    )
+    .unwrap();
+    assert_eq!(
+        frames(&out)[0].attrs["attr.a"].unit,
+        format!("{micro}*{micro}")
+    );
 }
 
 #[test]

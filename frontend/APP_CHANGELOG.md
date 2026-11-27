@@ -1,3 +1,18 @@
+## Unreleased
+
+### Fixes
+
+- Derived metrics can combine metrics in your own units with spaces or
+  digits in their names, such as `render passes` or `1000 ops`: the unit
+  of the result now stays that unit, instead of one that fits nothing
+  else.
+- An alias for a very large whole-number parameter value (beyond
+  9,007,199,254,740,992) now applies only to that value, not to its
+  neighbours. `10` and `10.0` are still the same value.
+- A derived metric is checked again for each combination of units its
+  inputs come in, also when a unit contains `|` or `;`; it no longer
+  borrows the check of another result.
+
 ## 0.1.0 — 2026-11-23
 
 The first version of Track Record: a place that keeps your benchmark

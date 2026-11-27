@@ -306,8 +306,27 @@ async fn a_source_stops_at_its_limits() {
     let err = source::load(&app.pool, "b", &fps, &points, &mut budget, &mut |_| {})
         .await
         .unwrap_err();
-    assert!(err.to_string().contains("more than 12 points"), "{err}");
+    // The second source fails before it loads inputs that do not fit
+    // into what the first one left.
+    assert!(
+        err.to_string()
+            .contains("more than the 2 points the chart may still hold"),
+        "{err}"
+    );
     assert!(err.to_string().contains("max(series.fps)"), "{err}");
+    // Without series inputs, the frames made are what counts.
+    let mut budget = Budget::new(1);
+    let err = source::load(
+        &app.pool,
+        "d",
+        &node(json!({"metric": "load_time"})),
+        &points,
+        &mut budget,
+        &mut |_| {},
+    )
+    .await
+    .unwrap_err();
+    assert!(err.to_string().contains("more than 1 points"), "{err}");
     // A sample whose inputs alone exceed the points a run may hold fails
     // before its series are loaded, also for a scalar of them.
     let tiny = Limits {
@@ -499,4 +518,56 @@ async fn a_series_without_a_value_needs_a_fitting_x_too() {
     assert!(fs[0].is_empty(), "no value: a frame without points");
     assert_eq!(fs[0].columns[0].unit, "B");
     assert_eq!(out.excluded.errors, 1);
+}
+
+#[tokio::test]
+async fn an_x_that_overflows_in_the_x_unit_is_excluded() {
+    let app = app!();
+    let write = app.as_scope(TokenScope::Write).await;
+    let run = new_run(&write, &app, "2026-11-01T10:00:00Z").await;
+    for (size, scale) in [(10, 1e-30), (20, 1.0)] {
+        let mut one = sample(0, 1.0);
+        let y: Vec<f64> = [10.0, 30.0, 60.0, 55.0, 58.0]
+            .iter()
+            .map(|y| y * scale)
+            .collect();
+        one["series"][0]["y"] = json!(y);
+        let body = case_execution_body("pixel-8", size, json!([one]));
+        add_ce(&write, &app, run, &body).await;
+    }
+    // x of about 1e302 s is no finite number of ns; x of about 1e272 s is.
+    let metric = "rekey(series.fps, cumsum(series.fps) * 1e300[s/fps])";
+    let out = load(&app, json!({"metric": metric, "x_unit": "ns"})).await;
+    let fs = frames(&out.tree);
+    assert_eq!(fs.len(), 1, "{fs:#?}");
+    assert_eq!(fs[0].values[0].len(), 5);
+    assert!(fs[0].values[0].iter().flatten().all(|x| x.is_finite()));
+    assert_eq!(out.excluded.errors, 1);
+}
+
+#[tokio::test]
+async fn a_sample_without_the_metric_needs_no_room() {
+    let app = app!();
+    let write = app.as_scope(TokenScope::Write).await;
+    let run = new_run(&write, &app, "2026-11-01T10:00:00Z").await;
+    // The second sample lacks load_time; the first fills the budget.
+    let mut lacking = sample(1, 1.0);
+    lacking["measurements"] = json!({});
+    let body = case_execution_body("pixel-8", 10, json!([sample(0, 1.0), lacking]));
+    add_ce(&write, &app, run, &body).await;
+    let limits = Limits::default();
+    let mut budget = Budget::new(1);
+    let out = source::load(
+        &app.pool,
+        "a",
+        &node(json!({"metric": "load_time"})),
+        &limits,
+        &mut budget,
+        &mut |_| {},
+    )
+    .await
+    .unwrap();
+    assert_eq!(frames(&out.tree).len(), 1);
+    assert_eq!(out.excluded.missing, 1);
+    assert_eq!(budget.used(), 1);
 }

@@ -141,11 +141,9 @@ pub fn tokenize(src: &str) -> Result<Vec<(Token, Span)>, Diagnostic> {
             let raw = &src[start + 1..end];
             let span = Span::new(start, end + 1);
             if c == '`' {
-                if raw.is_empty() {
-                    return Err(Diagnostic::new(span, "empty quoted name"));
-                }
-                // Verbatim: a metric name is trimmed where it is read, an
-                // attribute name (a parameter key) is not.
+                // Verbatim: a metric name is trimmed where it is read and
+                // must not be empty there; an attribute name (a parameter
+                // key) is read as it is, also empty (`param.``).
                 out.push((Token::Quoted(raw.to_owned()), span));
             } else {
                 out.push((Token::Unit(raw.trim().to_owned()), span));
@@ -249,7 +247,9 @@ mod tests {
         assert_eq!(err.span, Span::new(2, 3));
         let err = tokenize("`open").unwrap_err();
         assert!(err.message.contains("missing closing"));
-        assert!(tokenize("``").is_err());
+        // An empty quoted name is a token; the parser rejects it as a
+        // metric name and reads it as a parameter key.
+        assert!(tokenize("``").is_ok());
         assert!(tokenize("1e999").is_err());
     }
 }

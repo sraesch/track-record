@@ -1109,3 +1109,52 @@ fn a_derive_after_an_unknown_source_is_still_parsed() {
         "{p:#?}"
     );
 }
+
+#[test]
+fn a_parameter_with_an_empty_name_can_be_named() {
+    let p = problems(spec_with(json!([
+        {"id": "g", "type": "group", "input": "runs", "by": ["param."]},
+        {"id": "f", "type": "flatten", "input": "g"},
+        {"id": "d", "type": "derive", "input": "f", "name": "twice",
+         "expression": "param.`` * 2"}
+    ])));
+    assert!(p.is_empty(), "{p:#?}");
+}
+
+#[test]
+fn attributes_of_match_partners_are_checked_like_their_own() {
+    let spec = |b: &str, nodes: Value| {
+        let mut all = vec![
+            json!({"id": "runs", "type": "source", "metric": "load_time"}),
+            json!({"id": "ref", "type": "source", "metric": "load_time"}),
+            json!({"id": "pairs", "type": "match", "inputs": {"a": "runs", b: "ref"},
+                   "except": ["run", "sample"]}),
+            json!({"id": "both", "type": "combine", "input": "pairs",
+                   "expressions": [{"name": "ratio", "expression": format!("a / {b}"), "unit": ""}]}),
+        ];
+        all.extend(nodes.as_array().unwrap().iter().cloned());
+        let last = all.last().unwrap()["id"].clone();
+        all.push(json!({"id": "chart", "type": "table", "input": last, "columns": ["ratio"]}));
+        json!({"format": 1, "nodes": all})
+    };
+    // A fixed attribute of a partner has no unit, as its own.
+    let p = problems(spec(
+        "b",
+        json!([{"id": "d", "type": "derive", "input": "both", "name": "x",
+                "expression": "b.sample.repetition + 1[s]"}]),
+    ));
+    assert_problem(&p, Some("d"), Some("expression"), "");
+    // The parameter with an empty name of a partner can be named.
+    let p = problems(spec(
+        "b",
+        json!([{"id": "g", "type": "group", "input": "both", "by": ["b.param."]}]),
+    ));
+    assert!(p.is_empty(), "{p:#?}");
+    // A partner named series: its attributes, not a metric.
+    let p = problems(spec(
+        "series",
+        json!([{"id": "d", "type": "derive", "input": "both", "name": "x",
+                "expression": "series.param.width * 2 + series.sample.repetition"}]),
+    ));
+    assert!(p.is_empty(), "{p:#?}");
+}
