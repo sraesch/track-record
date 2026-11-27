@@ -200,20 +200,36 @@ impl Key<'_> {
     /// attributes of a family in the order of the table of fixed names,
     /// then by name (`asset.*`, `param.*`).
     pub fn names<'n>(&self, names: impl IntoIterator<Item = &'n str>) -> Vec<String> {
-        let mut out: Vec<(usize, usize, &str)> = names
+        let mut out: Vec<((usize, usize), &str)> = names
             .into_iter()
-            .filter_map(|n| {
-                let entry = self.position(n)?;
-                let fixed = FIXED
-                    .iter()
-                    .position(|(f, ..)| *f == unqualified(n))
-                    .unwrap_or(usize::MAX);
-                Some((entry, fixed, n))
-            })
+            .filter_map(|n| Some((self.rank(n)?, n)))
             .collect();
         out.sort_unstable();
-        out.dedup_by(|a, b| a.2 == b.2);
-        out.into_iter().map(|(.., n)| n.to_owned()).collect()
+        out.dedup_by(|a, b| a.1 == b.1);
+        out.into_iter().map(|(_, n)| n.to_owned()).collect()
+    }
+
+    /// Where the attribute `name` comes in the key, if it is part of it:
+    /// the entry of `by` that covers it, then its place in the table of
+    /// fixed names (`usize::MAX` for `asset.*`, `param.*`, ...). Names of
+    /// the same rank go by name.
+    pub fn rank(&self, name: &str) -> Option<(usize, usize)> {
+        let entry = self.position(name)?;
+        let fixed = FIXED
+            .iter()
+            .position(|(f, ..)| *f == unqualified(name))
+            .unwrap_or(usize::MAX);
+        Some((entry, fixed))
+    }
+
+    /// The entries of `by` that name an attribute, not a family, and that
+    /// `except` does not take out. A group key always has them, also where
+    /// no frame has a value.
+    pub fn named(&self) -> impl Iterator<Item = &str> {
+        self.by
+            .iter()
+            .filter(|e| Family::from_key(e).is_none() && self.includes(e))
+            .map(String::as_str)
     }
 }
 

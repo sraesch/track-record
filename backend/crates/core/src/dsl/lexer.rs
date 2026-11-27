@@ -138,15 +138,17 @@ pub fn tokenize(src: &str) -> Result<Vec<(Token, Span)>, Diagnostic> {
                     format!("missing closing {close:?}"),
                 ));
             };
-            let text = src[start + 1..end].trim().to_owned();
+            let raw = &src[start + 1..end];
             let span = Span::new(start, end + 1);
             if c == '`' {
-                if text.is_empty() {
+                if raw.is_empty() {
                     return Err(Diagnostic::new(span, "empty quoted name"));
                 }
-                out.push((Token::Quoted(text), span));
+                // Verbatim: a metric name is trimmed where it is read, an
+                // attribute name (a parameter key) is not.
+                out.push((Token::Quoted(raw.to_owned()), span));
             } else {
-                out.push((Token::Unit(text), span));
+                out.push((Token::Unit(raw.trim().to_owned()), span));
             }
             continue;
         }

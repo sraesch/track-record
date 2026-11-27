@@ -159,6 +159,7 @@ async fn a_source_gives_one_frame_per_sample_with_its_attributes() {
         .map(|c| (c.name.as_str(), c.unit.as_str()))
         .collect();
     assert_eq!(cols, [("x", "ms"), ("y", "fps")]);
+    assert_eq!(f.columns[0].dimension, "time");
     assert_eq!(
         f.column_values("x").unwrap(),
         [
@@ -307,6 +308,17 @@ async fn a_source_stops_at_its_limits() {
         .unwrap_err();
     assert!(err.to_string().contains("more than 12 points"), "{err}");
     assert!(err.to_string().contains("max(series.fps)"), "{err}");
+    // A sample whose inputs alone exceed the points a run may hold fails
+    // before its series are loaded, also for a scalar of them.
+    let tiny = Limits {
+        max_points: 4,
+        ..Limits::default()
+    };
+    let err = load_with(&app, json!({"metric": "max(series.fps)"}), tiny)
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("has 5 points"), "{err}");
+
     let scalars = node(json!({"metric": "max(series.fps)"}));
     let mut budget = Budget::new(points.max_points);
     let mut seen = Vec::new();
@@ -376,6 +388,7 @@ async fn a_graph_runs_on_the_frames_of_its_sources() {
                 .iter()
                 .find(|(n, _)| n == "device.name")
                 .and_then(|(_, v)| v.as_ref())
+                .map(|a| &a.value)
                 .unwrap()
         })
         .collect();
@@ -392,4 +405,98 @@ async fn a_graph_runs_on_the_frames_of_its_sources() {
         !pixel[0].attrs.contains_key("sample.id"),
         "differs per point"
     );
+}
+
+#[tokio::test]
+async fn assets_of_the_same_name_stay_apart() {
+    let app = app!();
+    let write = app.as_scope(TokenScope::Write).await;
+    let run = new_run(&write, &app, "2026-11-01T10:00:00Z").await;
+    for (assets, y) in [
+        (
+            json!([{"name": "model", "version": "v1"}, {"name": "model", "version": "v2"}]),
+            1.0,
+        ),
+        (json!([{"name": "model", "version": "v2"}]), 2.0),
+        (json!([{"name": "model", "content_hash": "v2"}]), 3.0),
+        (json!([{"name": "model", "version": "v1 (abc)"}]), 4.0),
+        (
+            json!([{"name": "model", "version": "v1", "content_hash": "abc"}]),
+            5.0,
+        ),
+    ] {
+        let mut body = case_execution_body("pixel-8", 10, json!([sample(0, y)]));
+        body["test_case"]["assets"] = assets;
+        add_ce(&write, &app, run, &body).await;
+    }
+    let out = load(&app, json!({"metric": "load_time"})).await;
+    let mut seen: Vec<(Option<f64>, AttrValue)> = frames(&out.tree)
+        .iter()
+        .map(|f| {
+            (
+                f.column_values("y").unwrap()[0],
+                attr(f, "asset.model").clone(),
+            )
+        })
+        .collect();
+    seen.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    let list = |parts: &[&str]| AttrValue::List(parts.iter().map(|p| text(p)).collect());
+    assert_eq!(
+        seen,
+        [
+            (
+                Some(1.0),
+                AttrValue::List(vec![list(&["version=v1"]), list(&["version=v2"])])
+            ),
+            (Some(2.0), text("v2")),
+            (Some(3.0), list(&["hash=v2"])),
+            (Some(4.0), text("v1 (abc)")),
+            (Some(5.0), list(&["version=v1", "hash=abc"])),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn long_series_are_loaded_in_batches_with_the_same_result() {
+    let app = app!();
+    let write = app.as_scope(TokenScope::Write).await;
+    let (run, _) = seed_run(&write, &app, "pixel-8", "2026-11-01T10:00:00Z").await;
+    let body = case_execution_body("iphone", 10, json!([sample(0, 3.0)]));
+    add_ce(&write, &app, run, &body).await;
+
+    let all = load(&app, json!({"metric": "series.fps"})).await;
+    // Every sample has a series of 5 points: one sample per batch.
+    let small = Limits {
+        batch_points: 6,
+        ..Limits::default()
+    };
+    let batched = load_with(&app, json!({"metric": "series.fps"}), small)
+        .await
+        .unwrap();
+    assert_eq!(frames(&batched.tree).len(), 3);
+    assert_eq!(batched.tree, all.tree);
+    let scalars = load_with(&app, json!({"metric": "max(series.fps)"}), small)
+        .await
+        .unwrap();
+    assert_eq!(ys(frames(&scalars.tree)), [Some(60.0); 3]);
+}
+
+#[tokio::test]
+async fn a_series_without_a_value_needs_a_fitting_x_too() {
+    let app = app!();
+    let write = app.as_scope(TokenScope::Write).await;
+    let run = new_run(&write, &app, "2026-11-01T10:00:00Z").await;
+    for x_unit in ["s", "B"] {
+        let mut one = sample(0, 1.0);
+        one["series"][0]["x_unit"] = json!(x_unit);
+        let body = case_execution_body("pixel-8", 10, json!([one]));
+        add_ce(&write, &app, run, &body).await;
+    }
+    // The latest upload has x in B; the sample with x in s does not fit.
+    let out = load(&app, json!({"metric": "series.fps * (1 / 0)"})).await;
+    let fs = frames(&out.tree);
+    assert_eq!(fs.len(), 1, "{fs:#?}");
+    assert!(fs[0].is_empty(), "no value: a frame without points");
+    assert_eq!(fs[0].columns[0].unit, "B");
+    assert_eq!(out.excluded.errors, 1);
 }

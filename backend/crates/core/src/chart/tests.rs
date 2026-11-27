@@ -1050,7 +1050,9 @@ fn derive_expressions_read_numeric_attributes() {
         {"id": "f", "type": "derive", "input": "e", "name": "f",
          "expression": "sample.repetition * 2", "unit": "ms"},
         {"id": "g", "type": "derive", "input": "f", "name": "g",
-         "expression": "attr.a * 2", "unit": "ms"}
+         "expression": "attr.a * 2", "unit": "ms"},
+        {"id": "h", "type": "derive", "input": "g", "name": "h",
+         "expression": "abs(param.width, 1)"}
     ])));
     let at = |node: &str| -> Vec<&Problem> {
         p.iter()
@@ -1084,4 +1086,26 @@ fn derive_expressions_read_numeric_attributes() {
     assert_problem(&p, Some("f"), Some("expression"), "cannot be converted");
     // A derived attribute's unit comes from the data: checked when it runs.
     assert!(at("g").is_empty(), "{p:#?}");
+    // What does not depend on units is checked also with parameters.
+    assert_problem(&p, Some("h"), Some("expression"), "abs takes 1 argument");
+}
+
+#[test]
+fn a_derive_after_an_unknown_source_is_still_parsed() {
+    let p = problems(json!({
+        "format": 1,
+        "variables": [{"name": "m", "type": "metric"}],
+        "nodes": [
+            {"id": "runs", "type": "source", "metric": {"var": "m"}},
+            {"id": "d", "type": "derive", "input": "runs", "name": "w",
+             "expression": "param.width +"},
+            {"id": "chart", "type": "table", "input": "d", "columns": ["y"]}
+        ]
+    }));
+    assert_problem(&p, Some("d"), Some("expression"), "");
+    assert!(
+        p.iter()
+            .any(|x| x.node.as_deref() == Some("d") && x.span.is_some()),
+        "{p:#?}"
+    );
 }

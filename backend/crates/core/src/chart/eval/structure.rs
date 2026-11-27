@@ -2,7 +2,7 @@
 //! "Nodes"): filter, group, flatten, sort, select_latest and concatenate.
 
 use std::cmp::Ordering;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -10,7 +10,7 @@ use serde_json::Value;
 use super::{Result, bound, map_frames, map_innermost, merge_innermost, prune};
 use crate::chart::attributes::Key;
 use crate::chart::frame::{
-    AttrValue, Attributes, Column, Frame, Group, Tree, cmp_missing_last, common_attributes,
+    Attr, AttrValue, Attributes, Column, Frame, Group, Tree, cmp_missing_last, common_attributes,
 };
 use crate::chart::problem::Problem;
 use crate::chart::spec::{
@@ -153,30 +153,25 @@ pub fn group(id: &str, n: &GroupNode, tree: Tree) -> Result<Tree> {
 }
 
 fn split(key: &Key, frames: Vec<Frame>) -> Vec<Group> {
-    let present: BTreeSet<&str> = frames
-        .iter()
-        .flat_map(|f| f.attrs.keys().map(String::as_str))
-        .collect();
-    let names = key.names(present);
-    let values: Vec<Vec<Option<AttrValue>>> = frames
+    // Each frame's key holds the attributes it has that the key includes,
+    // and the attributes the key names: sparse, so that families with many
+    // parameters or assets cost only what the frames carry.
+    let keys: Vec<Vec<(String, Option<Attr>)>> = frames
         .iter()
         .map(|f| {
-            names
-                .iter()
-                .map(|n| f.attrs.get(n).map(|a| a.value.clone()))
+            key.names(f.attrs.keys().map(String::as_str).chain(key.named()))
+                .into_iter()
+                .map(|n| {
+                    let v = f.attrs.get(&n).cloned();
+                    (n, v)
+                })
                 .collect()
         })
         .collect();
-    let cmp = |a: &[Option<AttrValue>], b: &[Option<AttrValue>]| {
-        a.iter()
-            .zip(b)
-            .map(|(x, y)| cmp_missing_last(x.as_ref(), y.as_ref(), false))
-            .find(|o| *o != Ordering::Equal)
-            .unwrap_or(Ordering::Equal)
-    };
+    let cmp = |a: &[(String, Option<Attr>)], b: &[(String, Option<Attr>)]| cmp_keys(key, a, b);
     let mut order: Vec<usize> = (0..frames.len()).collect();
     // Stable: frames with the same key keep their order.
-    order.sort_by(|&a, &b| cmp(&values[a], &values[b]));
+    order.sort_by(|&a, &b| cmp(&keys[a], &keys[b]));
 
     let mut frames: Vec<Option<Frame>> = frames.into_iter().map(Some).collect();
     let mut groups: Vec<Group> = Vec::new();
@@ -184,7 +179,7 @@ fn split(key: &Key, frames: Vec<Frame>) -> Vec<Group> {
     for i in order {
         let frame = frames[i].take().expect("each frame once");
         match last {
-            Some(l) if cmp(&values[l], &values[i]) == Ordering::Equal => {
+            Some(l) if cmp(&keys[l], &keys[i]) == Ordering::Equal => {
                 let Tree::Frames(members) = &mut groups.last_mut().expect("a group").tree else {
                     unreachable!("subgroups hold frames")
                 };
@@ -192,7 +187,7 @@ fn split(key: &Key, frames: Vec<Frame>) -> Vec<Group> {
             }
             _ => {
                 groups.push(Group {
-                    key: names.iter().cloned().zip(values[i].clone()).collect(),
+                    key: keys[i].clone(),
                     tree: Tree::Frames(vec![frame]),
                 });
                 last = Some(i);
@@ -200,6 +195,59 @@ fn split(key: &Key, frames: Vec<Frame>) -> Vec<Group> {
         }
     }
     groups
+}
+
+/// Compares two sparse keys as if both listed every attribute of either,
+/// a missing one without a value.
+fn cmp_keys(key: &Key, a: &[(String, Option<Attr>)], b: &[(String, Option<Attr>)]) -> Ordering {
+    let rank = |n: &str| {
+        (
+            key.rank(n).unwrap_or((usize::MAX, usize::MAX)),
+            n.to_owned(),
+        )
+    };
+    let (mut i, mut j) = (0, 0);
+    while i < a.len() || j < b.len() {
+        let (x, y) = match (a.get(i), b.get(j)) {
+            (Some(p), Some(q)) => match rank(&p.0).cmp(&rank(&q.0)) {
+                Ordering::Equal => {
+                    i += 1;
+                    j += 1;
+                    (p.1.as_ref(), q.1.as_ref())
+                }
+                Ordering::Less => {
+                    i += 1;
+                    (p.1.as_ref(), None)
+                }
+                Ordering::Greater => {
+                    j += 1;
+                    (None, q.1.as_ref())
+                }
+            },
+            (Some(p), None) => {
+                i += 1;
+                (p.1.as_ref(), None)
+            }
+            (None, Some(q)) => {
+                j += 1;
+                (None, q.1.as_ref())
+            }
+            (None, None) => break,
+        };
+        let o = cmp_attrs(x, y);
+        if o != Ordering::Equal {
+            return o;
+        }
+    }
+    Ordering::Equal
+}
+
+/// Orders attributes by value, then unit, so that the same value in two
+/// units (a parameter of `10 Mbit/s` and one of `10 kbit/s`) are two keys.
+/// Missing ones go last.
+fn cmp_attrs(a: Option<&Attr>, b: Option<&Attr>) -> Ordering {
+    cmp_missing_last(a.map(|x| &x.value), b.map(|x| &x.value), false)
+        .then_with(|| a.map(|x| x.unit.as_str()).cmp(&b.map(|x| x.unit.as_str())))
 }
 
 // flatten --------------------------------------------------------------------------------
@@ -280,7 +328,8 @@ pub fn sort(id: &str, n: &SortNode, tree: Tree) -> Result<Tree> {
             Ok(frames)
         }),
         SortTarget::Groups => {
-            if tree.depth() == 0 {
+            // An empty result has lost its levels; there is nothing to sort.
+            if tree.depth() == 0 && !tree.frames().is_empty() {
                 return Err(Problem::setting(
                     id,
                     "target",
@@ -310,7 +359,7 @@ fn point_value(f: &Frame, i: usize, name: &str) -> Option<AttrValue> {
 /// that all its frames share.
 fn group_value(g: &Group, name: &str) -> Option<AttrValue> {
     if let Some((_, v)) = g.key.iter().find(|(n, _)| n == name) {
-        return v.clone();
+        return v.as_ref().map(|a| a.value.clone());
     }
     common_attributes(g.tree.frames())
         .remove(name)
@@ -398,24 +447,36 @@ fn run_of<'a>(
     Some((id, get("run.started_at").map(|a| &a.value)))
 }
 
-/// The ids of the latest `n` runs among `runs`.
+/// The ids of the latest `n` runs among `runs`, by [`run_key`].
 fn latest<'a>(
     runs: impl Iterator<Item = Option<(&'a AttrValue, Option<&'a AttrValue>)>>,
     n: usize,
-) -> Vec<AttrValue> {
-    let mut seen: Vec<(&AttrValue, Option<&AttrValue>)> = Vec::new();
+) -> HashSet<String> {
+    let mut seen: HashMap<String, (&AttrValue, Option<&AttrValue>)> = HashMap::new();
     for (id, started) in runs.flatten() {
-        if !seen.iter().any(|(s, _)| s.same(id)) {
-            seen.push((id, started));
-        }
+        seen.entry(run_key(id)).or_insert((id, started));
     }
+    let mut runs: Vec<(String, (&AttrValue, Option<&AttrValue>))> = seen.into_iter().collect();
     // Newest first; a run without a start counts as the oldest.
-    seen.sort_by(|a, b| cmp_missing_last(a.1, b.1, true).then_with(|| b.0.total_cmp(a.0)));
-    seen.into_iter().take(n).map(|(id, _)| id.clone()).collect()
+    runs.sort_by(|(_, a), (_, b)| {
+        cmp_missing_last(a.1, b.1, true).then_with(|| b.0.total_cmp(a.0))
+    });
+    runs.into_iter().take(n).map(|(key, _)| key).collect()
 }
 
-fn among(ids: &[AttrValue], id: &AttrValue) -> bool {
-    ids.iter().any(|k| k.same(id))
+/// A run id as a key for hashing: run ids are texts.
+fn run_key(id: &AttrValue) -> String {
+    match id {
+        AttrValue::Text(s) => s.clone(),
+        other => format!("{other:?}"),
+    }
+}
+
+fn among(ids: &HashSet<String>, id: &AttrValue) -> bool {
+    match id {
+        AttrValue::Text(s) => ids.contains(s),
+        other => ids.contains(&run_key(other)),
+    }
 }
 
 // concatenate ----------------------------------------------------------------------------
@@ -483,11 +544,14 @@ fn show_columns(columns: &[Column]) -> String {
     let shown: Vec<String> = columns
         .iter()
         .map(|c| {
-            if c.unit.is_empty() {
-                c.name.clone()
-            } else {
-                format!("{} in {}", c.name, c.unit)
+            let mut shown = c.name.clone();
+            if !c.dimension.is_empty() {
+                shown.push_str(&format!(" ({})", c.dimension));
             }
+            if !c.unit.is_empty() {
+                shown.push_str(&format!(" in {}", c.unit));
+            }
+            shown
         })
         .collect();
     shown.join(", ")

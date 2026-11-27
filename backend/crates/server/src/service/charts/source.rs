@@ -22,8 +22,8 @@ use serde_json::Value;
 use sqlx::PgPool;
 use track_record_core::chart::spec::SourceNode;
 use track_record_core::chart::{Attr, AttrValue, Attributes, Column, Frame, Setting, Tree};
-use track_record_core::dsl::Kind;
 use track_record_core::dsl::eval::{EvalError, Value as DslValue};
+use track_record_core::dsl::{Kind, References};
 use uuid::Uuid;
 
 use crate::error::{ApiError, ApiResult};
@@ -33,11 +33,14 @@ use crate::service::analysis::{
 };
 use crate::service::derived;
 use crate::service::query::Aliases;
-use crate::service::runs::RunFilter;
+use crate::service::runs::{AssetRef, RunFilter};
 
 /// Points that one run of a chart may hold, over all its sources, unless
 /// the server is configured otherwise (`TR_CHART_MAX_POINTS`).
 pub const DEFAULT_MAX_POINTS: usize = 10_000_000;
+
+/// Points of the input series that a source loads at a time.
+pub const BATCH_POINTS: i64 = 1_000_000;
 
 /// The limits of the sources of one run of a chart.
 #[derive(Debug, Clone, Copy)]
@@ -46,6 +49,9 @@ pub struct Limits {
     pub max_samples: i64,
     /// Points over all sources.
     pub max_points: usize,
+    /// Points of input series loaded at a time; a sample with more is
+    /// loaded alone.
+    pub batch_points: i64,
 }
 
 impl Default for Limits {
@@ -53,6 +59,7 @@ impl Default for Limits {
         Self {
             max_samples: MAX_SAMPLES,
             max_points: DEFAULT_MAX_POINTS,
+            batch_points: BATCH_POINTS,
         }
     }
 }
@@ -181,62 +188,134 @@ pub async fn load(
     .map_err(|e| e.context(&format!("source {id}")))?;
     let attrs = SampleAttributes::load(pool, &ds, id, &prepared.expression).await?;
 
-    let columns = if series {
-        vec![
-            Column::new("x", x_unit.clone()),
-            Column::new("y", prepared.signature.unit.clone()),
-        ]
-    } else {
-        vec![Column::new("y", prepared.signature.unit.clone())]
-    };
+    let y = Column::new("y", prepared.signature.unit.clone());
     let mut excluded = Excluded::default();
     let mut frames = Vec::new();
     let mut evaluator = prepared.evaluator();
     let mut done = 0;
     for chunk in ds.samples.chunks(CHUNK) {
-        let ids: Vec<Uuid> = chunk.iter().map(|s| s.sample_id).collect();
-        let data = derived::load_sample_data(pool, &ids, evaluator.inputs()).await?;
-        for s in chunk {
-            let out = match evaluator.evaluate(&data[&s.sample_id]) {
-                Ok(out) => out,
-                Err(e) => {
-                    excluded.record(&e);
+        // The series a chunk reads are loaded in batches of a bounded number
+        // of points, so that a source of long series does not hold more
+        // than a batch of input points besides the frames it made.
+        for batch in batches(pool, id, chunk, evaluator.inputs(), limits).await? {
+            let ids: Vec<Uuid> = batch.iter().map(|s| s.sample_id).collect();
+            let data = derived::load_sample_data(pool, &ids, evaluator.inputs()).await?;
+            for s in batch {
+                // A run deleted while the source loads has no attributes
+                // any more; its samples are gone with it, before they are
+                // evaluated, counted or charged to the budget.
+                let Some(attrs) = attrs.of(s) else {
                     continue;
-                }
-            };
-            let values = match out.value {
-                DslValue::Scalar(v) => vec![vec![v]],
-                DslValue::Series(None) => vec![vec![], vec![]],
-                DslValue::Series(Some(points)) => {
-                    let Some(f) = prepared
+                };
+                let out = match evaluator.evaluate(&data[&s.sample_id]) {
+                    Ok(out) => out,
+                    Err(e) => {
+                        excluded.record(&e);
+                        continue;
+                    }
+                };
+                // A series, with or without a value, needs an x that
+                // converts to the source's x unit.
+                let factor = match &out.value {
+                    DslValue::Scalar(_) => 1.0,
+                    DslValue::Series(_) => match prepared
                         .catalogue
                         .conversion_factor(&out.signature.x_unit, &x_unit)
-                    else {
-                        excluded.record(&EvalError::Data(format!(
-                            "x is in {:?}, which cannot be converted to {x_unit:?}",
-                            out.signature.x_unit
-                        )));
-                        continue;
-                    };
-                    let points = points.scale_x(f);
-                    vec![
-                        points.x.into_iter().map(Some).collect(),
-                        points.y.into_iter().map(Some).collect(),
-                    ]
-                }
-            };
-            budget.take(id, values[0].len())?;
-            frames.push(Frame::new(attrs.of(s), columns.clone(), values));
+                    {
+                        Some(f) => f,
+                        None => {
+                            excluded.record(&EvalError::Data(format!(
+                                "x is in {:?}, which cannot be converted to {x_unit:?}",
+                                out.signature.x_unit
+                            )));
+                            continue;
+                        }
+                    },
+                };
+                let x = || Column::x(x_unit.clone(), out.signature.x_dimension.clone());
+                let (columns, values) = match out.value {
+                    DslValue::Scalar(v) => {
+                        budget.take(id, 1)?;
+                        (vec![y.clone()], vec![vec![v]])
+                    }
+                    DslValue::Series(None) => (vec![x(), y.clone()], vec![vec![], vec![]]),
+                    DslValue::Series(Some(points)) => {
+                        let f = factor;
+                        budget.take(id, points.len())?;
+                        let points = points.scale_x(f);
+                        (
+                            vec![x(), y.clone()],
+                            vec![
+                                points.x.into_iter().map(Some).collect(),
+                                points.y.into_iter().map(Some).collect(),
+                            ],
+                        )
+                    }
+                };
+                frames.push(Frame::new(attrs, columns, values));
+            }
+            tokio::task::yield_now().await;
         }
         done += chunk.len();
         progress(done);
-        tokio::task::yield_now().await;
     }
     Ok(Loaded {
         tree: Tree::Frames(frames),
         excluded,
         samples: ds.samples.len(),
     })
+}
+
+/// Splits `chunk` into batches whose input series have at most
+/// `limits.batch_points` points together, by the point counts stored with
+/// the series. A sample with more is a batch of its own; one whose inputs
+/// alone exceed the points a run may hold fails before it is loaded, as an
+/// expression needs all inputs of a sample at once.
+async fn batches<'a>(
+    pool: &PgPool,
+    source: &str,
+    chunk: &'a [SampleRow],
+    refs: &References,
+    limits: &Limits,
+) -> ApiResult<Vec<&'a [SampleRow]>> {
+    let max_points = limits.batch_points;
+    if refs.series.is_empty() {
+        return Ok(vec![chunk]);
+    }
+    let ids: Vec<Uuid> = chunk.iter().map(|s| s.sample_id).collect();
+    let names: Vec<&String> = refs.series.iter().collect();
+    let counts: HashMap<Uuid, i64> = sqlx::query_as(
+        "SELECT se.sample_id, sum(se.point_count)::bigint FROM series se \
+         JOIN metric mt ON mt.id = se.metric_id \
+         WHERE se.sample_id = ANY($1) AND mt.name = ANY($2) GROUP BY se.sample_id",
+    )
+    .bind(&ids)
+    .bind(names)
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .collect();
+    let mut out = Vec::new();
+    let (mut start, mut points) = (0, 0);
+    for (i, s) in chunk.iter().enumerate() {
+        let n = counts.get(&s.sample_id).copied().unwrap_or(0);
+        if n > limits.max_points as i64 {
+            return Err(ApiError::invalid(format!(
+                "source {source}: sample {} has {n} points in the series the metric reads, more \
+                 than the {} points a chart may hold; narrow the filter of the source",
+                s.sample_id, limits.max_points
+            )));
+        }
+        if i > start && points + n > max_points {
+            out.push(&chunk[start..i]);
+            (start, points) = (i, 0);
+        }
+        points += n;
+    }
+    if start < chunk.len() {
+        out.push(&chunk[start..]);
+    }
+    Ok(out)
 }
 
 /// The attributes of the samples of a data set, built once per run and per
@@ -248,8 +327,11 @@ struct SampleAttributes {
     source: Attributes,
 }
 
-/// Run attributes that the data set does not load.
+/// Run attributes that the data set does not load, and those that change
+/// while a run is uploaded, read together from one row.
 struct RunExtra {
+    status: crate::db::RunStatus,
+    is_valid: bool,
     ended_at: Option<chrono::DateTime<chrono::Utc>>,
     trigger: crate::db::RunTrigger,
     suite: String,
@@ -262,13 +344,15 @@ impl SampleAttributes {
         let run_ids: Vec<Uuid> = ds.runs.keys().copied().collect();
         let rows: Vec<(
             Uuid,
+            crate::db::RunStatus,
+            bool,
             Option<chrono::DateTime<chrono::Utc>>,
             crate::db::RunTrigger,
             String,
             i32,
             Vec<String>,
         )> = sqlx::query_as(
-            "SELECT r.id, r.ended_at, r.triggered_by, s.name, sv.version, \
+            "SELECT r.id, r.status, r.is_valid, r.ended_at, r.triggered_by, s.name, sv.version, \
                     coalesce(array_agg(t.tag ORDER BY t.tag) FILTER (WHERE t.tag IS NOT NULL), \
                              '{}') \
              FROM run r \
@@ -282,23 +366,27 @@ impl SampleAttributes {
         .await?;
         let extra: HashMap<Uuid, RunExtra> = rows
             .into_iter()
-            .map(|(id, ended_at, trigger, suite, suite_version, tags)| {
-                (
-                    id,
-                    RunExtra {
-                        ended_at,
-                        trigger,
-                        suite,
-                        suite_version,
-                        tags,
-                    },
-                )
-            })
+            .map(
+                |(id, status, is_valid, ended_at, trigger, suite, suite_version, tags)| {
+                    (
+                        id,
+                        RunExtra {
+                            status,
+                            is_valid,
+                            ended_at,
+                            trigger,
+                            suite,
+                            suite_version,
+                            tags,
+                        },
+                    )
+                },
+            )
             .collect();
         let runs = ds
             .runs
             .iter()
-            .map(|(id, run)| (*id, run_attributes(run, extra.get(id))))
+            .filter_map(|(id, run)| Some((*id, run_attributes(run, extra.get(id)?))))
             .collect();
         let cases = ds
             .test_cases
@@ -315,11 +403,11 @@ impl SampleAttributes {
         })
     }
 
-    fn of(&self, s: &SampleRow) -> Attributes {
+    /// The attributes of a sample; `None` if its run is gone.
+    fn of(&self, s: &SampleRow) -> Option<Attributes> {
         let mut a = self.source.clone();
-        if let Some(run) = self.runs.get(&s.run_id) {
-            a.extend(run.iter().map(|(k, v)| (k.clone(), v.clone())));
-        }
+        let run = self.runs.get(&s.run_id)?;
+        a.extend(run.iter().map(|(k, v)| (k.clone(), v.clone())));
         if let Some(case) = self.cases.get(&s.test_case_id) {
             a.extend(case.iter().map(|(k, v)| (k.clone(), v.clone())));
         }
@@ -335,7 +423,7 @@ impl SampleAttributes {
             "sample.warmup".into(),
             Attr::new(AttrValue::Bool(s.is_warmup)),
         );
-        a
+        Some(a)
     }
 }
 
@@ -355,15 +443,29 @@ fn name_of(v: impl serde::Serialize) -> Attr {
     }
 }
 
-fn run_attributes(run: &RunRef, extra: Option<&RunExtra>) -> Attributes {
+/// The version and content hash of an asset, tagged.
+fn asset_parts(asset: &AssetRef) -> AttrValue {
+    let mut parts = Vec::new();
+    if let Some(v) = &asset.version {
+        parts.push(AttrValue::Text(format!("version={v}")));
+    }
+    if let Some(h) = &asset.content_hash {
+        parts.push(AttrValue::Text(format!("hash={h}")));
+    }
+    AttrValue::List(parts)
+}
+
+fn run_attributes(run: &RunRef, x: &RunExtra) -> Attributes {
     let mut a = BTreeMap::new();
     a.insert("run.id".into(), text(&run.id.to_string()));
     a.insert(
         "run.started_at".into(),
         Attr::new(AttrValue::Time(run.started_at)),
     );
-    a.insert("run.status".into(), name_of(run.status));
-    a.insert("run.valid".into(), Attr::new(AttrValue::Bool(run.is_valid)));
+    // Status, validity and end time change while a run is uploaded or
+    // invalidated; they come from one read of the run's row.
+    a.insert("run.status".into(), name_of(x.status));
+    a.insert("run.valid".into(), Attr::new(AttrValue::Bool(x.is_valid)));
     a.insert("environment.id".into(), number(run.shared_environment_id));
     let sut = &run.sut_version;
     a.insert("sut.id".into(), number(sut.id));
@@ -377,38 +479,54 @@ fn run_attributes(run: &RunRef, extra: Option<&RunExtra>) -> Attributes {
             a.insert(name.into(), text(v));
         }
     }
-    if let Some(x) = extra {
-        if let Some(t) = x.ended_at {
-            a.insert("run.ended_at".into(), Attr::new(AttrValue::Time(t)));
-        }
-        a.insert("run.trigger".into(), name_of(x.trigger));
-        a.insert("suite.name".into(), text(&x.suite));
-        a.insert("suite.version".into(), number(x.suite_version));
-        a.insert(
-            "run.tags".into(),
-            Attr::new(AttrValue::List(
-                x.tags.iter().map(|t| AttrValue::Text(t.clone())).collect(),
-            )),
-        );
+    if let Some(t) = x.ended_at {
+        a.insert("run.ended_at".into(), Attr::new(AttrValue::Time(t)));
     }
+    a.insert("run.trigger".into(), name_of(x.trigger));
+    a.insert("suite.name".into(), text(&x.suite));
+    a.insert("suite.version".into(), number(x.suite_version));
+    a.insert(
+        "run.tags".into(),
+        Attr::new(AttrValue::List(
+            x.tags.iter().map(|t| AttrValue::Text(t.clone())).collect(),
+        )),
+    );
     a
 }
 
 /// The attributes of a case: scenario, assets and parameters after aliases.
-/// Parameters keep their JSON type and their unit. An asset's value is its
-/// version, or its content hash, or both as `version (hash)`.
+/// Parameters keep their JSON type and their unit.
+///
+/// `asset.<name>` is the version of the asset when the case has one asset
+/// of that name and it has only a version, the common case. One asset with
+/// a content hash is a list of `version=<version>` and `hash=<content
+/// hash>`, and several assets of the name a list of such lists, in order:
+/// distinct assets never give the same value, whatever their versions say.
 fn case_attributes(tc: &TestCaseRow) -> Attributes {
     let mut a = BTreeMap::new();
     a.insert("scenario.name".into(), text(&tc.scenario));
     a.insert("scenario.version".into(), number(tc.scenario_version));
+    let mut assets: BTreeMap<&str, Vec<&AssetRef>> = BTreeMap::new();
     for asset in &tc.assets {
-        let value = match (&asset.version, &asset.content_hash) {
-            (Some(v), Some(h)) => format!("{v} ({h})"),
-            (Some(v), None) => v.clone(),
-            (None, Some(h)) => h.clone(),
-            (None, None) => asset.id.to_string(),
+        assets.entry(&asset.name).or_default().push(asset);
+    }
+    for (name, list) in assets {
+        let value = match list.as_slice() {
+            [
+                AssetRef {
+                    version: Some(v),
+                    content_hash: None,
+                    ..
+                },
+            ] => AttrValue::Text(v.clone()),
+            [one] => asset_parts(one),
+            many => {
+                let mut values: Vec<AttrValue> = many.iter().map(|x| asset_parts(x)).collect();
+                values.sort_by(AttrValue::total_cmp);
+                AttrValue::List(values)
+            }
         };
-        a.insert(format!("asset.{}", asset.name), text(&value));
+        a.insert(format!("asset.{name}"), Attr::new(value));
     }
     for (name, value) in &tc.parameters {
         let Some(v) = AttrValue::from_json(value) else {
