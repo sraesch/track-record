@@ -390,18 +390,23 @@ impl<'a> UnitParser<'a> {
                     .sqrt()
                     .ok_or_else(|| self.err("the unit has no square root"))
             }
+            // A symbol runs to the next operator and may contain spaces
+            // (`render passes`), so that a custom unit with spaces reads
+            // back from the symbols that unit algebra writes
+            // (`render passes*render passes`, `(render passes)^2`).
             Some(_) => {
                 let start = self.pos;
                 while let Some(c) = self.rest().chars().next() {
-                    if matches!(c, '*' | '·' | '/' | '^' | '(' | ')') || c.is_whitespace() {
+                    if matches!(c, '*' | '·' | '/' | '^' | '(' | ')') {
                         break;
                     }
                     self.bump();
                 }
-                if start == self.pos {
+                let symbol = self.input[start..self.pos].trim_end();
+                if symbol.is_empty() {
                     return Err(self.err("expected a unit symbol"));
                 }
-                Ok(self.catalogue.resolve_symbol(&self.input[start..self.pos]))
+                Ok(self.catalogue.resolve_symbol(symbol))
             }
             None => Err(self.err("expected a unit symbol")),
         }
@@ -485,6 +490,37 @@ pub(crate) mod tests {
             1000.0
         ));
         assert_eq!(c.conversion_factor("°C", "K"), None);
+    }
+
+    #[test]
+    fn custom_units_with_spaces_read_back_from_their_symbols() {
+        let c = catalogue();
+        let rp = c.resolve("render passes");
+        assert_eq!(rp.dimension, Dimension::base("custom:render passes"));
+        assert_eq!(c.resolve(" render passes ").dimension, rp.dimension);
+        // The symbols unit algebra writes read back as the same unit.
+        let squared = rp.mul(&rp);
+        assert_eq!(squared.symbol, "render passes*render passes");
+        assert_eq!(c.resolve(&squared.symbol).dimension, squared.dimension);
+        let root = squared.sqrt().unwrap();
+        assert_eq!(root.symbol, "sqrt(render passes*render passes)");
+        assert_eq!(c.resolve(&root.symbol).dimension, rp.dimension);
+        let ticks = c.resolve("frame ticks");
+        for u in [ticks.powi(2), ticks.div(&c.resolve("s")), rp.div(&ticks)] {
+            let back = c.resolve(&u.symbol);
+            assert_eq!(back.dimension, u.dimension, "{}", u.symbol);
+            assert!(approx(back.conversion_factor(&u), 1.0));
+        }
+        assert!(approx(
+            c.conversion_factor("render passes / ms", "render passes/s"),
+            1000.0
+        ));
+        // Catalogue symbols are found with spaces around them.
+        assert!(approx(c.conversion_factor("kB / s", "B/s"), 1000.0));
+        assert_ne!(
+            c.resolve("frame ticks").dimension,
+            c.resolve("frame").dimension
+        );
     }
 
     #[test]

@@ -39,6 +39,15 @@ change that they can see.
   endpoints that run charts follow with
   [#30](https://github.com/sraesch/track-record/issues/30).
 
+### Fixed
+
+- Custom units with spaces (`render passes`) keep their meaning in unit
+  algebra (FR-13a, FR-17): the units a derived metric or a derive node
+  computes from them, such as `render passes*render passes` or
+  `sqrt(...)` of it, read back as the same unit, instead of becoming a
+  custom unit of their own that converts to nothing. Spaces around a unit
+  symbol no longer count either (`kB / s` is `kB/s`).
+
 ## [0.1.0] - 2026-11-23
 
 ### Added

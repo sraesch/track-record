@@ -742,6 +742,31 @@ fn a_derived_unit_reads_back_in_the_next_derive() {
 }
 
 #[test]
+fn a_custom_unit_with_spaces_reads_back_in_the_next_derive() {
+    let mut f = frame(&[("param.n", num(3))], &[Some(1.0)]);
+    f.attrs.get_mut("param.n").unwrap().unit = "render passes".into();
+    let tree = Tree::Frames(vec![f]);
+    let out = derived(
+        json!({"name": "sq", "expression": "param.n * param.n"}),
+        tree,
+    )
+    .unwrap();
+    let out = derived(json!({"name": "root", "expression": "sqrt(attr.sq)"}), out).unwrap();
+    let out = derived(
+        json!({"name": "sum", "expression": "attr.root + param.n"}),
+        out,
+    )
+    .unwrap();
+    let f = &frames(&out)[0];
+    assert_eq!(f.attrs["attr.sq"].unit, "render passes*render passes");
+    assert_eq!(
+        f.attrs["attr.root"].unit,
+        "sqrt(render passes*render passes)"
+    );
+    assert_eq!(f.attrs["attr.sum"].value.as_f64(), Some(6.0));
+}
+
+#[test]
 fn chained_derives_cannot_grow_units_without_bound() {
     let mut tree = Tree::Frames(vec![frame(&[("param.w", num(1))], &[Some(1.0)])]);
     tree = derived(json!({"name": "a0", "expression": "param.w"}), tree).unwrap();
