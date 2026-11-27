@@ -135,9 +135,28 @@ pub fn is_prefix(name: &str) -> bool {
             .any(|(p, ..)| p.strip_suffix('.') == Some(name))
 }
 
-/// The family of the attribute `name`, if it is one.
+/// The attribute `name` without the names of match inputs in front of it:
+/// `run.id` for `b.run.id` or `c.b.run.id`, which a combine makes of the
+/// attributes of its other inputs.
+/// A name that is no attribute after them stays as it is.
+pub fn unqualified(name: &str) -> &str {
+    let mut rest = name;
+    while lookup(rest).is_none() {
+        match rest.split_once('.') {
+            Some((prefix, after)) if super::spec::is_identifier(prefix) && !is_prefix(prefix) => {
+                rest = after;
+            }
+            _ => return name,
+        }
+    }
+    rest
+}
+
+/// The family of the attribute `name`, if it is one. The attributes of the
+/// other inputs of a combine (`b.run.id`) are in the family of the
+/// attribute they come from.
 pub fn family_of(name: &str) -> Option<Family> {
-    lookup(name).map(|i| i.family)
+    lookup(unqualified(name)).map(|i| i.family)
 }
 
 /// The attributes every frame of a source has: the fixed ones and the
@@ -262,5 +281,25 @@ mod tests {
         assert!(!key.includes("run.id"));
         assert!(!key.includes("sample.repetition"));
         assert!(key.includes("device.name"));
+    }
+
+    #[test]
+    fn attributes_of_other_inputs_keep_their_family() {
+        assert_eq!(unqualified("b.run.id"), "run.id");
+        assert_eq!(unqualified("c.b.param.width"), "param.width");
+        assert_eq!(unqualified("run.id"), "run.id");
+        assert_eq!(unqualified("b.mean"), "b.mean");
+        assert_eq!(family_of("b.source"), Some(Family::Source));
+        assert_eq!(family_of("c.b.run.id"), Some(Family::Run));
+
+        // A later match neither keys on the sources of partners nor keeps
+        // their runs when runs are excepted.
+        let except = names(&["run"]);
+        let key = MatchKey::Except(&except);
+        assert!(!key.includes("b.source"));
+        assert!(!key.includes("b.metric"));
+        assert!(!key.includes("b.run.id"));
+        assert!(!key.includes("c.b.sut.id"));
+        assert!(key.includes("b.device.name"));
     }
 }

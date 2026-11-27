@@ -305,9 +305,11 @@ The settings that the sections above leave open, as
 - **combine** has either `functions` (with `column`) or `expressions`, each
   `{"name", "expression", "unit"}`.
 - **match** names its inputs in `inputs`:
-  `{"a": "runs", "b": "reference"}`. A name is an identifier and not the
-  start of attribute names (`sut`, `param`, ...), so that `b.sut.id` is
-  clear after a combine.
+  `{"a": "runs", "b": "reference"}`. A name is an identifier, not `x`, and
+  not the start of attribute names (`sut`, `param`, ...), so that `b.sut.id`
+  is clear after a combine. Such attributes keep the family of the
+  attribute they come from: a later key with `except: ["run"]` also leaves
+  out `b.run.id`, and `b.source` is never part of a match key.
 - **Visualizations** assign group levels with `levels` (outermost first;
   `["panel", "color"]` by default), convert units and use log scales with
   `axes` (`{"y": {"unit": "s", "log": true}}`). `line` marks changes with

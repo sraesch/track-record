@@ -988,7 +988,7 @@ pub async fn get_series_points(
 mod tests {
     use serde_json::json;
     use track_record_core::chart::VarType;
-    use track_record_core::chart::filter::FIELDS;
+    use track_record_core::chart::filter::{FIELDS, STATUSES, TRIGGERS, VALIDITIES};
 
     use super::*;
 
@@ -1017,6 +1017,23 @@ mod tests {
         assert_eq!(filter.latest_runs, Some(5));
         assert_eq!(filter.validity, Validity::All);
         assert_eq!(filter.limit, None);
+
+        // Every value of an enumeration that charts accept is one here.
+        for (field, values) in [
+            ("status", STATUSES),
+            ("triggered_by", TRIGGERS),
+            ("validity", VALIDITIES),
+        ] {
+            for value in values {
+                let v = if field == "status" {
+                    json!([value])
+                } else {
+                    json!(value)
+                };
+                serde_json::from_value::<RunFilter>(json!({ field: v }))
+                    .unwrap_or_else(|e| panic!("{field} {value}: {e}"));
+            }
+        }
     }
 
     #[test]
