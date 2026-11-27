@@ -1033,3 +1033,55 @@ fn bounds_and_comparisons_have_the_unit_of_their_value() {
                      "value": "a", "compare": "b"}));
     assert_problem(&p, Some("chart"), Some("compare"), "cannot be converted");
 }
+
+#[test]
+fn derive_expressions_read_numeric_attributes() {
+    let p = problems(spec_with(json!([
+        {"id": "a", "type": "derive", "input": "runs", "name": "a",
+         "expression": "param.width * sut.id"},
+        {"id": "b", "type": "derive", "input": "a", "name": "b",
+         "expression": "attr.a / 2 + load_time"},
+        {"id": "c", "type": "derive", "input": "b", "name": "c",
+         "expression": "sut.branch + attr.nope + rate(param.w)"},
+        {"id": "d", "type": "derive", "input": "c", "name": "d",
+         "expression": "sut.branch + attr.nope"},
+        {"id": "e", "type": "derive", "input": "d", "name": "e",
+         "expression": "sample.repetition + 1[s]"},
+        {"id": "f", "type": "derive", "input": "e", "name": "f",
+         "expression": "sample.repetition * 2", "unit": "ms"},
+        {"id": "g", "type": "derive", "input": "f", "name": "g",
+         "expression": "attr.a * 2", "unit": "ms"}
+    ])));
+    let at = |node: &str| -> Vec<&Problem> {
+        p.iter()
+            .filter(|x| x.node.as_deref() == Some(node))
+            .collect()
+    };
+    assert!(at("a").is_empty(), "{p:#?}");
+    assert_problem(
+        &p,
+        Some("b"),
+        Some("expression"),
+        "load_time is not an attribute",
+    );
+    assert_problem(
+        &p,
+        Some("c"),
+        Some("expression"),
+        "rate is not a function of attributes",
+    );
+    assert_problem(
+        &p,
+        Some("d"),
+        Some("expression"),
+        "sut.branch is not a number",
+    );
+    assert_problem(&p, Some("d"), Some("expression"), "no attribute attr.nope");
+    assert_eq!(at("d")[0].span, Some(crate::dsl::Span::new(0, 10)));
+    // Units are checked where they are known: the fixed attributes have none.
+    assert_problem(&p, Some("e"), Some("expression"), "");
+    assert_eq!(at("e").len(), 1, "{p:#?}");
+    assert_problem(&p, Some("f"), Some("expression"), "cannot be converted");
+    // A derived attribute's unit comes from the data: checked when it runs.
+    assert!(at("g").is_empty(), "{p:#?}");
+}

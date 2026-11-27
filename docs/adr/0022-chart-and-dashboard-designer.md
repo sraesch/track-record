@@ -325,9 +325,34 @@ The settings that the sections above leave open, as
 - **Validation** infers for every node its group levels, its columns with
   their units, and the attributes its frames and points can have. A setting
   that is a variable is checked with its default; without one, what depends
-  on it is known only when the chart runs. Until the DSL reads attribute
-  and input names in derive and combine expressions, the unit of an
-  expression column is the declared one.
+  on it is known only when the chart runs. Until the DSL reads the input
+  names of combine expressions, the unit of an expression column is the
+  declared one.
+- **Order of values:** group orders its subgroups, and sort its frames,
+  groups or points, by value: numbers, then times, texts, booleans and
+  lists. Numbers compare by value, as the analysis compares parameters:
+  `10` equals `10.0`. Frames without a value for a key form the last
+  subgroup; missing values sort last, also with `desc`. The subgroups of a
+  family are keyed by its attributes in the order of the table above, then
+  `asset.*` and `param.*` by name.
+- **filter:** a missing attribute and no value meet no condition, `!=` and
+  `not in` included. On `run.tags`, `=` means the list contains the value,
+  `in` that it contains one of the values, and `!=` and `not in` the
+  opposite. Comparisons take numbers and times (RFC 3339).
+- **select_latest:** frames, or points, without `run.id` are dropped.
+- **derive:** the expression reads attributes by name (`param.width`) and
+  calls only the scalar functions `abs`, `log10`, `sqrt`, `min`, `max` and
+  `clamp`; metric expressions keep rejecting attribute names. The units of
+  parameters and derived attributes come from the data, so a run checks the
+  expression for each frame: a frame whose units do not fit, or for which
+  the expression has no value, does not get the attribute, as one without
+  an input. Validation checks units only where all attributes are fixed
+  ones, which have none. After a concatenate, points with attributes of
+  their own get a value of their own.
+- **Sources:** the value of `asset.<name>` is the asset's version, its
+  content hash, or both as `version (hash)`; `sut.tag` is a text, as a SUT
+  version has one tag. A derived series without a value is a frame without
+  points. The budget of points is `TR_CHART_MAX_POINTS` (10 million).
 
 ### Evaluation
 

@@ -12,6 +12,11 @@
 //! arg      = IDENT "=" expr | expr
 //! name     = IDENT | `QUOTED`
 //! ```
+//!
+//! [`parse_attributes`] reads the expressions of a chart that compute with
+//! attributes instead of metrics (`param.width * param.height`, ADR 0022):
+//! `primary` then takes `IDENT ("." name)+` as an attribute, and only the
+//! scalar functions. Metric expressions keep rejecting attribute names.
 
 use super::ast::{BinOp, Expr, ExprKind, NamedArg};
 use super::lexer::{Token, tokenize};
@@ -19,6 +24,21 @@ use super::{Diagnostic, MAX_DEPTH, MAX_SOURCE_LEN, Span};
 
 /// Parses an expression.
 pub fn parse(src: &str) -> Result<Expr, Diagnostic> {
+    parse_with(src, false)
+}
+
+/// The functions an expression over attributes can call: those that take
+/// and give scalars.
+pub const SCALAR_FUNCTIONS: &[&str] = &["abs", "log10", "sqrt", "min", "max", "clamp"];
+
+/// Parses an expression over attributes (`param.width * param.height`): its
+/// names are attributes, not metrics, and it calls only
+/// [`SCALAR_FUNCTIONS`].
+pub fn parse_attributes(src: &str) -> Result<Expr, Diagnostic> {
+    parse_with(src, true)
+}
+
+fn parse_with(src: &str, attributes: bool) -> Result<Expr, Diagnostic> {
     if src.len() > MAX_SOURCE_LEN {
         return Err(Diagnostic::new(
             Span::new(0, src.len()),
@@ -36,6 +56,7 @@ pub fn parse(src: &str) -> Result<Expr, Diagnostic> {
         tokens,
         pos: 0,
         depth: 0,
+        attributes,
     };
     let expr = p.expr()?;
     let (token, span) = p.peek();
@@ -63,7 +84,8 @@ fn tree_depth(e: &Expr) -> usize {
         ExprKind::Number { .. }
         | ExprKind::Metric(_)
         | ExprKind::Series(_)
-        | ExprKind::Derived(_) => 0,
+        | ExprKind::Derived(_)
+        | ExprKind::Attribute(_) => 0,
         ExprKind::Neg(inner) => tree_depth(inner),
         ExprKind::Binary { lhs, rhs, .. } => tree_depth(lhs).max(tree_depth(rhs)),
         ExprKind::Call { args, named, .. } => args
@@ -79,6 +101,8 @@ struct Parser {
     tokens: Vec<(Token, Span)>,
     pos: usize,
     depth: usize,
+    /// Names are attributes, not metrics ([`parse_attributes`]).
+    attributes: bool,
 }
 
 impl Parser {
@@ -211,12 +235,17 @@ impl Parser {
                     span,
                 })
             }
+            Token::Quoted(name) if self.attributes => Err(not_an_attribute(&name, span)),
             Token::Quoted(name) => {
                 self.bump();
                 Ok(Expr {
                     kind: ExprKind::Metric(name),
                     span,
                 })
+            }
+            Token::Ident(name) if self.attributes && self.peek_at(1) != &Token::LParen => {
+                self.bump();
+                self.attribute(name, span)
             }
             Token::Ident(name) => {
                 self.bump();
@@ -269,7 +298,45 @@ impl Parser {
         }
     }
 
+    /// An attribute name after its first part: `param.width`, `run.id`.
+    fn attribute(&mut self, first: String, span: Span) -> Result<Expr, Diagnostic> {
+        if self.peek().0 != Token::Dot {
+            return Err(not_an_attribute(&first, span));
+        }
+        if first == "series" || first == "derived" {
+            return Err(Diagnostic::new(
+                span,
+                format!(
+                    "{first}.<name> is a metric; this expression computes with attributes such as \
+                     param.width"
+                ),
+            ));
+        }
+        let mut name = first;
+        let mut end = span;
+        while self.peek().0 == Token::Dot {
+            self.bump();
+            let (part, part_span) = self.name("an attribute name after '.'")?;
+            name.push('.');
+            name.push_str(&part);
+            end = part_span;
+        }
+        Ok(Expr {
+            kind: ExprKind::Attribute(name),
+            span: span.to(end),
+        })
+    }
+
     fn call(&mut self, name: String, name_span: Span) -> Result<Expr, Diagnostic> {
+        if self.attributes && !SCALAR_FUNCTIONS.contains(&name.as_str()) {
+            return Err(Diagnostic::new(
+                name_span,
+                format!(
+                    "{name} is not a function of attributes; use {}",
+                    SCALAR_FUNCTIONS.join(", ")
+                ),
+            ));
+        }
         self.enter()?;
         self.expect(Token::LParen, "'('")?;
         let mut args = Vec::new();
@@ -279,6 +346,12 @@ impl Parser {
                 if let (Token::Ident(arg), arg_span) = self.peek().clone()
                     && *self.peek_at(1) == Token::Eq
                 {
+                    if self.attributes {
+                        return Err(Diagnostic::new(
+                            arg_span,
+                            format!("{name} takes no named arguments here"),
+                        ));
+                    }
                     self.bump();
                     self.bump();
                     let value = self.expr()?;
@@ -324,6 +397,16 @@ impl Parser {
     }
 }
 
+fn not_an_attribute(name: &str, span: Span) -> Diagnostic {
+    Diagnostic::new(
+        span,
+        format!(
+            "{name} is not an attribute; this expression computes with attributes such as \
+             param.width, not with metrics"
+        ),
+    )
+}
+
 fn binary(op: BinOp, lhs: Expr, rhs: Expr) -> Expr {
     let span = lhs.span.to(rhs.span);
     Expr {
@@ -353,6 +436,7 @@ mod tests {
             ExprKind::Metric(n) => n.clone(),
             ExprKind::Series(n) => format!("series.{n}"),
             ExprKind::Derived(n) => format!("derived.{n}"),
+            ExprKind::Attribute(n) => format!("@{n}"),
             ExprKind::Neg(e) => format!("(-{})", show(e)),
             ExprKind::Binary { op, lhs, rhs } => {
                 format!("({} {} {})", show(lhs), op.symbol(), show(rhs))
@@ -425,10 +509,54 @@ mod tests {
         assert!(err(&chain).message.contains("levels of operations"));
     }
 
+    #[test]
+    fn attribute_expressions_read_attributes_not_metrics() {
+        let a = |src: &str| show(&parse_attributes(src).unwrap());
+        assert_eq!(
+            a("param.width * param.height"),
+            "(@param.width * @param.height)"
+        );
+        assert_eq!(a("abs(sut.id - 1)"), "abs((@sut.id - 1))");
+        assert_eq!(
+            a("param.`frame size` / 2[px]"),
+            "(@param.frame size / 2[px])"
+        );
+        assert_eq!(a("b.param.width"), "@b.param.width");
+        let e = parse_attributes("max(param.w, param.h) + param.w").unwrap();
+        let names: Vec<String> = e.attributes().into_iter().map(|(n, _)| n).collect();
+        assert_eq!(names, ["param.w", "param.h", "param.w"]);
+        assert!(e.references().metrics.is_empty());
+
+        let err = |src: &str| parse_attributes(src).unwrap_err();
+        assert!(err("load_time * 2").message.contains("not an attribute"));
+        assert_eq!(err("2 * `load time`").span, Span::new(4, 15));
+        assert!(err("series.fps").message.contains("is a metric"));
+        assert!(err("derived.x + 1").message.contains("is a metric"));
+        assert!(
+            err("rate(param.w)")
+                .message
+                .contains("not a function of attributes")
+        );
+        assert!(
+            err("max(param.w, from=1)")
+                .message
+                .contains("no named arguments")
+        );
+
+        // Metric expressions keep rejecting attribute names.
+        assert!(
+            parse("param.width * 2")
+                .unwrap_err()
+                .message
+                .contains("unknown prefix")
+        );
+    }
+
     proptest! {
         #[test]
         fn parser_never_panics(src in "[a-z0-9_ .,()+*/^=`\\[\\]-]{0,80}") {
             let _ = parse(&src);
+            let _ = parse_attributes(&src);
         }
 
         #[test]

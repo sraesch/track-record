@@ -11,12 +11,15 @@
 //!   values, expressions, attributes, and the columns, units and group
 //!   levels of each node. A spec with problems can be saved but not run.
 //! - [`variables`]: variables, and binding their values ([`Spec::bind`]).
+//! - [`eval`]: what the nodes compute ([`eval::run`]), on the trees that
+//!   the server loads for the sources.
 //!
-//! What the nodes compute is not here yet; it builds on these types. Like
-//! the rest of this crate, nothing here does I/O: the units of the metrics
-//! a source reads come through [`crate::dsl::check::Env`].
+//! Like the rest of this crate, nothing here does I/O: the units of the
+//! metrics a source reads come through [`crate::dsl::check::Env`], and the
+//! frames of the sources come from the server.
 
 pub mod attributes;
+pub mod eval;
 pub mod filter;
 pub mod frame;
 pub mod graph;

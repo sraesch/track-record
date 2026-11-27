@@ -66,6 +66,10 @@ pub trait Inputs {
     fn series(&mut self, name: &str) -> Result<Series, EvalError>;
     /// The value of a derived metric, in its declared unit.
     fn derived(&mut self, name: &str) -> Result<Value, EvalError>;
+    /// The value of a numeric attribute of a chart's frame.
+    fn attribute(&mut self, name: &str) -> Result<f64, EvalError> {
+        Err(EvalError::Missing(name.to_owned()))
+    }
 }
 
 fn finite(v: Option<f64>) -> Option<f64> {
@@ -78,6 +82,7 @@ pub fn eval(node: &Node, inputs: &mut dyn Inputs) -> R {
     match node {
         Node::Const(v) => Ok(Value::Scalar(Some(*v))),
         Node::Metric(name) => Ok(Value::Scalar(finite(Some(inputs.metric(name)?)))),
+        Node::Attribute(name) => Ok(Value::Scalar(finite(Some(inputs.attribute(name)?)))),
         Node::Series(name) => Ok(Value::Series(Some(inputs.series(name)?))),
         Node::Derived(name) => inputs.derived(name),
         Node::Neg(inner) => Ok(map(eval(inner, inputs)?, |v| -v)),

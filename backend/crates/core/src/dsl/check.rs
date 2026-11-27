@@ -64,6 +64,11 @@ pub trait Env {
     fn series(&self, name: &str) -> Option<SeriesUnits>;
     /// Signature of a derived metric; `Err` explains why it is unusable.
     fn derived(&mut self, name: &str) -> Result<Signature, String>;
+    /// Unit of a numeric attribute of a chart's frame (`param.width`), for
+    /// expressions over attributes; `Err` explains why it is unusable.
+    fn attribute(&mut self, name: &str) -> Result<String, String> {
+        Err(format!("unknown attribute {name}"))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,6 +101,8 @@ pub struct Conv {
 pub enum Node {
     Const(f64),
     Metric(String),
+    /// A numeric attribute of a chart's frame.
+    Attribute(String),
     Series(String),
     Derived(String),
     Neg(Box<Node>),
@@ -305,6 +312,13 @@ impl Checker<'_> {
                     self.error(e.span, format!("{name} is only valid as interp={name}"))
                 }
                 None => self.error(e.span, format!("unknown metric {name}")),
+            },
+            ExprKind::Attribute(name) => match self.env.attribute(name) {
+                Ok(unit) => Some(T::scalar(
+                    Node::Attribute(name.clone()),
+                    U::Known(self.cat.resolve(&unit)),
+                )),
+                Err(message) => self.error(e.span, message),
             },
             ExprKind::Series(name) => match self.env.series(name) {
                 Some(s) => Some(T {
