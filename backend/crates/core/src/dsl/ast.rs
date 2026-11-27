@@ -52,6 +52,9 @@ pub enum ExprKind {
     Series(String),
     /// A derived metric (`derived.<name>`).
     Derived(String),
+    /// An attribute of a frame of a chart (`param.width`), only in
+    /// expressions read by [`crate::dsl::parser::parse_attributes`].
+    Attribute(String),
     Neg(Box<Expr>),
     Binary {
         op: BinOp,
@@ -93,7 +96,8 @@ impl Expr {
             ExprKind::Number { .. }
             | ExprKind::Metric(_)
             | ExprKind::Series(_)
-            | ExprKind::Derived(_) => {}
+            | ExprKind::Derived(_)
+            | ExprKind::Attribute(_) => {}
             ExprKind::Neg(e) => e.collect_derived(name, out),
             ExprKind::Binary { lhs, rhs, .. } => {
                 lhs.collect_derived(name, out);
@@ -127,7 +131,8 @@ impl Expr {
             ExprKind::Number { .. }
             | ExprKind::Metric(_)
             | ExprKind::Series(_)
-            | ExprKind::Derived(_) => {}
+            | ExprKind::Derived(_)
+            | ExprKind::Attribute(_) => {}
             ExprKind::Neg(e) => e.collect_metric(name, out),
             ExprKind::Binary { lhs, rhs, .. } => {
                 lhs.collect_metric(name, out);
@@ -155,7 +160,7 @@ impl Expr {
 
     fn collect(&self, refs: &mut References) {
         match &self.kind {
-            ExprKind::Number { .. } => {}
+            ExprKind::Number { .. } | ExprKind::Attribute(_) => {}
             ExprKind::Metric(n) => {
                 refs.metrics.insert(n.clone());
             }
@@ -178,6 +183,37 @@ impl Expr {
                     if !KEYWORD_ARGS.contains(&n.name.as_str()) {
                         n.value.collect(refs);
                     }
+                }
+            }
+        }
+    }
+
+    /// The attributes the expression reads, with where, in source order.
+    pub fn attributes(&self) -> Vec<(String, Span)> {
+        let mut out = Vec::new();
+        self.collect_attributes(&mut out);
+        out.sort_by_key(|(_, s)| s.start);
+        out
+    }
+
+    fn collect_attributes(&self, out: &mut Vec<(String, Span)>) {
+        match &self.kind {
+            ExprKind::Attribute(n) => out.push((n.clone(), self.span)),
+            ExprKind::Number { .. }
+            | ExprKind::Metric(_)
+            | ExprKind::Series(_)
+            | ExprKind::Derived(_) => {}
+            ExprKind::Neg(e) => e.collect_attributes(out),
+            ExprKind::Binary { lhs, rhs, .. } => {
+                lhs.collect_attributes(out);
+                rhs.collect_attributes(out);
+            }
+            ExprKind::Call { args, named, .. } => {
+                for a in args {
+                    a.collect_attributes(out);
+                }
+                for n in named {
+                    n.value.collect_attributes(out);
                 }
             }
         }

@@ -10,6 +10,7 @@
 //! The output of every node is a [`Tree`]: an ordered list of frames, or of
 //! groups, never both. All frames are at the same depth.
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
@@ -74,6 +75,70 @@ impl AttrValue {
             _ => None,
         }
     }
+
+    /// The order in which nodes sort and group values: numbers, times,
+    /// texts, booleans, lists; within a type by value. Numbers compare by
+    /// value, as the analysis compares parameters: `10` equals `10.0`, and
+    /// integers beyond the precision of `f64` stay apart.
+    pub fn total_cmp(&self, other: &AttrValue) -> Ordering {
+        use AttrValue as V;
+        match (self, other) {
+            (V::Number(a), V::Number(b)) => cmp_numbers(a, b),
+            (V::Time(a), V::Time(b)) => a.cmp(b),
+            (V::Text(a), V::Text(b)) => a.cmp(b),
+            (V::Bool(a), V::Bool(b)) => a.cmp(b),
+            (V::List(a), V::List(b)) => {
+                for (x, y) in a.iter().zip(b) {
+                    let o = x.total_cmp(y);
+                    if o != Ordering::Equal {
+                        return o;
+                    }
+                }
+                a.len().cmp(&b.len())
+            }
+            _ => self.rank().cmp(&other.rank()),
+        }
+    }
+
+    /// True if the two values are the same by [`AttrValue::total_cmp`].
+    pub fn same(&self, other: &AttrValue) -> bool {
+        self.total_cmp(other) == Ordering::Equal
+    }
+
+    fn rank(&self) -> u8 {
+        match self {
+            AttrValue::Number(_) => 0,
+            AttrValue::Time(_) => 1,
+            AttrValue::Text(_) => 2,
+            AttrValue::Bool(_) => 3,
+            AttrValue::List(_) => 4,
+        }
+    }
+}
+
+fn cmp_numbers(a: &serde_json::Number, b: &serde_json::Number) -> Ordering {
+    if let (Some(x), Some(y)) = (a.as_i64(), b.as_i64()) {
+        return x.cmp(&y);
+    }
+    if let (Some(x), Some(y)) = (a.as_u64(), b.as_u64()) {
+        return x.cmp(&y);
+    }
+    let (x, y) = (a.as_f64().unwrap_or(0.0), b.as_f64().unwrap_or(0.0));
+    x.total_cmp(&y)
+}
+
+/// Orders optional values with the missing ones last, also when `desc`
+/// reverses the order of the others.
+pub fn cmp_missing_last(a: Option<&AttrValue>, b: Option<&AttrValue>, desc: bool) -> Ordering {
+    match (a, b) {
+        (Some(x), Some(y)) => {
+            let o = x.total_cmp(y);
+            if desc { o.reverse() } else { o }
+        }
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
+    }
 }
 
 /// An attribute with its unit (`""` for none); parameters have one.
@@ -99,8 +164,32 @@ impl Attr {
     }
 }
 
+impl Attr {
+    /// Same value and unit.
+    pub fn same(&self, other: &Attr) -> bool {
+        self.unit == other.unit && self.value.same(&other.value)
+    }
+}
+
 /// Attributes by name.
 pub type Attributes = BTreeMap<String, Attr>;
+
+/// The attributes that all frames share: same value and unit. A frame
+/// merged from them (reduce, concatenate, combine) keeps these.
+pub fn common_attributes<'a>(frames: impl IntoIterator<Item = &'a Frame>) -> Attributes {
+    let mut frames = frames.into_iter();
+    let Some(first) = frames.next() else {
+        return Attributes::new();
+    };
+    let mut common = first.attrs.clone();
+    for f in frames {
+        common.retain(|name, attr| f.attrs.get(name).is_some_and(|a| a.same(attr)));
+        if common.is_empty() {
+            break;
+        }
+    }
+    common
+}
 
 /// An ordered list of points with the same columns.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -157,6 +246,23 @@ impl Frame {
             .and_then(|p| p.get(i))
             .and_then(|a| a.get(name))
             .or_else(|| self.attrs.get(name))
+    }
+
+    /// Keeps the points at `indices`, in that order: the values of every
+    /// column and the point attributes move together.
+    pub fn select_points(&mut self, indices: &[usize]) {
+        for column in &mut self.values {
+            *column = indices.iter().map(|&i| column[i]).collect();
+        }
+        if let Some(points) = &mut self.point_attrs {
+            let mut old: Vec<Option<Attributes>> =
+                std::mem::take(points).into_iter().map(Some).collect();
+            // Indices do not repeat: a point is kept or moved, never copied.
+            *points = indices
+                .iter()
+                .map(|&i| old[i].take().unwrap_or_default())
+                .collect();
+        }
     }
 
     /// Checks that every column has one value per point and that the point
@@ -308,6 +414,33 @@ mod tests {
         }]);
         nested.check().unwrap();
         assert_eq!(nested.frames().len(), 1);
+    }
+
+    #[test]
+    fn values_order_by_type_then_value_and_numbers_by_value() {
+        let j = |v: serde_json::Value| AttrValue::from_json(&v).unwrap();
+        assert!(j(serde_json::json!(10)).same(&j(serde_json::json!(10.0))));
+        assert!(!j(serde_json::json!(10)).same(&j(serde_json::json!("10"))));
+        let big = |s: &str| AttrValue::from_json(&serde_json::from_str(s).unwrap()).unwrap();
+        assert_eq!(
+            big("9007199254740992").total_cmp(&big("9007199254740993")),
+            Ordering::Less
+        );
+        let mut values = [
+            j(serde_json::json!([true])),
+            AttrValue::Bool(false),
+            j(serde_json::json!("a")),
+            AttrValue::Time(DateTime::<Utc>::UNIX_EPOCH),
+            j(serde_json::json!(2.5)),
+            j(serde_json::json!(-3)),
+        ];
+        values.sort_by(AttrValue::total_cmp);
+        assert_eq!(values[0], j(serde_json::json!(-3)));
+        assert_eq!(values[2], AttrValue::Time(DateTime::<Utc>::UNIX_EPOCH));
+        assert_eq!(values[5], j(serde_json::json!([true])));
+        let x = j(serde_json::json!(1));
+        assert_eq!(cmp_missing_last(Some(&x), None, true), Ordering::Less);
+        assert_eq!(cmp_missing_last(None, Some(&x), false), Ordering::Greater);
     }
 
     #[test]

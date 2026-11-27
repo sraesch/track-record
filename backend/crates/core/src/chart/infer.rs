@@ -15,12 +15,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 
-use super::attributes::{self, Family};
+use super::attributes::{self, AttrType, Family};
 use super::graph::Graph;
 use super::problem::Problem;
 use super::spec::{
-    CombineNode, DEFAULT_LEVELS, FlattenLevels, MatchNode, NodeKind, On, ReduceNode, RoleKind,
-    SortTarget, SourceNode, Spec, is_identifier,
+    CombineNode, DEFAULT_LEVELS, DeriveNode, FlattenLevels, MatchNode, NodeKind, On, ReduceNode,
+    RoleKind, SortTarget, SourceNode, Spec, is_identifier,
 };
 use super::variables::{Setting, check_variables};
 use crate::dsl::check::{Env, Kind};
@@ -316,6 +316,7 @@ fn infer(
             Some(input.clone())
         }
         NodeKind::Derive(n) => {
+            derive_expression(cx, n, input);
             let mut shape = input.clone();
             if is_identifier(&n.name) {
                 let name = format!("attr.{}", n.name);
@@ -505,6 +506,65 @@ fn source(cx: &mut Cx, env: &mut dyn Env, s: &SourceNode) -> Option<Shape> {
         columns,
         attributes: attributes::source_attributes().collect(),
     })
+}
+
+/// Checks the expression of a derive node: its syntax, that its names are
+/// numeric attributes of the input, and, where all their units are known
+/// (the fixed attributes have none), its units. The units of parameters
+/// and derived attributes come from the data; the run checks them per
+/// frame.
+fn derive_expression(cx: &mut Cx, n: &DeriveNode, input: &Shape) {
+    if n.expression.trim().is_empty() {
+        return; // reported with the values
+    }
+    let expr = match dsl::parse_attributes(&n.expression) {
+        Ok(expr) => expr,
+        Err(d) => return cx.expression("expression", &d),
+    };
+    let mut known = true;
+    let mut ok = true;
+    for (name, span) in expr.attributes() {
+        let message = match attributes::lookup(attributes::unqualified(&name)) {
+            _ if !input.has_attribute(&name) => format!("there is no attribute {name}"),
+            Some(info) if matches!(info.ty, AttrType::Number | AttrType::Any) => {
+                known &= attributes::FIXED.iter().any(|(f, ..)| *f == name);
+                continue;
+            }
+            _ => format!("{name} is not a number; derive computes with numeric attributes"),
+        };
+        ok = false;
+        cx.expression("expression", &Diagnostic::new(span, message));
+    }
+    if !(ok && known) {
+        return;
+    }
+    let mut env = FixedAttributes;
+    if let Err(diagnostics) = dsl::check::check(&expr, &mut env, cx.catalogue, n.unit.as_deref()) {
+        for d in &diagnostics {
+            cx.expression("expression", d);
+        }
+    }
+}
+
+/// The units of the fixed numeric attributes: none.
+struct FixedAttributes;
+
+impl Env for FixedAttributes {
+    fn metric(&self, _: &str) -> Option<String> {
+        None
+    }
+
+    fn series(&self, _: &str) -> Option<crate::dsl::check::SeriesUnits> {
+        None
+    }
+
+    fn derived(&mut self, name: &str) -> Result<crate::dsl::Signature, String> {
+        Err(format!("derived.{name} is a metric, not an attribute"))
+    }
+
+    fn attribute(&mut self, _: &str) -> Result<String, String> {
+        Ok(String::new())
+    }
 }
 
 fn match_node(cx: &mut Cx, n: &MatchNode, inputs: &[(Option<&str>, &Shape)]) -> Shape {

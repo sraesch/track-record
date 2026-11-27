@@ -52,7 +52,7 @@ pub enum AttrType {
     Time,
     Text,
     Bool,
-    /// A list of texts (`run.tags`, `sut.tag`).
+    /// A list of texts (`run.tags`).
     List,
     /// The JSON type of the value: number, text or bool (parameters).
     Any,
@@ -82,7 +82,7 @@ pub const FIXED: &[(&str, Family, AttrType)] = &[
     ("sut.commit", F::Run, T::Text),
     ("sut.branch", F::Run, T::Text),
     ("sut.build_config", F::Run, T::Text),
-    ("sut.tag", F::Run, T::List),
+    ("sut.tag", F::Run, T::Text),
     ("environment.id", F::Run, T::Number),
     ("scenario.name", F::Case, T::Text),
     ("scenario.version", F::Case, T::Number),
@@ -184,7 +184,36 @@ pub struct Key<'a> {
 
 impl Key<'_> {
     pub fn includes(&self, name: &str) -> bool {
-        self.by.iter().any(|e| covers(e, name)) && !self.except.iter().any(|e| covers(e, name))
+        self.position(name).is_some()
+    }
+
+    /// The index of the first entry of `by` that covers the attribute
+    /// `name`, if the key includes it.
+    pub fn position(&self, name: &str) -> Option<usize> {
+        if self.except.iter().any(|e| covers(e, name)) {
+            return None;
+        }
+        self.by.iter().position(|e| covers(e, name))
+    }
+
+    /// The attributes of the key among `names`, in the order of `by`; the
+    /// attributes of a family in the order of the table of fixed names,
+    /// then by name (`asset.*`, `param.*`).
+    pub fn names<'n>(&self, names: impl IntoIterator<Item = &'n str>) -> Vec<String> {
+        let mut out: Vec<(usize, usize, &str)> = names
+            .into_iter()
+            .filter_map(|n| {
+                let entry = self.position(n)?;
+                let fixed = FIXED
+                    .iter()
+                    .position(|(f, ..)| *f == unqualified(n))
+                    .unwrap_or(usize::MAX);
+                Some((entry, fixed, n))
+            })
+            .collect();
+        out.sort_unstable();
+        out.dedup_by(|a, b| a.2 == b.2);
+        out.into_iter().map(|(.., n)| n.to_owned()).collect()
     }
 }
 
