@@ -43,7 +43,9 @@ change that they can see.
 
 - Uploads reject a parameter whose name contains a backtick (`` ` ``) with
   `422 validation_failed` (FR-4): expressions quote names in backticks, so
-  such a parameter could not be read in a chart's derive expression.
+  such a parameter could not be read in a chart's derive expression. An
+  identical retry of a case execution stored before keeps returning 200
+  (FR-3).
 
 ### Fixed
 
