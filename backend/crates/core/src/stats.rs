@@ -33,7 +33,14 @@ pub fn summarize(values: &[Option<f64>], percentiles: &[f64], confidence: f64) -
     let mean = (n > 0).then(|| mean_sorted(&v));
     let stddev = (n > 1).then(|| {
         let m = mean.unwrap_or(0.0);
-        (v.iter().map(|x| (x - m).powi(2)).sum::<f64>() / (n - 1) as f64).sqrt()
+        // Scaled by the largest deviation, so that squares of large values
+        // do not overflow.
+        let scale = v.iter().map(|x| (x - m).abs()).fold(0.0f64, f64::max);
+        if scale == 0.0 {
+            return 0.0;
+        }
+        let sum = v.iter().map(|x| ((x - m) / scale).powi(2)).sum::<f64>();
+        scale * (sum / (n - 1) as f64).sqrt()
     });
     let ci = match (mean, stddev) {
         (Some(m), Some(s)) => {
@@ -61,7 +68,19 @@ pub fn summarize(values: &[Option<f64>], percentiles: &[f64], confidence: f64) -
 
 /// Mean with Kahan-Neumaier summation, so long runs of samples stay exact.
 fn mean_sorted(v: &[f64]) -> f64 {
-    neumaier(v.iter().copied()) / v.len() as f64
+    let n = v.len() as f64;
+    let sum = neumaier(v.iter().copied());
+    if sum.is_finite() {
+        return sum / n;
+    }
+    // The sum overflows; the mean of finite values does not.
+    let scale = largest(v);
+    scale * (neumaier(v.iter().map(|x| x / scale)) / n)
+}
+
+/// The largest magnitude of the values.
+fn largest(v: &[f64]) -> f64 {
+    v.iter().map(|x| x.abs()).fold(0.0, f64::max)
 }
 
 /// Sum with Kahan-Neumaier summation.
@@ -86,9 +105,17 @@ fn finite(values: &[Option<f64>]) -> impl DoubleEndedIterator<Item = f64> + '_ {
 
 /// Sum of the values; no value if there are none (FR-12a).
 pub fn sum(values: &[Option<f64>]) -> Option<f64> {
-    let mut v = finite(values).peekable();
-    v.peek()?;
-    Some(neumaier(v)).filter(|s| s.is_finite())
+    let v: Vec<f64> = finite(values).collect();
+    if v.is_empty() {
+        return None;
+    }
+    let sum = neumaier(v.iter().copied());
+    if sum.is_finite() {
+        return Some(sum);
+    }
+    // An intermediate sum overflowed; the total may not.
+    let scale = largest(&v);
+    Some(scale * neumaier(v.iter().map(|x| x / scale))).filter(|s| s.is_finite())
 }
 
 /// Geometric mean of the values: no value if there are none or one is
@@ -334,6 +361,19 @@ mod tests {
     }
 
     #[test]
+    fn large_values_do_not_overflow_the_mean_or_the_stddev() {
+        let s = summarize(&[Some(1e308), Some(1e308)], &[], 0.95);
+        assert_eq!(s.mean, Some(1e308));
+        let s = summarize(&[Some(f64::MAX); 3], &[], 0.95);
+        assert_eq!(s.mean, Some(f64::MAX));
+        assert_eq!(s.stddev, Some(0.0));
+        let s = summarize(&[Some(1e308), Some(-1e308)], &[], 0.95);
+        assert_eq!(s.mean, Some(0.0));
+        let expected = 1e308 * 2.0f64.sqrt();
+        assert!(close(s.stddev.unwrap(), expected, expected * 1e-12));
+    }
+
+    #[test]
     fn sums_skip_no_value_and_have_none_without_values() {
         assert_eq!(
             sum(&[Some(1.0), None, Some(2.5), Some(f64::NAN)]),
@@ -345,6 +385,9 @@ mod tests {
         // Neumaier keeps the small terms.
         assert_eq!(sum(&[Some(1e16), Some(1.0), Some(-1e16)]), Some(1.0));
         assert_eq!(sum(&[Some(f64::MAX), Some(f64::MAX)]), None);
+        // An overflow on the way that a later value cancels.
+        assert_eq!(sum(&[Some(1e308), Some(1e308), Some(-1e308)]), Some(1e308));
+        assert_eq!(sum(&[Some(1e308), Some(-1e308), Some(1e308)]), Some(1e308));
     }
 
     #[test]

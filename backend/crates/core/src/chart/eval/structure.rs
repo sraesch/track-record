@@ -505,6 +505,11 @@ fn concat(id: &str, frames: Vec<Frame>) -> Result<Option<Frame>> {
         ));
     }
     let common = common_attributes(&frames);
+    // A merge inside a match group keeps the frame's place in the match.
+    let input = first
+        .input
+        .clone()
+        .filter(|i| frames.iter().all(|f| f.input.as_ref() == Some(i)));
     let total: usize = frames.iter().map(Frame::len).sum();
     let mut values: Vec<Vec<Option<f64>>> = vec![Vec::with_capacity(total); columns.len()];
     let mut points: Vec<Attributes> = Vec::with_capacity(total);
@@ -534,6 +539,7 @@ fn concat(id: &str, frames: Vec<Frame>) -> Result<Option<Frame>> {
     if !seen_names.is_empty() {
         frame.point_attrs = Some(points);
     }
+    frame.input = input;
     Ok(Some(frame))
 }
 

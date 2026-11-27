@@ -16,12 +16,12 @@ pub mod structure;
 #[cfg(test)]
 mod tests;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
-use super::frame::{Frame, Group, Tree};
+use super::frame::{Column, Frame, Group, Tree};
 use super::graph::Graph;
 use super::problem::Problem;
-use super::spec::{NodeKind, Spec};
+use super::spec::{FlattenLevels, NodeKind, Spec};
 use super::variables::Setting;
 use crate::units::UnitCatalogue;
 
@@ -31,12 +31,18 @@ pub type Result<T> = std::result::Result<T, Problem>;
 /// to the node `until` for a preview. `sources` holds the output of every
 /// source that the evaluated nodes read, by node id. Returns the tree that
 /// reaches the visualization, or the output of `until`.
+///
+/// `max_points` is the budget of points the run may hold at once (ADR
+/// 0022, "Limits"): the sources and every result that a node still needs.
+/// Nodes that make points (resample, and a match that repeats a partner)
+/// check it before they allocate; a run over it fails at that node.
 pub fn run(
     spec: &Spec,
     graph: &Graph,
     mut sources: BTreeMap<String, Tree>,
     until: Option<&str>,
     catalogue: &UnitCatalogue,
+    max_points: usize,
 ) -> Result<Tree> {
     let target = match until {
         Some(id) => graph
@@ -53,63 +59,147 @@ pub fn run(
         }
     }
     let mut results: Vec<Option<Tree>> = vec![None; spec.nodes.len()];
+    // Points held by the sources and the results still needed.
+    let mut held: usize = sources.values().map(points).sum();
+    // The columns of the inputs of each match when it ran, by node.
+    let mut match_columns: HashMap<usize, BTreeMap<String, Vec<Column>>> = HashMap::new();
     for &i in &needed {
         let node = &spec.nodes[i];
         let mut inputs = Vec::new();
+        // Points of the inputs this node consumes, its own copies
+        // included: freed by it.
+        let mut freed = 0;
         for (name, j) in graph.inputs(i) {
             readers[*j] -= 1;
             let tree = if readers[*j] == 0 {
                 results[*j].take()
             } else {
-                results[*j].clone()
+                // A copy for this reader: held as well until it is used.
+                let copy = results[*j].clone();
+                held = held.saturating_add(copy.as_ref().map_or(0, points));
+                copy
             };
             let tree = tree.expect("inputs are evaluated before their readers");
+            freed += points(&tree);
             inputs.push((name.clone(), tree));
         }
+        if held > max_points {
+            return Err(over_budget(&node.id, max_points));
+        }
+        held -= freed;
+        let limit = max_points.saturating_sub(held);
+        if node.kind.is_match() {
+            match_columns.insert(
+                i,
+                inputs
+                    .iter()
+                    .filter_map(|(name, t)| {
+                        let first = t.frames().into_iter().next()?;
+                        Some((
+                            name.clone().unwrap_or_else(|| "a".into()),
+                            first.columns.clone(),
+                        ))
+                    })
+                    .collect(),
+            );
+        }
         let out = match &node.kind {
-            NodeKind::Source(_) => sources
-                .remove(&node.id)
-                .ok_or_else(|| Problem::node(&node.id, "the data of this source was not loaded"))?,
+            NodeKind::Source(_) => {
+                let tree = sources.remove(&node.id).ok_or_else(|| {
+                    Problem::node(&node.id, "the data of this source was not loaded")
+                })?;
+                // Counted when it was loaded.
+                held -= points(&tree);
+                tree
+            }
             NodeKind::Combine(n) => {
                 let tree = inputs
                     .into_iter()
                     .next()
                     .map(|(_, t)| t)
                     .unwrap_or_default();
-                let names = match_names(spec, graph, i);
-                compute::combine(&node.id, n, tree, names.as_deref(), catalogue)?
+                let found = match_inputs(spec, graph, i, &match_columns);
+                compute::combine(&node.id, n, tree, found.as_ref(), catalogue)?
             }
-            kind => evaluate(&node.id, kind, inputs, catalogue)?,
+            kind => evaluate(&node.id, kind, inputs, catalogue, limit)?,
         };
         debug_assert!(out.check().is_ok(), "{}: {:?}", node.id, out.check());
+        held = held.saturating_add(points(&out));
+        if held > max_points {
+            return Err(over_budget(&node.id, max_points));
+        }
         results[i] = Some(out);
     }
     Ok(results[target].take().expect("the target was evaluated"))
 }
 
-/// The names of the inputs of the match whose level a combine at node `i`
-/// merges, `a` first: the match it reads through nodes that keep the
-/// levels of their input.
-fn match_names(spec: &Spec, graph: &Graph, i: usize) -> Option<Vec<String>> {
+/// The number of points of all frames of a tree.
+fn points(tree: &Tree) -> usize {
+    tree.frames().iter().map(|f| f.len()).sum()
+}
+
+fn over_budget(id: &str, max_points: usize) -> Problem {
+    Problem::node(
+        id,
+        format!(
+            "the chart would hold more than {max_points} points here; narrow the filter of a \
+             source, or reduce the frames earlier"
+        ),
+    )
+}
+
+/// The inputs of the match whose level a combine at node `i` merges: the
+/// match it reads through nodes that keep that level innermost, or that
+/// add a level below it and merge it again (a group, then a concatenate).
+/// The columns the match saw count only where no node on the way changed
+/// them.
+fn match_inputs(
+    spec: &Spec,
+    graph: &Graph,
+    i: usize,
+    match_columns: &HashMap<usize, BTreeMap<String, Vec<Column>>>,
+) -> Option<compute::MatchInputs> {
     let mut j = graph.inputs(i).first()?.1;
+    // Levels below the match level at node j.
+    let mut below = 0usize;
+    let mut same_columns = true;
     loop {
         match &spec.nodes[j].kind {
-            NodeKind::Match(_) => {
-                return Some(
-                    graph
-                        .inputs(j)
-                        .iter()
-                        .map(|(name, _)| name.clone().unwrap_or_else(|| "a".into()))
-                        .collect(),
-                );
+            NodeKind::Match(_) if below == 0 => {
+                let names = graph
+                    .inputs(j)
+                    .iter()
+                    .map(|(name, _)| name.clone().unwrap_or_else(|| "a".into()))
+                    .collect();
+                let columns = match (same_columns, match_columns.get(&j)) {
+                    (true, Some(c)) => c.clone(),
+                    _ => BTreeMap::new(),
+                };
+                return Some(compute::MatchInputs { names, columns });
             }
             NodeKind::Filter(_)
             | NodeKind::Derive(_)
             | NodeKind::Sort(_)
             | NodeKind::SelectLatest(_)
-            | NodeKind::Resample(_) => j = graph.inputs(j).first()?.1,
+            | NodeKind::Resample(_) => {}
+            NodeKind::Group(_) if below > 0 => below -= 1,
+            NodeKind::Concatenate(_) => below += 1,
+            NodeKind::Reduce(_) => {
+                below += 1;
+                same_columns = false;
+            }
+            NodeKind::Combine(n) if n.functions.is_some() => {
+                below += 1;
+                same_columns = false;
+            }
+            NodeKind::Flatten(n) => match n.levels {
+                None => below += 1,
+                Some(FlattenLevels::Count(k)) => below += k as usize,
+                Some(FlattenLevels::All) => return None,
+            },
             _ => return None,
         }
+        j = graph.inputs(j).first()?.1;
     }
 }
 
@@ -120,13 +210,14 @@ fn evaluate(
     kind: &NodeKind,
     inputs: Vec<(Option<String>, Tree)>,
     catalogue: &UnitCatalogue,
+    limit: usize,
 ) -> Result<Tree> {
     if let NodeKind::Match(n) = kind {
         let named = inputs
             .into_iter()
             .map(|(name, t)| (name.unwrap_or_else(|| "a".into()), t))
             .collect();
-        return compute::match_frames(id, n, named);
+        return compute::match_frames(id, n, named, limit);
     }
     let mut inputs = inputs.into_iter().map(|(_, t)| t);
     let input = inputs
@@ -141,7 +232,7 @@ fn evaluate(
         NodeKind::Sort(n) => structure::sort(id, n, input),
         NodeKind::SelectLatest(n) => structure::select_latest(id, n, input),
         NodeKind::Concatenate(_) => structure::concatenate(id, input),
-        NodeKind::Resample(n) => compute::resample(id, n, input),
+        NodeKind::Resample(n) => compute::resample(id, n, input, catalogue, limit),
         NodeKind::Reduce(n) => compute::reduce(id, n, input, catalogue),
         NodeKind::Combine(n) => compute::combine(id, n, input, None, catalogue),
         NodeKind::Match(_) => unreachable!("matched above"),

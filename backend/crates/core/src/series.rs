@@ -373,7 +373,7 @@ impl Series {
 
 /// x values compare equal if they are the same up to rounding of a unit
 /// conversion.
-pub(crate) fn same_x(a: f64, b: f64) -> bool {
+fn same_x(a: f64, b: f64) -> bool {
     a == b || (a - b).abs() <= 1e-9 * a.abs().max(b.abs())
 }
 
@@ -382,9 +382,39 @@ pub fn grid(from: f64, to: f64, points: usize) -> Vec<f64> {
     match points {
         0 => vec![],
         1 => vec![from],
-        _ => (0..points)
-            .map(|i| from + (to - from) * i as f64 / (points - 1) as f64)
-            .collect(),
+        _ if from == to => vec![from; points],
+        _ => {
+            let (lo, hi) = (from.min(to), from.max(to));
+            let last = (points - 1) as f64;
+            // `to - from` can overflow; then work on the halves, which
+            // only loses precision below the smallest normal numbers.
+            let s = if (to - from).is_finite() { 1.0 } else { 0.5 };
+            let (a, d) = (from * s, to * s - from * s);
+            // `d * i / last` makes every interior point that is exactly
+            // representable exact (a step at 29 on 0..100 stays at 29);
+            // where `d * last` overflows, `d * (i / last)` instead. One
+            // formula for the whole grid, and every step of it rounds
+            // monotonically, so the grid never runs backward.
+            let product = (d * last).is_finite();
+            (0..points)
+                .map(|i| {
+                    // The ends exactly, and never beyond them.
+                    if i == 0 {
+                        return from;
+                    }
+                    if i == points - 1 {
+                        return to;
+                    }
+                    let i = i as f64;
+                    let step = if product {
+                        d * i / last
+                    } else {
+                        d * (i / last)
+                    };
+                    ((a + step) / s).clamp(lo, hi)
+                })
+                .collect()
+        }
     }
 }
 
@@ -543,6 +573,37 @@ mod tests {
     fn resample_and_aggregate() {
         let a = s(&[(0.0, 0.0), (2.0, 2.0)]);
         let b = s(&[(0.0, 2.0), (1.0, 4.0)]);
+        // The ends are exact, also where rounding would miss them.
+        let g = grid(0.2, 1.0, 4);
+        assert_eq!((g[0], g[3]), (0.2, 1.0));
+        assert!(g[1] > 0.2 && g[2] < 1.0 && g[1] < g[2]);
+        let g = grid(0.0, 1e308, 3);
+        assert!(g.iter().all(|x| x.is_finite()) && g[2] == 1e308);
+        assert!(grid(100.0, 100.0, 200).iter().all(|x| *x == 100.0));
+        let g = grid(-1e308, 1e308, 3);
+        assert_eq!(g, [-1e308, 0.0, 1e308]);
+        // Representable interior points are exact: a step at 29 stays there.
+        let g = grid(0.0, 100.0, 101);
+        assert!(g.iter().enumerate().all(|(i, x)| *x == i as f64));
+        let step = s(&[(0.0, 0.0), (29.0, 1.0), (100.0, 1.0)]);
+        assert_eq!(step.resample(&g, Interp::Step)[29], Some(1.0));
+        // The grid never runs backward, also on a range of a few ulps and
+        // where the width or its multiples overflow.
+        for (from, to, n) in [
+            (10.0, 10.000000000000002, 8),
+            (0.1, 0.7, 1000),
+            (-f64::MAX, f64::MAX, 1001),
+            (0.0, f64::MAX, 100_000),
+            (1.0, 0.0, 7),
+        ] {
+            let g = grid(from, to, n);
+            assert_eq!((g[0], g[n - 1]), (from, to));
+            let sign = if to >= from { 1.0 } else { -1.0 };
+            assert!(
+                g.windows(2).all(|w| sign * (w[1] - w[0]) >= 0.0),
+                "{from}..{to} ({n}): {g:?}"
+            );
+        }
         let g = grid(0.0, 2.0, 3);
         assert_eq!(g, vec![0.0, 1.0, 2.0]);
         let rows = vec![

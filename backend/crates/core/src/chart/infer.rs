@@ -19,8 +19,8 @@ use super::attributes::{self, AttrType, Family};
 use super::graph::Graph;
 use super::problem::Problem;
 use super::spec::{
-    CombineNode, DEFAULT_LEVELS, DeriveNode, Expression, FlattenLevels, MatchNode, NodeKind, On,
-    ReduceNode, RoleKind, SortTarget, SourceNode, Spec, is_identifier,
+    CombineNode, DEFAULT_LEVELS, DeriveNode, Expression, FlattenLevels, Function, MatchNode,
+    NodeKind, On, ReduceNode, RoleKind, SortTarget, SourceNode, Spec, is_identifier,
 };
 use super::variables::{Setting, check_variables};
 use crate::dsl::check::{Env, Kind};
@@ -153,6 +153,14 @@ pub fn validate(
                     catalogue,
                 };
                 derive_syntax(&mut cx, n);
+            }
+            if let NodeKind::Combine(n) = &node.kind {
+                let mut cx = Cx {
+                    id: &node.id,
+                    problems: &mut problems,
+                    catalogue,
+                };
+                combine_syntax(&mut cx, n);
             }
             continue;
         };
@@ -333,6 +341,14 @@ fn infer(
                 let name = format!("attr.{}", n.name);
                 if shape.attributes.contains(&name) {
                     cx.problem("name", format!("the attribute {name} exists already"));
+                }
+                // The partners of a match get it too.
+                for level in &mut shape.levels {
+                    if let Level::Match { inputs } = level {
+                        for mi in inputs {
+                            mi.attributes.insert(name.clone());
+                        }
+                    }
                 }
                 shape.attributes.insert(name);
             }
@@ -652,7 +668,50 @@ fn reduce(cx: &mut Cx, n: &ReduceNode, input: &Shape) -> Option<Shape> {
     let mut shape = input.clone();
     shape.levels.pop();
     shape.columns = columns;
+    merged_inside_match(&mut shape, &n.functions, &column.name, false);
     Some(shape)
+}
+
+/// After a reduce or a combine with functions below a match level (groups
+/// inside a match group, merged again), the frames of every input of every
+/// match have the columns of the functions, in the unit of that input's
+/// column.
+fn merged_inside_match(shape: &mut Shape, functions: &[Function], column: &str, x: bool) {
+    // Every match level above describes the frames, which all have the
+    // new columns.
+    let inputs = shape.levels.iter_mut().flat_map(|level| match level {
+        Level::Match { inputs } => inputs.as_mut_slice(),
+        Level::Group { .. } => &mut [],
+    });
+    for mi in inputs {
+        let unit = mi
+            .columns
+            .iter()
+            .find(|c| c.name == column)
+            .and_then(|c| c.unit.clone());
+        let mut columns: Vec<ColumnShape> = Vec::new();
+        if x {
+            columns.extend(mi.columns.iter().find(|c| c.name == "x").cloned());
+        }
+        for f in functions {
+            let name = f.column();
+            if columns.iter().any(|c| c.name == name) {
+                continue;
+            }
+            let unit = if f.is_count() {
+                Some(String::new())
+            } else {
+                unit.clone()
+            };
+            columns.push(ColumnShape::new(name, unit));
+        }
+        for count in ["n", "n_no_value"] {
+            if !columns.iter().any(|c| c.name == count) {
+                columns.push(ColumnShape::count(count));
+            }
+        }
+        mi.columns = columns;
+    }
 }
 
 fn combine(cx: &mut Cx, n: &CombineNode, input: &Shape) -> Option<Shape> {
@@ -670,7 +729,14 @@ fn combine(cx: &mut Cx, n: &CombineNode, input: &Shape) -> Option<Shape> {
         }
         let column = cx.reduced_column(input, n.column.as_ref())?;
         function_columns(cx, functions, &column, &mut columns);
+        // Every aggregate states its counts (FR-12a).
+        for count in ["n", "n_no_value"] {
+            if !columns.iter().any(|c| c.name == count) {
+                columns.push(ColumnShape::count(count));
+            }
+        }
         shape.columns = columns;
+        merged_inside_match(&mut shape, functions, &column.name, true);
         return Some(shape);
     }
     let Some(Level::Match { inputs }) = last else {
@@ -726,7 +792,13 @@ fn combine(cx: &mut Cx, n: &CombineNode, input: &Shape) -> Option<Shape> {
         let unit = combine_expression(cx, i, e, inputs, input);
         columns.push(ColumnShape::new(&e.name, unit));
     }
+    // As in evaluation, attributes of partners that a has from an earlier
+    // combine give way to those of the partners here.
     let mut attributes = inputs[0].attributes.clone();
+    for mi in &inputs[1..] {
+        let prefix = format!("{}.", mi.name);
+        attributes.retain(|a| !a.starts_with(&prefix));
+    }
     for mi in &inputs[1..] {
         attributes.extend(mi.attributes.iter().map(|a| format!("{}.{a}", mi.name)));
     }
@@ -775,14 +847,43 @@ fn combine_expression(
     if !ok || !known {
         return e.unit.clone();
     }
+    let inputs: Vec<String> = units.values().cloned().collect();
     let mut env = NameUnits(units);
     match dsl::check::check(&expr, &mut env, cx.catalogue, e.unit.as_deref()) {
-        Ok(checked) => Some(checked.signature.unit),
+        Ok(checked) => {
+            let unit = checked.signature.unit;
+            if crate::chart::eval::derive::grown(&unit, &inputs, e.unit.as_deref()) {
+                cx.problem(
+                    &format!("expressions[{i}].unit"),
+                    format!(
+                        "the unit of the expression is {} characters long, more than {}; \
+                         declare a unit",
+                        unit.chars().count(),
+                        crate::chart::eval::derive::MAX_UNIT_LEN
+                    ),
+                );
+                return None;
+            }
+            Some(unit)
+        }
         Err(diagnostics) => {
             for d in &diagnostics {
                 cx.expression(&setting, d);
             }
             e.unit.clone()
+        }
+    }
+}
+
+/// Reports the syntax errors of the expressions of a combine, which need no
+/// input to be found.
+fn combine_syntax(cx: &mut Cx, n: &CombineNode) {
+    for (i, e) in n.expressions.iter().flatten().enumerate() {
+        if e.expression.trim().is_empty() {
+            continue; // reported with the values
+        }
+        if let Err(d) = dsl::parse_columns(&e.expression) {
+            cx.expression(&format!("expressions[{i}].expression"), &d);
         }
     }
 }

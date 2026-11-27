@@ -29,7 +29,7 @@ pub const MAX_UNIT_LEN: usize = 256;
 
 /// True if the expression made `unit` from the `inputs` units and it is
 /// longer than [`MAX_UNIT_LEN`].
-pub(super) fn grown(unit: &str, inputs: &[String], declared: Option<&str>) -> bool {
+pub(crate) fn grown(unit: &str, inputs: &[String], declared: Option<&str>) -> bool {
     unit.chars().count() > MAX_UNIT_LEN
         && declared != Some(unit)
         && !inputs.iter().any(|u| u == unit)

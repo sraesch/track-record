@@ -523,7 +523,7 @@ async fn run_chart(app: &TestApp, spec: &Value, until: Option<&str>) -> Tree {
         }
     }
     let catalogue = catalog::unit_catalogue(&app.pool).await.unwrap();
-    eval::run(&spec, &graph, sources, until, &catalogue).unwrap()
+    eval::run(&spec, &graph, sources, until, &catalogue, limits.max_points).unwrap()
 }
 
 #[tokio::test]

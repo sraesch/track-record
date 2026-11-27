@@ -155,7 +155,9 @@ fn a_series_source_has_x_and_y() {
             ("median", Some("fps")),
             ("p10", Some("fps")),
             ("p90", Some("fps")),
-            ("count", Some(""))
+            ("count", Some("")),
+            ("n", Some("")),
+            ("n_no_value", Some(""))
         ]
     );
 }
@@ -1247,4 +1249,123 @@ fn the_input_named_a_comes_first_in_a_match() {
         v.shapes["both"].column("e").unwrap().unit.as_deref(),
         Some("ms")
     );
+}
+
+#[test]
+fn partners_get_the_attributes_derived_after_a_match() {
+    let p = problems(json!({"format": 1, "nodes": [
+        {"id": "runs", "type": "source", "metric": "load_time"},
+        {"id": "ref", "type": "source", "metric": "load_time"},
+        {"id": "pairs", "type": "match", "inputs": {"a": "runs", "b": "ref"},
+         "except": ["run", "sample"]},
+        {"id": "twice", "type": "derive", "input": "pairs", "name": "twice",
+         "expression": "sample.repetition * 2"},
+        {"id": "both", "type": "combine", "input": "twice",
+         "expressions": [{"name": "e", "expression": "a * b.attr.twice"}]},
+        {"id": "chart", "type": "table", "input": "both", "columns": ["e"]}
+    ]}));
+    assert!(p.is_empty(), "{p:#?}");
+}
+
+#[test]
+fn a_partner_name_used_again_replaces_the_earlier_partner() {
+    // a carries b.attr.old from the first combine; the second combine
+    // pairs it with a fresh b that has no attr.old, so b.attr.old is gone.
+    let p = problems(json!({"format": 1, "nodes": [
+        {"id": "runs", "type": "source", "metric": "load_time"},
+        {"id": "ref", "type": "source", "metric": "load_time"},
+        {"id": "pairs", "type": "match", "inputs": {"a": "runs", "b": "ref"},
+         "except": ["run", "sample"]},
+        {"id": "old", "type": "derive", "input": "pairs", "name": "old",
+         "expression": "sample.repetition * 2"},
+        {"id": "first", "type": "combine", "input": "old",
+         "expressions": [{"name": "e", "expression": "a / b"}]},
+        {"id": "again", "type": "match", "inputs": {"a": "first", "b": "ref"},
+         "except": ["run", "sample"]},
+        {"id": "second", "type": "combine", "input": "again",
+         "expressions": [{"name": "f", "expression": "a.e * b"}]},
+        {"id": "use", "type": "derive", "input": "second", "name": "x",
+         "expression": "b.attr.old"},
+        {"id": "chart", "type": "table", "input": "use", "columns": ["f"]}
+    ]}));
+    assert_problem(&p, Some("use"), Some("expression"), "b.attr.old");
+}
+
+#[test]
+fn a_combine_expression_cannot_grow_its_unit_without_bound() {
+    let long = vec!["a"; 100].join(" * ");
+    let spec = |unit: Value| {
+        json!({"format": 1, "nodes": [
+            {"id": "runs", "type": "source", "metric": "load_time"},
+            {"id": "ref", "type": "source", "metric": "load_time"},
+            {"id": "pairs", "type": "match", "inputs": {"a": "runs", "b": "ref"}},
+            {"id": "both", "type": "combine", "input": "pairs",
+             "expressions": [{"name": "e", "expression": long, "unit": unit}]},
+            {"id": "chart", "type": "table", "input": "both", "columns": ["e"]}
+        ]})
+    };
+    let p = problems(spec(Value::Null));
+    assert_problem(
+        &p,
+        Some("both"),
+        Some("expressions[0].unit"),
+        "more than 256",
+    );
+    let p = problems(spec(json!("s^100")));
+    assert!(p.is_empty(), "{p:#?}");
+}
+
+#[test]
+fn combine_syntax_is_checked_without_its_input() {
+    let p = problems(json!({
+      "format": 1,
+      "variables": [{"name": "metric", "type": "metric"}],
+      "nodes": [
+        {"id": "runs", "type": "source", "metric": {"var": "metric"}},
+        {"id": "ref", "type": "source", "metric": "load_time"},
+        {"id": "pairs", "type": "match", "inputs": {"a": "runs", "b": "ref"}},
+        {"id": "both", "type": "combine", "input": "pairs",
+         "expressions": [{"name": "e", "expression": "a +"}]},
+        {"id": "chart", "type": "table", "input": "both", "columns": ["e"]}
+      ]
+    }));
+    assert_problem(&p, Some("both"), Some("expressions[0].expression"), "");
+}
+
+#[test]
+fn a_reduce_inside_a_match_updates_the_columns_of_its_inputs() {
+    let v = validation(json!({"format": 1, "nodes": [
+        {"id": "runs", "type": "source", "metric": "load_time"},
+        {"id": "ref", "type": "source", "metric": "load_time"},
+        {"id": "pairs", "type": "match", "inputs": {"a": "runs", "b": "ref"},
+         "except": ["run"]},
+        {"id": "by_source", "type": "group", "input": "pairs", "by": ["source"]},
+        {"id": "stats", "type": "reduce", "input": "by_source", "functions": ["mean"]},
+        {"id": "diff", "type": "combine", "input": "stats",
+         "expressions": [{"name": "d", "expression": "a.mean - b.mean"}]},
+        {"id": "chart", "type": "table", "input": "diff", "columns": ["d"]}
+    ]}));
+    assert!(v.problems.is_empty(), "{:#?}", v.problems);
+    assert_eq!(
+        v.shapes["diff"].column("d").unwrap().unit.as_deref(),
+        Some("ms")
+    );
+}
+
+#[test]
+fn a_reduce_below_a_deeper_match_updates_its_inputs() {
+    let p = problems(json!({"format": 1, "nodes": [
+        {"id": "runs", "type": "source", "metric": "load_time"},
+        {"id": "ref", "type": "source", "metric": "load_time"},
+        {"id": "pairs", "type": "match", "inputs": {"a": "runs", "b": "ref"},
+         "except": ["run"]},
+        {"id": "by_source", "type": "group", "input": "pairs", "by": ["source"]},
+        {"id": "by_run", "type": "group", "input": "by_source", "by": ["run.id"]},
+        {"id": "stats", "type": "reduce", "input": "by_run", "functions": ["mean"]},
+        {"id": "flat", "type": "flatten", "input": "stats"},
+        {"id": "diff", "type": "combine", "input": "flat",
+         "expressions": [{"name": "d", "expression": "a.mean - b.mean"}]},
+        {"id": "chart", "type": "table", "input": "diff", "columns": ["d"]}
+    ]}));
+    assert!(p.is_empty(), "{p:#?}");
 }

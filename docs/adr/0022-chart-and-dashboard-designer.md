@@ -365,15 +365,23 @@ The settings that the sections above leave open, as
   computed with (FR-12a): the sum of no values is no value, the geomean of
   a negative value is no value (0 with a 0), `first` and `last` skip no
   value, and the stddev and confidence interval of one value are no value.
-  reduce adds `n` and `n_no_value`. Its new frame keeps the attributes the
-  frames share, and each point the other attributes of its frame, so that
-  `run.started_at` can be the x of a line. combine with functions keeps
-  the point attributes that all frames share at a point.
+  Both add `n` and `n_no_value`, so that every aggregate states its counts
+  (FR-12a), and a result beyond the range of `f64` is no value. reduce's
+  new frame keeps the attributes the frames share, and each point the
+  other attributes of its frame, so that `run.started_at` can be the x of a
+  line. combine with functions keeps the attributes that every frame with
+  a value has the same at a point.
 - **resample** puts the frames of each innermost group on one grid of
   `points` (200 by default) from `from` to `to`, by default the range of x
-  of the group, and interpolates every other column (FR-19). Outside a
-  series and next to no value there is no value. A group without points
-  has no grid.
+  of the group, and interpolates every other column (FR-19). x is
+  converted to the unit of the first frame of the group; x of another
+  dimension fails the node. The ends of the grid are exact, a point of the
+  grid that is a representable number is that number, and the grid never
+  runs backward. Before a series
+  and next to no value there is no value; after it too, except that step
+  interpolation holds the last value (ADR 0009). Without `from` and `to`, a
+  group without points has no grid; with both, its frames get the grid
+  with no values.
 - **match** keys a frame by its attributes that `except` leaves, or that
   `only` names; the family `source` never counts. Keys compare as group
   keys do: `10` equals `10.0`, and the same value in two units is two keys.
@@ -381,8 +389,10 @@ The settings that the sections above leave open, as
   of another input with one key are an error. `except: ["run", "sample"]`
   pairs the results of runs with a reference run.
 - **combine** lines up the frames of a group point by point: frames with x
-  need the same x (in convertible units), frames without x the same number
-  of points. A frame with one point and no x applies to every point, and a
+  need the same x of the same dimension (equal in the same unit, equal up
+  to rounding after a conversion; a conversion that overflows equals
+  nothing), frames without x the same number of
+  points. A frame with one point and no x applies to every point, and a
   frame without points is no value at every point. Anything else fails the
   node and asks for a resample first; resampling is never implicit.
 - **combine expressions** use the grammar, scalar functions and unit rules
@@ -393,7 +403,20 @@ The settings that the sections above leave open, as
   group (`unmatched: keep`) and no value give no value. Units that do not
   fit the expression fail the node instead of giving no value, which would
   look like the no value of FR-12a. The new frame has `a`'s attributes,
-  and each partner's under its name.
+  and each partner's under its name, also those of its points; they
+  replace what `a` has under that name from an earlier combine. An input
+  whose frames found no partner keeps the columns it had at the match
+  (where the nodes on the way keep columns); an input without any frame
+  adds none, since evaluation takes columns from the data. A merge inside
+  a match group (a group, then a concatenate or reduce) keeps the input of
+  its frames. Units are checked per group, with the units that group has,
+  also in a group without points (from its columns and frame attributes),
+  so that an expression is not accepted only because a group is empty.
+- **Budget at run time:** the run counts the points of its sources, of
+  every result that a node still needs, and of the copies a result gets
+  for a second reader. resample and match, which make
+  points, check what is left before they allocate; a run over the budget
+  fails at the node that goes over it.
   A unit it only passes on, from an attribute or declared, may be longer.
 - **Sources:** the value of `asset.<name>` is the asset's version when the
   case has one asset of that name and it has only a version (`"v1"`). One
