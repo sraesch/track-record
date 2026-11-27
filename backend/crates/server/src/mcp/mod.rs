@@ -249,7 +249,9 @@ impl McpServer {
     /// List runs, newest measured start first (FR-11).
     #[tool(
         description = "List runs, newest measured start first. Filters: suite, SUT \
-                       version fields, measured start time range, status, trigger, client \
+                       version fields, measured start time range, relative selection \
+                       (`started_within_days`, `latest_runs`, `since_tag`, \
+                       `since_sut_tag`), status, trigger, client \
                        device (after aliases), scenario, asset, parameters (`name=value`), \
                        metric and tags. Only valid runs unless `validity` says otherwise. \
                        Pages with `limit` and `cursor` (the previous `next_cursor`).",

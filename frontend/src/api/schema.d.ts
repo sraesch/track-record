@@ -1358,6 +1358,12 @@ export interface components {
             cursor?: string | null;
             /**
              * Format: int64
+             * @description Of the runs that match all other conditions, only the N (at least 1)
+             *     with the newest measured start. `limit` and `cursor` page through them.
+             */
+            latest_runs?: number | null;
+            /**
+             * Format: int64
              * @description Page size, 1 to 500 (default 50).
              */
             limit?: number | null;
@@ -1376,6 +1382,18 @@ export interface components {
             /** Format: int64 */
             shared_environment_id?: number | null;
             /**
+             * @description Measured start at or after that of the earliest run whose SUT version
+             *     has this tag, e.g. a release. Looked up among all runs, whatever the
+             *     other conditions say; 422 if no run has the tag.
+             */
+            since_sut_tag?: string | null;
+            /**
+             * @description Measured start at or after that of the earliest run with this run tag.
+             *     The marked run is looked up among all runs, whatever the other
+             *     conditions say; 422 if no run has the tag.
+             */
+            since_tag?: string | null;
+            /**
              * Format: date-time
              * @description Measured start time at or after this time.
              */
@@ -1385,6 +1403,12 @@ export interface components {
              * @description Measured start time before this time.
              */
             started_before?: string | null;
+            /**
+             * Format: int64
+             * @description Measured start within the last N days (at least 1), counted from the
+             *     server's time at the request.
+             */
+            started_within_days?: number | null;
             /** @description Status; repeat for several. */
             status?: components["schemas"]["RunStatus"][];
             /** @description Suite name. */
@@ -2747,6 +2771,28 @@ export interface operations {
                 started_after?: string;
                 /** @description Measured start time before this time. */
                 started_before?: string;
+                /**
+                 * @description Measured start within the last N days (at least 1), counted from the
+                 *     server's time at the request.
+                 */
+                started_within_days?: number;
+                /**
+                 * @description Of the runs that match all other conditions, only the N (at least 1)
+                 *     with the newest measured start. `limit` and `cursor` page through them.
+                 */
+                latest_runs?: number;
+                /**
+                 * @description Measured start at or after that of the earliest run with this run tag.
+                 *     The marked run is looked up among all runs, whatever the other
+                 *     conditions say; 422 if no run has the tag.
+                 */
+                since_tag?: string;
+                /**
+                 * @description Measured start at or after that of the earliest run whose SUT version
+                 *     has this tag, e.g. a release. Looked up among all runs, whatever the
+                 *     other conditions say; 422 if no run has the tag.
+                 */
+                since_sut_tag?: string;
                 /** @description Status; repeat for several. */
                 status?: components["schemas"]["RunStatus"][];
                 triggered_by?: components["schemas"]["RunTrigger"];
