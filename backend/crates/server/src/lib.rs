@@ -32,6 +32,8 @@ pub struct AppState {
     pub max_body_bytes: usize,
     /// `Host` values accepted on `/mcp`; empty disables the check.
     pub mcp_allowed_hosts: Vec<String>,
+    /// Limits of one run of a chart (`TR_CHART_MAX_POINTS`, ADR 0022).
+    pub chart_limits: service::charts::source::Limits,
 }
 
 impl AppState {
@@ -41,6 +43,10 @@ impl AppState {
             attachments: Arc::new(AttachmentStore::new(&config.attachment_root)),
             max_body_bytes: config.max_body_bytes,
             mcp_allowed_hosts: config.mcp_allowed_hosts.clone(),
+            chart_limits: service::charts::source::Limits {
+                max_points: config.chart_max_points,
+                ..Default::default()
+            },
         }
     }
 }
@@ -115,6 +121,7 @@ pub fn openapi_json(which: &str) -> Option<String> {
         attachments: Arc::new(AttachmentStore::new("/nonexistent")),
         max_body_bytes: 0,
         mcp_allowed_hosts: Vec::new(),
+        chart_limits: Default::default(),
     };
     let doc = match which {
         "machine" => api::machine_api(&state).1,

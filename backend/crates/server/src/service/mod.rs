@@ -13,4 +13,5 @@ pub mod lifecycle;
 pub mod metrics;
 pub mod query;
 pub mod runs;
+pub mod table;
 pub mod tokens;

@@ -470,6 +470,12 @@ The settings that the sections above leave open, as
 - A run validates the spec, loads the sources in chunks and evaluates the
   nodes in the order of their inputs. A node with several consumers is
   evaluated once.
+- A run reads all its sources in **one read-only `REPEATABLE READ`
+  transaction**: the samples a source selects, their attributes, the point
+  counts it checks and the series it loads come from the same data, so a
+  series uploaded or a run invalidated during the run cannot slip past the
+  filter or the size check. The transaction ends once the sources are
+  loaded; the nodes are evaluated after it.
 - The response is an **NDJSON stream** like today's comparison (NFR-7):
   `start`, `progress` (samples done and in total), one `result`, then
   `done` or `error`. Request errors are problem details before the stream
@@ -479,14 +485,23 @@ The settings that the sections above leave open, as
 - The result arrives at the end, not row by row: most nodes need all their
   input. Progress counts the samples of the sources, which is where the
   time goes.
-- Lines are downsampled for display on the server (`max_points`), as today.
+- Lines are downsampled for display on the server (`max_points`, 2000 by
+  default), as today: each frame that reaches a `line` keeps the minimum
+  and maximum of each bucket of its points, and a gap stays a gap.
 - **Preview:** a run can stop at a node (`until`) and be limited to part of
   the data (`preview`): each source then reads only the latest run that
-  matches its filter. The result is marked `partial`. The editor uses this
-  for the selected node.
+  matches its filter. The result is marked `partial`, also when `until`
+  names a node other than the visualization. Problems of nodes that
+  `until` does not need do not stop the run (problems of the spec itself
+  do); a whole run needs every node to be valid. The editor uses this for the selected
+  node.
 - **Export** (FR-20): with `format` `csv`, `json` or `parquet`, a run
   streams the data that reaches the visualization as a file, one row per
-  point with its attributes and columns.
+  point with its attributes and columns. A column or attribute with a
+  unit gets a `unit(<name>)` column after it, a name no attribute or
+  column can have. Values keep their type and digits: a column of mixed
+  types (`10` and `"10"`), lists or integers a float cannot hold exactly
+  holds JSON values (native in NDJSON, JSON text in CSV and Parquet).
 - There is no cache (NFR-5 still allows one), and nothing is kept between
   requests (NFR-1).
 

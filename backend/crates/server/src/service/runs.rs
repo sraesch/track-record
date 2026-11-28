@@ -12,7 +12,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{DateTime, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::{PgPool, Postgres, QueryBuilder};
+use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -127,7 +127,7 @@ impl RunFilter {
     /// `since_tag` and `since_sut_tag` into the latest of them and
     /// `started_after`, which all must hold. The result no longer has those
     /// three fields; [`push_run_level_conditions`] expects a resolved filter.
-    pub async fn resolve(&self, pool: &PgPool) -> ApiResult<RunFilter> {
+    pub async fn resolve(&self, conn: &mut PgConnection) -> ApiResult<RunFilter> {
         if self.started_within_days.is_some_and(|n| n < 1) {
             return Err(ApiError::bad_request(
                 "started_within_days must be at least 1",
@@ -138,7 +138,12 @@ impl RunFilter {
         }
         let mut bounds: Vec<DateTime<Utc>> = self.started_after.into_iter().collect();
         if let Some(days) = self.started_within_days {
-            bounds.push(Utc::now() - TimeDelta::days(days.min(MAX_WITHIN_DAYS)));
+            // The database's time: in a transaction, the time it started,
+            // so that the sources of one chart run share one cutoff.
+            let now: DateTime<Utc> = sqlx::query_scalar("SELECT now()")
+                .fetch_one(&mut *conn)
+                .await?;
+            bounds.push(now - TimeDelta::days(days.min(MAX_WITHIN_DAYS)));
         }
         if let Some(tag) = &self.since_tag {
             let start: Option<DateTime<Utc>> = sqlx::query_scalar(
@@ -146,7 +151,7 @@ impl RunFilter {
                  JOIN run_tag t ON t.run_id = r.id WHERE t.tag = $1",
             )
             .bind(tag)
-            .fetch_one(pool)
+            .fetch_one(&mut *conn)
             .await?;
             bounds.push(start.ok_or_else(|| {
                 ApiError::invalid(format!("since_tag: no run has the tag {tag:?}"))
@@ -158,7 +163,7 @@ impl RunFilter {
                  JOIN sut_version sut ON sut.id = r.sut_version_id WHERE sut.tag = $1",
             )
             .bind(tag)
-            .fetch_one(pool)
+            .fetch_one(&mut *conn)
             .await?;
             bounds.push(start.ok_or_else(|| {
                 ApiError::invalid(format!(
@@ -326,7 +331,7 @@ pub async fn list_runs(pool: &PgPool, filter: &RunFilter) -> ApiResult<RunList> 
     if !(1..=500).contains(&limit) {
         return Err(ApiError::bad_request("limit must be between 1 and 500"));
     }
-    let filter = &filter.resolve(pool).await?;
+    let filter = &filter.resolve(&mut *pool.acquire().await?).await?;
     let aliases = Aliases::load(pool).await?;
     let mut q = QueryBuilder::<Postgres>::new(RUN_SELECT);
     q.push(" WHERE true");
@@ -691,7 +696,7 @@ const CASE_EXECUTION_SELECT: &str = "\
 
 /// Assets of test cases, by test case id.
 pub async fn test_case_assets(
-    pool: &PgPool,
+    executor: impl sqlx::PgExecutor<'_>,
     test_case_ids: &[i64],
 ) -> ApiResult<HashMap<i64, Vec<AssetRef>>> {
     let rows: Vec<(i64, i64, String, Option<String>, Option<String>)> = sqlx::query_as(
@@ -700,7 +705,7 @@ pub async fn test_case_assets(
          WHERE tca.test_case_id = ANY($1) ORDER BY a.name, a.id",
     )
     .bind(test_case_ids)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
     let mut out: HashMap<i64, Vec<AssetRef>> = HashMap::new();
     for (tc, id, name, version, content_hash) in rows {

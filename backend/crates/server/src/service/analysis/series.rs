@@ -150,7 +150,8 @@ struct Loaded {
 }
 
 async fn load(pool: &PgPool, req: &SeriesViewRequest, max_series: usize) -> ApiResult<Loaded> {
-    let prepared = derived::prepare(pool, &req.metric, req.unit.as_deref()).await?;
+    let mut conn = pool.acquire().await?;
+    let prepared = derived::prepare(&mut conn, &req.metric, req.unit.as_deref()).await?;
     if prepared.signature.kind != Kind::Series {
         return Err(ApiError::invalid(format!(
             "{} is a scalar; this view needs a series, e.g. series.<name>",
@@ -171,9 +172,9 @@ async fn load(pool: &PgPool, req: &SeriesViewRequest, max_series: usize) -> ApiR
             prepared.signature.x_unit
         )));
     }
-    let aliases = Aliases::load(pool).await?;
+    let aliases = Aliases::load(&mut *conn).await?;
     let ds = load_dataset(
-        pool,
+        &mut conn,
         &req.filter,
         req.include_warmup,
         &Restrict::default(),
@@ -188,7 +189,7 @@ async fn load(pool: &PgPool, req: &SeriesViewRequest, max_series: usize) -> ApiR
         let mut evaluator = prepared.evaluator();
         'chunks: for (c, chunk) in ds.samples.chunks(CHUNK).enumerate() {
             let ids: Vec<Uuid> = chunk.iter().map(|s| s.sample_id).collect();
-            let data = derived::load_sample_data(pool, &ids, evaluator.inputs()).await?;
+            let data = derived::load_sample_data(&mut conn, &ids, evaluator.inputs()).await?;
             for (j, s) in chunk.iter().enumerate() {
                 match evaluator.evaluate(&data[&s.sample_id]) {
                     Ok(out) => {

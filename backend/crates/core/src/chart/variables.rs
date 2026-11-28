@@ -373,6 +373,19 @@ impl Spec {
     /// wrong type and a value for a variable the spec does not declare are
     /// problems. The literal values are checked again after binding.
     pub fn bind(&self, values: &BTreeMap<String, Value>) -> Result<Spec, Vec<Problem>> {
+        let (spec, problems) = self.bind_partly(values);
+        if problems.is_empty() {
+            Ok(spec)
+        } else {
+            Err(problems)
+        }
+    }
+
+    /// [`bind`](Self::bind) that keeps going: the spec with every variable
+    /// that has a fitting value bound, and the problems. A run that stops
+    /// at a node uses it, so that problems of nodes it does not evaluate
+    /// do not stop it.
+    pub fn bind_partly(&self, values: &BTreeMap<String, Value>) -> (Spec, Vec<Problem>) {
         let mut problems = Vec::new();
         for name in values.keys().filter(|n| self.variable(n).is_none()) {
             problems.push(Problem::spec_setting(
@@ -434,11 +447,7 @@ impl Spec {
                 problems.push(Problem::setting(&node.id, setting, message));
             }
         }
-        if problems.is_empty() {
-            Ok(spec)
-        } else {
-            Err(problems)
-        }
+        (spec, problems)
     }
 
     /// The spec with the variables that have a fitting default replaced by

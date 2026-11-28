@@ -29,6 +29,7 @@ metrics and derived metrics). That API is not covered here.
 | [Tags and annotations](annotations.md) | Tags on runs and test cases, free-text annotations |
 | [Derived metrics](derived-metrics.md) | Listing, validating and evaluating derived metrics; the expression language |
 | [Analysis](analysis.md) | Run filter, aggregates, trends, comparisons, series views, export |
+| [Charts](charts.md) | Running and checking chart specs, export of their data |
 
 ## Quick start
 
@@ -126,6 +127,13 @@ token of any scope.
 | `POST` | [`/api/v1/analysis/series/overlay`](analysis.md#series-overlay) | read | Series of many samples, optionally on a common grid |
 | `POST` | [`/api/v1/analysis/series/aggregate`](analysis.md#series-aggregate) | read | Percentile bands of series per grid point |
 | `POST` | [`/api/v1/analysis/export`](analysis.md#export) | read | CSV, NDJSON or Parquet export, streamed |
+
+### Charts
+
+| Method | Path | Scope | Purpose |
+|---|---|---|---|
+| `POST` | [`/api/v1/charts/run`](charts.md#run-a-chart) | read | Run a chart spec, streamed as NDJSON, or export its data |
+| `POST` | [`/api/v1/charts/validate`](charts.md#validate-a-chart) | read | Check a chart spec: problems and the output of each node |
 
 ## What the machine API cannot do
 
