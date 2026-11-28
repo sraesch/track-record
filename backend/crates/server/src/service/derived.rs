@@ -999,13 +999,13 @@ pub async fn evaluate(pool: &PgPool, req: &EvaluateRequest) -> ApiResult<Evaluat
         "SELECT id, repetition, is_warmup FROM sample WHERE case_execution_id = $1 ORDER BY repetition",
     )
     .bind(req.case_execution_id)
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await?;
     if samples.is_empty() {
         let exists: bool =
             sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM case_execution WHERE id = $1)")
                 .bind(req.case_execution_id)
-                .fetch_one(pool)
+                .fetch_one(&mut *conn)
                 .await?;
         if !exists {
             return Err(ApiError::not_found(format!(

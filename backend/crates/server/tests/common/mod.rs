@@ -35,11 +35,19 @@ pub struct TestApp {
     db_name: String,
 }
 
-/// Skips the test (returns) when no database is configured.
+/// Skips the test (returns) when no database is configured. With an
+/// argument, a function that changes the state before the app starts
+/// (`app!(|s| s.chart_limits.max_points = 10)`).
 #[macro_export]
 macro_rules! app {
     () => {
         match common::TestApp::spawn().await {
+            Some(app) => app,
+            None => return,
+        }
+    };
+    ($configure:expr) => {
+        match common::TestApp::spawn_with($configure).await {
             Some(app) => app,
             None => return,
         }
@@ -53,6 +61,11 @@ fn with_database(url: &str, db: &str) -> String {
 
 impl TestApp {
     pub async fn spawn() -> Option<Self> {
+        Self::spawn_with(|_| {}).await
+    }
+
+    /// [`spawn`](Self::spawn), with `configure` applied to the state.
+    pub async fn spawn_with(configure: impl FnOnce(&mut AppState)) -> Option<Self> {
         let Ok(admin_url) = std::env::var("TEST_DATABASE_URL") else {
             if std::env::var("TR_REQUIRE_DB").as_deref() == Ok("1") {
                 panic!("TEST_DATABASE_URL is not set but TR_REQUIRE_DB=1");
@@ -95,12 +108,14 @@ impl TestApp {
         track_record_server::db::check_schema(&pool).await.unwrap();
 
         let attachment_dir = tempfile::tempdir().unwrap();
-        let state = AppState {
+        let mut state = AppState {
             pool: pool.clone(),
             attachments: Arc::new(AttachmentStore::new(attachment_dir.path())),
             max_body_bytes: 64 * 1024 * 1024,
             mcp_allowed_hosts: Vec::new(),
+            chart_limits: Default::default(),
         };
+        configure(&mut state);
         state.attachments.init().await.unwrap();
 
         let machine = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -227,6 +242,25 @@ impl Api {
     pub async fn raw(&self, rb: RequestBuilder) -> Response {
         self.auth(rb).send().await.unwrap()
     }
+}
+
+/// POSTs `body` and reads an NDJSON stream of events; a response other
+/// than 200 gives its problem as the only element.
+pub async fn ndjson(api: &Api, url: &str, body: &Value) -> (StatusCode, Vec<Value>) {
+    let response = api.raw(api.client.post(url).json(body)).await;
+    let status = response.status();
+    let content_type = response.headers().get("content-type").cloned();
+    let text = response.text().await.unwrap();
+    if status != StatusCode::OK {
+        return (status, vec![serde_json::from_str(&text).unwrap()]);
+    }
+    assert_eq!(content_type.unwrap(), "application/x-ndjson");
+    (
+        status,
+        text.lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect(),
+    )
 }
 
 pub async fn send(rb: RequestBuilder) -> (StatusCode, Value) {

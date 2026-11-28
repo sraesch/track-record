@@ -23,9 +23,11 @@ Every error is a problem details object
 Internal errors (`500`, code `internal`) never reveal details; the server
 logs them.
 
-Errors of [compare](analysis.md#compare) that happen after the stream has
-started arrive as an `error` event in the stream instead; an
-[export](analysis.md#export) that fails after it has started is cut off.
+Errors of [compare](analysis.md#compare) and of a
+[chart run](charts.md#run-a-chart) that happen after the stream has started
+arrive as an `error` event in the stream instead; an
+[export](analysis.md#export) that fails after it has started is cut off, as
+is the [export of a chart](charts.md#export).
 
 ## Status codes
 
@@ -84,6 +86,17 @@ started arrive as an `error` event in the stream instead; an
 | `validation_failed` | 422 | E.g. a series where a scalar is needed (`series.fps is a series; this view needs a scalar metric, e.g. max(series.fps)`), a reference run that is not in the trend, or more than 2,000,000 samples |
 | `bad_request` | 400 | E.g. `limit and cursor apply to the run list, not to analysis`, an invalid grid, `dimension parameters needs the compared parameters in \`parameters\`` |
 | `derived_metric_cycle` | 422 | Derived metrics would refer to each other in a cycle |
+
+### Charts
+
+| Code | Status | Meaning |
+|---|---|---|
+| `invalid_chart` | 422 | The spec of a [chart run](charts.md#run-a-chart) is not well-formed or not valid, a variable has no value or one of the wrong type, or `until` names no node. `detail` lists the problems; [validate](charts.md#validate-a-chart) gives them per node and setting |
+| `chart_failed` | — | In the `error` event of a chart run: the data does not fit a node (e.g. two partners with one key in a match), or the run would hold more points than its budget. `node` and `setting` say where |
+
+A chart's source can also fail with the codes of an analysis
+(`invalid_expression`, `validation_failed`), before the stream or, for the
+budget of points while the sources load, in its `error` event.
 
 ### Seen only on the UI port
 

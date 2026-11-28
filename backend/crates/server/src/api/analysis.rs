@@ -4,16 +4,11 @@
 //! Long operations stream (NFR-7): the comparison as NDJSON events, the
 //! export as the file itself.
 
-use std::convert::Infallible;
-
 use axum::Json;
-use axum::body::Body;
 use axum::extract::State;
-use axum::http::{HeaderValue, header};
 use axum::response::Response;
-use bytes::Bytes;
-use futures::stream;
 
+use super::stream::{file, ndjson};
 use crate::AppState;
 use crate::error::{ApiJson, ApiPath, ApiResult, Problem};
 use crate::service::analysis::compare::{self, CompareEvent, CompareRequest};
@@ -99,21 +94,6 @@ pub async fn trend(
     Ok(Json(analysis::trend(&state.pool, &req).await?))
 }
 
-fn ndjson(rx: tokio::sync::mpsc::Receiver<CompareEvent>) -> Response {
-    let body = stream::unfold(rx, |mut rx| async move {
-        let event = rx.recv().await?;
-        let mut line = serde_json::to_vec(&event).expect("events serialize");
-        line.push(b'\n');
-        Some((Ok::<_, Infallible>(Bytes::from(line)), rx))
-    });
-    let mut response = Response::new(Body::from_stream(body));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/x-ndjson"),
-    );
-    response
-}
-
 /// Compare side by side along a dimension (FR-16), streamed (NFR-7).
 ///
 /// The response is NDJSON: a `start` event, `progress` events, one `row`
@@ -170,23 +150,5 @@ pub async fn export(
 ) -> ApiResult<Response> {
     let format = req.format;
     let rx = export::export(state.pool.clone(), req).await?;
-    let body = stream::unfold(rx, |mut rx| async move {
-        let chunk = rx.recv().await?;
-        Some((chunk, rx))
-    });
-    let mut response = Response::new(Body::from_stream(body));
-    let headers = response.headers_mut();
-    headers.insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static(format.content_type()),
-    );
-    headers.insert(
-        header::CONTENT_DISPOSITION,
-        HeaderValue::from_str(&format!(
-            "attachment; filename=\"track-record-export.{}\"",
-            format.extension()
-        ))
-        .expect("ASCII header"),
-    );
-    Ok(response)
+    Ok(file(rx, format, "track-record-export"))
 }

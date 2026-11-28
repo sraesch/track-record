@@ -13,12 +13,14 @@
 //! - [`variables`]: variables, and binding their values ([`Spec::bind`]).
 //! - [`eval`]: what the nodes compute ([`eval::run`]), on the trees that
 //!   the server loads for the sources.
+//! - [`display`]: the result prepared for display (downsampled lines).
 //!
 //! Like the rest of this crate, nothing here does I/O: the units of the
 //! metrics a source reads come through [`crate::dsl::check::Env`], and the
 //! frames of the sources come from the server.
 
 pub mod attributes;
+pub mod display;
 pub mod eval;
 pub mod filter;
 pub mod frame;

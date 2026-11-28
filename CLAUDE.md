@@ -111,6 +111,16 @@ npm run generate:api              # regenerate src/api/schema.d.ts from backend/
   Combine expressions are parsed with `dsl::parse_columns` (bare names
   too), resolved to columns and attributes of the match inputs and
   evaluated per point as derive is (`chart::eval::compute`).
+- A chart run (`service::charts::run`, `POST /charts/run`) reads all its
+  sources in one read-only `REPEATABLE READ` transaction
+  (`charts::snapshot`), so the read path of sources and analysis takes a
+  `&mut PgConnection`, not the pool. `source::select` picks the samples
+  (request errors come before the stream), `Selected::load` the points.
+  `eval::run` runs in `spawn_blocking` after the snapshot ends. The API
+  types are in `charts::model`, because core types have no `ToSchema`.
+  Validation gets metric units through `charts::env::ChartEnv`.
+- Files of an export (CSV, NDJSON, Parquet) go through
+  `service::table::TableWriter`, shared by analysis and chart export.
 - Derived metrics have no versions
   ([ADR 0017](docs/adr/0017-derived-metrics-without-versions.md)): `PUT`
   creates one or changes its definition, and `derived.<name>` is resolved by

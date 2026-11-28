@@ -45,6 +45,20 @@ change that they can see.
   of frames with the same key, and `combine` expressions such as
   `a.mean / b.mean` with units checked and inferred, also when a chart is
   validated. No value is counted, never computed with.
+- Endpoints that run and check charts (FR-20, FR-22, FR-23,
+  [#30](https://github.com/sraesch/track-record/issues/30)):
+  `POST /charts/run` and `POST /charts/validate` on the machine port (any
+  token scope) and the UI port. A run streams NDJSON (`start`, `progress`,
+  one `result` with the tree that reaches the visualization and
+  `excluded` per source, then `done` or `error`). With `format` it returns
+  that data as CSV, NDJSON or Parquet instead. `until` stops at a node,
+  `preview` reads only the latest run of each source, and `max_points`
+  downsamples lines. All sources of a run are read from one snapshot, so
+  data uploaded or invalidated during the run does not change what it
+  sees. `TR_CHART_MAX_POINTS` now limits each run. Validation answers with
+  the problems per node and setting, with positions inside expressions,
+  and the columns, attributes and group levels of each node. See
+  `docs/rest/charts.md`.
 
 ### Changed
 

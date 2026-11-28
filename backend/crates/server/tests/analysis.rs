@@ -739,23 +739,6 @@ async fn trend_marks_changes_and_follows_aliases() {
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
-async fn ndjson(api: &Api, url: &str, body: &Value) -> (StatusCode, Vec<Value>) {
-    let response = api.raw(api.client.post(url).json(body)).await;
-    let status = response.status();
-    let content_type = response.headers().get("content-type").cloned();
-    let text = response.text().await.unwrap();
-    if status != StatusCode::OK {
-        return (status, vec![serde_json::from_str(&text).unwrap()]);
-    }
-    assert_eq!(content_type.unwrap(), "application/x-ndjson");
-    (
-        status,
-        text.lines()
-            .map(|l| serde_json::from_str(l).unwrap())
-            .collect(),
-    )
-}
-
 fn row_events(events: &[Value]) -> Vec<&Value> {
     events.iter().filter(|e| e["type"] == "row").collect()
 }

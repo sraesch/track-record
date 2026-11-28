@@ -68,7 +68,8 @@ pub fn type_of(name: &str) -> Expect {
 }
 
 /// Checks what the server's run filter takes beyond the type of a field:
-/// whole numbers of at least 1, run ids, and the values of enumerations.
+/// whole numbers of at least 1, run ids, parameters as `name=value`, and
+/// the values of enumerations.
 /// The value has the field's type already.
 pub fn check(name: &str, value: &Value) -> Result<(), String> {
     let one_of = |allowed: &[&str], v: &Value| match v.as_str() {
@@ -90,6 +91,10 @@ pub fn check(name: &str, value: &Value) -> Result<(), String> {
             _ => Err(format!("{v} is not a run id (a UUID)")),
         }),
         "status" => items().iter().try_for_each(|v| one_of(STATUSES, v)),
+        "param" => items().iter().try_for_each(|v| match v.as_str() {
+            Some(s) if s.split_once('=').is_some_and(|(n, _)| !n.trim().is_empty()) => Ok(()),
+            _ => Err(format!("{v} is not a parameter condition: name=value")),
+        }),
         "triggered_by" => one_of(TRIGGERS, value),
         "validity" => one_of(VALIDITIES, value),
         _ => Ok(()),
@@ -136,6 +141,9 @@ mod tests {
             json!(["7c6c5a3e-0c4b-4d4e-9c39-6f1e6c3b8a10"])
         ));
         assert!(!ok("run_id", json!(["not-a-uuid"])));
+        assert!(ok("param", json!(["codec=h264", "size_mb=10"])));
+        assert!(!ok("param", json!(["codec"])));
+        assert!(!ok("param", json!([" =h264"])));
         assert!(!ok(
             "run_id",
             json!(["7c6c5a3e-0c4b-4d4e-9c39-6f1e6c3b8a1z"])

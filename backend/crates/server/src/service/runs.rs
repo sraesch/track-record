@@ -138,7 +138,12 @@ impl RunFilter {
         }
         let mut bounds: Vec<DateTime<Utc>> = self.started_after.into_iter().collect();
         if let Some(days) = self.started_within_days {
-            bounds.push(Utc::now() - TimeDelta::days(days.min(MAX_WITHIN_DAYS)));
+            // The database's time: in a transaction, the time it started,
+            // so that the sources of one chart run share one cutoff.
+            let now: DateTime<Utc> = sqlx::query_scalar("SELECT now()")
+                .fetch_one(&mut *conn)
+                .await?;
+            bounds.push(now - TimeDelta::days(days.min(MAX_WITHIN_DAYS)));
         }
         if let Some(tag) = &self.since_tag {
             let start: Option<DateTime<Utc>> = sqlx::query_scalar(

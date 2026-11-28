@@ -18,7 +18,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::{PgConnection, PgPool};
+use sqlx::PgPool;
+use sqlx::pool::PoolConnection;
 use tokio::sync::mpsc;
 use track_record_core::dsl::Kind;
 use utoipa::ToSchema;
@@ -302,7 +303,7 @@ pub async fn compare(pool: PgPool, req: CompareRequest) -> ApiResult<mpsc::Recei
         if tx.send(start).await.is_err() {
             return;
         }
-        if let Err(e) = run(&mut conn, &prepared, &ds, &plan, &tx).await {
+        if let Err(e) = run(conn, &prepared, &ds, &plan, &tx).await {
             let detail = match &e {
                 ApiError::Problem { detail, .. } => detail.clone(),
                 ApiError::Internal(err) => {
@@ -338,8 +339,10 @@ struct CellData {
     runs: HashMap<Uuid, (Vec<Option<f64>>, BTreeMap<String, Value>)>,
 }
 
+/// Evaluates the samples, then gives the connection back before the rows
+/// go out, so that a slow reader holds no connection.
 async fn run(
-    conn: &mut PgConnection,
+    mut conn: PoolConnection<sqlx::Postgres>,
     prepared: &Prepared,
     ds: &Dataset,
     plan: &Plan,
@@ -348,11 +351,18 @@ async fn run(
     let total = ds.samples.len();
     let progress_tx = tx.clone();
     let mut excluded = Excluded::default();
-    let values = eval_scalars(conn, prepared, &ds.samples, &mut excluded, &mut |done| {
-        // Progress is best effort: a slow reader skips some.
-        let _ = progress_tx.try_send(CompareEvent::Progress { done, total });
-    })
+    let values = eval_scalars(
+        &mut conn,
+        prepared,
+        &ds.samples,
+        &mut excluded,
+        &mut |done| {
+            // Progress is best effort: a slow reader skips some.
+            let _ = progress_tx.try_send(CompareEvent::Progress { done, total });
+        },
+    )
     .await?;
+    drop(conn);
 
     let mut cases = Cases::default();
     // (case key, device) -> column -> cell

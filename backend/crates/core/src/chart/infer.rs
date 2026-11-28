@@ -745,8 +745,8 @@ fn combine(cx: &mut Cx, n: &CombineNode, input: &Shape) -> Option<Shape> {
     let last = input.levels.last();
     let mut shape = input.clone();
     shape.levels.pop();
-    let mut columns: Vec<ColumnShape> = input.column("x").cloned().into_iter().collect();
     if let Some(functions) = &n.functions {
+        let mut columns: Vec<ColumnShape> = input.column("x").cloned().into_iter().collect();
         if matches!(last, Some(Level::Match { .. })) {
             cx.node_problem(
                 "combine with functions merges the frames of a group; after a match, combine \
@@ -775,6 +775,7 @@ fn combine(cx: &mut Cx, n: &CombineNode, input: &Shape) -> Option<Shape> {
     };
     // A frame with one point and no x applies to every point of the others,
     // so x comes from the inputs that are series, whichever their names.
+    let mut columns: Vec<ColumnShape> = Vec::new();
     let mut xs = inputs
         .iter()
         .filter_map(|mi| mi.columns.iter().find(|c| c.name == "x").map(|c| (mi, c)));

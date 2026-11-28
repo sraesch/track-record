@@ -12,7 +12,9 @@
 
 pub mod analysis;
 pub mod annotate;
+pub mod charts;
 pub mod read;
+pub mod stream;
 pub mod ui;
 pub mod write;
 
@@ -48,6 +50,7 @@ pub const UI_PREFIX: &str = "/ui/api/v1";
         (name = "definitions", description = "Definitions and dimensions"),
         (name = "annotations", description = "Tags and annotations"),
         (name = "analysis", description = "Aggregates, trends, comparisons, series views and export (FR-12 to FR-20)"),
+        (name = "charts", description = "Run and check charts (FR-20, FR-22 to FR-25)"),
         (name = "ui", description = "Web UI only: never reachable with an API token"),
     )
 )]
@@ -87,6 +90,8 @@ fn read_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(analysis::series_overlay))
         .routes(routes!(analysis::series_aggregate))
         .routes(routes!(analysis::export))
+        .routes(routes!(charts::run_chart))
+        .routes(routes!(charts::validate_chart))
 }
 
 fn annotate_routes() -> OpenApiRouter<AppState> {

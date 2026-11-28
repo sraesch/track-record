@@ -245,6 +245,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ui/api/v1/charts/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a chart spec (FR-22, FR-23), streamed (NFR-7).
+         * @description The response is NDJSON: a `start` event, `progress` events, one
+         *     `result` with the tree that reaches the visualization (or the node
+         *     `until` names), then `done`, or `error` if the run fails after it
+         *     started. With `format`, the response is instead the file of the data
+         *     that reaches the visualization (FR-20): text/csv, application/x-ndjson
+         *     or application/vnd.apache.parquet.
+         */
+        post: operations["run_chart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ui/api/v1/charts/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a chart spec: whether it is well-formed and valid, its problems
+         *     per node and setting, and the columns, attributes and group levels of
+         *     each node (ADR 0022, "Spec"). Problems are part of the answer.
+         */
+        post: operations["validate_chart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ui/api/v1/client-devices": {
         parameters: {
             query?: never;
@@ -901,6 +947,14 @@ export interface components {
             /** Format: int64 */
             size_bytes: number;
         };
+        /**
+         * @description The value of an attribute and its unit (absent for none). Times are
+         *     RFC 3339 text; parameters keep their JSON type.
+         */
+        AttrJson: {
+            unit?: string;
+            value: unknown;
+        };
         BandValues: {
             /** Format: double */
             p: number;
@@ -962,6 +1016,127 @@ export interface components {
             run: components["schemas"]["RunRef"];
             stats: components["schemas"]["Stats"];
         };
+        /** @description A column of a frame. */
+        ChartColumn: {
+            /** @description The x-dimension of a series' `x` (`time`, `bytes`, ...). */
+            dimension?: string;
+            name: string;
+            unit: string;
+        };
+        /**
+         * @description One line of the NDJSON stream of a chart run: `start`, `progress`, one
+         *     `result`, then `done` or `error`.
+         */
+        ChartEvent: {
+            /** @description The node whose output the result is. */
+            node: string;
+            /**
+             * @description The result is not the whole chart: a preview, or a node other
+             *     than the visualization.
+             */
+            partial: boolean;
+            /** @description The sources the run reads, with the samples each selected. */
+            sources: components["schemas"]["SourceSamples"][];
+            total_samples: number;
+            /** @enum {string} */
+            type: "start";
+        } | {
+            done: number;
+            total: number;
+            /** @enum {string} */
+            type: "progress";
+        } | {
+            /**
+             * @description Samples left out per source because its metric does not apply
+             *     to them.
+             */
+            excluded: {
+                [key: string]: components["schemas"]["Excluded"];
+            };
+            node: string;
+            partial: boolean;
+            tree: components["schemas"]["ChartTree"];
+            /** @enum {string} */
+            type: "result";
+        } | {
+            /** @enum {string} */
+            type: "done";
+        } | {
+            code: string;
+            detail: string;
+            node?: string | null;
+            setting?: string | null;
+            /** @enum {string} */
+            type: "error";
+        };
+        /** @description An ordered list of points with the same columns. */
+        ChartFrame: {
+            attributes: {
+                [key: string]: components["schemas"]["AttrJson"];
+            };
+            columns: components["schemas"]["ChartColumn"][];
+            /** @description The input of a match the frame came from. */
+            input?: string | null;
+            points: components["schemas"]["ChartPoint"][];
+        };
+        /** @description A group: the attributes it was formed by and its members. */
+        ChartGroup: {
+            key: components["schemas"]["KeyValue"][];
+            tree: components["schemas"]["ChartTree"];
+        };
+        /** @description A `ChartEvent`, or with `format: json` a row of the file: attributes and columns by name. */
+        ChartLine: components["schemas"]["ChartEvent"] | {
+            [key: string]: unknown;
+        };
+        /**
+         * @description A point: one value per column (null for no value), and the attributes
+         *     in which it differs from its frame.
+         */
+        ChartPoint: {
+            attributes?: {
+                [key: string]: components["schemas"]["AttrJson"];
+            };
+            values: (number | null)[];
+        };
+        /** @description One problem of a spec or of a run. */
+        ChartProblem: {
+            end?: number | null;
+            message: string;
+            /** @description Id of the node; none for a problem of the whole spec. */
+            node?: string | null;
+            /**
+             * @description Path of the setting, e.g. `filter.sut_branch`, `functions[1]` or
+             *     `variables[0].default`.
+             */
+            setting?: string | null;
+            /**
+             * @description Byte offsets of the part of the setting's expression, as the DSL
+             *     reports them.
+             */
+            start?: number | null;
+        };
+        /** @description What a node returns: a list of frames, or of groups. */
+        ChartTree: {
+            /** @description The frames, in order; absent when the tree is a list of groups. */
+            frames?: components["schemas"]["ChartFrame"][] | null;
+            /** @description The groups, in order; absent when the tree is a list of frames. */
+            groups?: components["schemas"]["ChartGroup"][] | null;
+        };
+        /** @description The problems of a spec and the output of each node. */
+        ChartValidation: {
+            /** @description The output of each node whose inputs could be checked, by node id. */
+            nodes: {
+                [key: string]: components["schemas"]["NodeShape"];
+            };
+            problems: components["schemas"]["ChartProblem"][];
+            /** @description The spec can be run: well-formed and without problems. */
+            valid: boolean;
+            /**
+             * @description The spec can be saved: known node types and settings, unique ids,
+             *     inputs that exist, no cycle, one visualization, within the limits.
+             */
+            well_formed: boolean;
+        };
         ClientDevice: {
             /** Format: date-time */
             created_at: string;
@@ -970,6 +1145,14 @@ export interface components {
             name: string;
             /** @description Name after aliases. */
             resolved_name: string;
+        };
+        ColumnShape: {
+            name: string;
+            /**
+             * @description `""` for no unit; null if the unit is known only when the chart
+             *     runs.
+             */
+            unit?: string | null;
         };
         CompareCell: {
             difference?: null | components["schemas"]["Difference"];
@@ -1215,6 +1398,34 @@ export interface components {
             /** @description Why the run is invalid. */
             reason: string;
         };
+        /**
+         * @description An attribute of a group key; `value` is null for the subgroup of frames
+         *     without a value.
+         */
+        KeyValue: {
+            name: string;
+            unit?: string;
+            value: unknown;
+        };
+        /**
+         * @description A group level: made by a group node (`by`, `except`) or by a match
+         *     (`inputs`).
+         */
+        LevelShape: {
+            by: string[];
+            except: string[];
+            /** @enum {string} */
+            kind: "group";
+        } | {
+            inputs: components["schemas"]["MatchInputShape"][];
+            /** @enum {string} */
+            kind: "match";
+        };
+        MatchInputShape: {
+            attributes: string[];
+            columns: components["schemas"]["ColumnShape"][];
+            name: string;
+        };
         MeasurementOut: {
             metric: string;
             /** Format: int64 */
@@ -1264,6 +1475,18 @@ export interface components {
         };
         /** @enum {string} */
         MetricValueType: "float" | "integer" | "boolean";
+        /** @description The output of a node as validation infers it. */
+        NodeShape: {
+            /**
+             * @description Attributes frames and points can have. `param.*` and `asset.*`
+             *     stand for every parameter and asset.
+             */
+            attributes: string[];
+            /** @description Columns of the frames; of the frames of `a` below a match level. */
+            columns: components["schemas"]["ColumnShape"][];
+            /** @description Group levels, outermost first. */
+            levels: components["schemas"]["LevelShape"][];
+        };
         OverlayResponse: {
             excluded: components["schemas"]["Excluded"];
             /** @description The common grid, if one was requested. */
@@ -1329,6 +1552,37 @@ export interface components {
         RenamedMetric: components["schemas"]["Metric"] & {
             /** @description Derived metrics whose expressions were changed to the new name. */
             rewritten: string[];
+        };
+        /** @description Runs a chart spec that is not saved (FR-22, FR-23). */
+        RunChart: {
+            format?: null | components["schemas"]["ExportFormat"];
+            /**
+             * @description Most points per line for display (at least 2, default 2000): each
+             *     frame that reaches a `line` keeps the minimum and maximum of each
+             *     bucket of its points. Other visualizations are not downsampled.
+             */
+            max_points?: number | null;
+            /**
+             * @description Limits each source to the latest run that matches its filter. The
+             *     result is marked `partial`.
+             */
+            preview?: boolean;
+            /** @description The spec (format 1, ADR 0022). */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * @description Stops at this node and returns its output instead of what reaches
+             *     the visualization (preview of a node).
+             */
+            until?: string | null;
+            /**
+             * @description Values of the chart's variables, by name. A variable without a value
+             *     takes its default; without one, the run is rejected.
+             */
+            variables?: {
+                [key: string]: unknown;
+            };
         };
         RunDetail: components["schemas"]["RunSummary"] & {
             annotations: components["schemas"]["Annotation"][];
@@ -1600,6 +1854,11 @@ export interface components {
             /** @description JSON scalar, or `null` to remove the alias. */
             target: Record<string, never>;
         };
+        /** @description The samples a source selected. */
+        SourceSamples: {
+            id: string;
+            samples: number;
+        };
         /**
          * @description Aggregate across the samples of one run, case and device (FR-12).
          *     Samples without a value (FR-12a) are counted in `n_no_value` and left
@@ -1732,6 +1991,16 @@ export interface components {
         };
         UpdateAnnotation: {
             body: string;
+        };
+        /** @description Checks a chart spec without running it. */
+        ValidateChart: {
+            /**
+             * @description The spec (format 1, ADR 0022). Settings that are variables are
+             *     checked with their defaults.
+             */
+            spec: {
+                [key: string]: unknown;
+            };
         };
         ValidateExpression: {
             expression: string;
@@ -2314,6 +2583,87 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    run_chart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunChart"];
+            };
+        };
+        responses: {
+            /** @description NDJSON stream of events; with `format`, the file of the data that reaches the visualization: CSV, NDJSON with one object per row (not events) or Parquet */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": components["schemas"]["ChartLine"];
+                    "text/csv": string;
+                    "application/vnd.apache.parquet": string;
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    validate_chart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateChart"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChartValidation"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
         };
