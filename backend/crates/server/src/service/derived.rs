@@ -19,7 +19,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use track_record_core::dsl::check::SeriesUnits;
 use track_record_core::dsl::eval::{EvalError, Value};
 use track_record_core::dsl::program::{
@@ -40,7 +40,7 @@ use crate::service::catalog;
 // Loading ------------------------------------------------------------------------
 
 /// The named derived metrics that exist and every derived metric they use.
-pub async fn load_library(pool: &PgPool, names: &BTreeSet<String>) -> ApiResult<Library> {
+pub async fn load_library(conn: &mut PgConnection, names: &BTreeSet<String>) -> ApiResult<Library> {
     if names.is_empty() {
         return Ok(Library::default());
     }
@@ -55,7 +55,7 @@ pub async fn load_library(pool: &PgPool, names: &BTreeSet<String>) -> ApiResult<
          WHERE id IN (SELECT id FROM closure)",
     )
     .bind(names)
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await?;
     Ok(Library::new(rows.into_iter().map(
         |(name, expression, unit)| Definition {
@@ -67,7 +67,7 @@ pub async fn load_library(pool: &PgPool, names: &BTreeSet<String>) -> ApiResult<
 }
 
 /// The derived metrics built on `name`, directly or through others.
-async fn users_of(pool: &PgPool, name: &str) -> ApiResult<BTreeSet<String>> {
+async fn users_of(conn: &mut PgConnection, name: &str) -> ApiResult<BTreeSet<String>> {
     let rows: Vec<String> = sqlx::query_scalar(
         "WITH RECURSIVE users(id) AS ( \
              SELECT d.derived_metric_id FROM derived_metric_dependency d \
@@ -78,7 +78,7 @@ async fn users_of(pool: &PgPool, name: &str) -> ApiResult<BTreeSet<String>> {
          SELECT name FROM derived_metric WHERE id IN (SELECT id FROM users)",
     )
     .bind(name)
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await?;
     Ok(rows.into_iter().collect())
 }
@@ -136,12 +136,13 @@ pub async fn broken_by_metric_unit(
     metric: &str,
     unit: &str,
 ) -> ApiResult<Vec<String>> {
-    let all: BTreeSet<String> = expressions(pool)
+    let mut conn = pool.acquire().await?;
+    let all: BTreeSet<String> = expressions(&mut *conn)
         .await?
         .into_iter()
         .map(|(_, name, _)| name)
         .collect();
-    let library = load_library(pool, &all).await?;
+    let library = load_library(&mut conn, &all).await?;
     let mut users = Vec::new();
     let mut names = BTreeSet::new();
     for user in &all {
@@ -157,8 +158,8 @@ pub async fn broken_by_metric_unit(
     if users.is_empty() {
         return Ok(vec![]);
     }
-    let catalogue = catalog::unit_catalogue(pool).await?;
-    let before = LatestUnits::load(pool, &names).await?;
+    let catalogue = catalog::unit_catalogue(&mut *conn).await?;
+    let before = LatestUnits::load(&mut conn, &names).await?;
     let mut after = before.clone();
     if let Some(u) = after.metrics.get_mut(metric) {
         *u = unit.to_owned();
@@ -189,12 +190,12 @@ pub struct LatestUnits {
 }
 
 impl LatestUnits {
-    pub async fn load(pool: &PgPool, names: &BTreeSet<String>) -> ApiResult<Self> {
+    pub async fn load(conn: &mut PgConnection, names: &BTreeSet<String>) -> ApiResult<Self> {
         let names: Vec<&String> = names.iter().collect();
         let metrics: Vec<(String, String)> =
             sqlx::query_as("SELECT m.name, m.unit FROM metric m WHERE m.name = ANY($1)")
                 .bind(&names)
-                .fetch_all(pool)
+                .fetch_all(&mut *conn)
                 .await?;
         let series: Vec<(String, String, String, String)> = sqlx::query_as(
             "SELECT DISTINCT ON (m.id) m.name, m.unit, se.x_unit, se.x_dimension FROM metric m \
@@ -202,7 +203,7 @@ impl LatestUnits {
              WHERE m.name = ANY($1) ORDER BY m.id, se.created_at DESC, se.key DESC",
         )
         .bind(&names)
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await?;
         Ok(Self {
             metrics: metrics.into_iter().collect(),
@@ -237,7 +238,7 @@ impl UnitSource for LatestUnits {
 /// as they were uploaded, with the unit their metric has now. Every sample
 /// gets an entry.
 pub async fn load_sample_data(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     sample_ids: &[Uuid],
     refs: &References,
 ) -> ApiResult<HashMap<Uuid, SampleData>> {
@@ -254,7 +255,7 @@ pub async fn load_sample_data(
         )
         .bind(sample_ids)
         .bind(names)
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await?;
         for (sample, name, unit, value) in rows {
             if let Some(d) = out.get_mut(&sample) {
@@ -271,10 +272,10 @@ pub async fn load_sample_data(
         )
         .bind(sample_ids)
         .bind(names)
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await?;
         let ids: Vec<Uuid> = rows.iter().map(|r| r.0).collect();
-        let mut points = series_store::load_many(pool, &ids).await?;
+        let mut points = series_store::load_many(&mut *conn, &ids).await?;
         for (id, sample, name, unit, x_unit, x_dimension) in rows {
             let p = points.remove(&id).unwrap_or_default();
             if let Some(d) = out.get_mut(&sample) {
@@ -372,12 +373,12 @@ pub struct Analysis {
 /// of that derived metric: it must not use itself, and it must not break a
 /// derived metric built on it.
 pub async fn analyze(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     expression: &str,
     unit: Option<&str>,
     name: Option<&str>,
 ) -> ApiResult<Analysis> {
-    let catalogue = catalog::unit_catalogue(pool).await?;
+    let catalogue = catalog::unit_catalogue(&mut *conn).await?;
     let expr = match parse(expression) {
         Ok(e) => e,
         Err(d) => {
@@ -393,7 +394,7 @@ pub async fn analyze(
         }
     };
     let refs = expr.references();
-    let library = load_library(pool, &refs.derived).await?;
+    let library = load_library(conn, &refs.derived).await?;
 
     let root = Root {
         expr,
@@ -414,7 +415,7 @@ pub async fn analyze(
         }
     }
     let names: BTreeSet<String> = inputs.metrics.union(&inputs.series).cloned().collect();
-    let latest = LatestUnits::load(pool, &names).await?;
+    let latest = LatestUnits::load(conn, &names).await?;
 
     let mut result = match name.and_then(|name| cycle(&library, &root, name)) {
         // With a cycle there is nothing more to check: the metrics in it
@@ -433,7 +434,7 @@ pub async fn analyze(
             expression: expression.to_owned(),
             unit: checked.signature.unit.clone(),
         };
-        let broken = broken_users(pool, &catalogue, &library, definition, root.expr.span).await?;
+        let broken = broken_users(conn, &catalogue, &library, definition, root.expr.span).await?;
         if !broken.is_empty() {
             result = Err(broken);
         }
@@ -475,18 +476,18 @@ fn cycle(library: &Library, root: &Root, name: &str) -> Option<Diagnostic> {
 /// is valid now and would not be with `definition`, reported at `span`.
 /// `library` holds what the new definition uses.
 async fn broken_users(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     catalogue: &UnitCatalogue,
     library: &Library,
     definition: Definition,
     span: Span,
 ) -> ApiResult<Vec<Diagnostic>> {
-    let users = users_of(pool, &definition.name).await?;
+    let users = users_of(conn, &definition.name).await?;
     if users.is_empty() {
         return Ok(vec![]);
     }
     let name = definition.name.clone();
-    let before = load_library(pool, &users).await?;
+    let before = load_library(conn, &users).await?;
     let mut after = before.clone();
     after.merge(library);
     after.insert(definition);
@@ -508,7 +509,7 @@ async fn broken_users(
             }
         }
     }
-    let latest = LatestUnits::load(pool, &names).await?;
+    let latest = LatestUnits::load(conn, &names).await?;
     let mut out = Vec::new();
     for user in &users {
         if check(&before, user, &latest).is_ok()
@@ -542,7 +543,7 @@ fn find_reference(expr: &Expr, name: &str) -> Option<Span> {
 
 pub async fn validate(pool: &PgPool, req: &ValidateExpression) -> ApiResult<Validation> {
     let a = analyze(
-        pool,
+        &mut *pool.acquire().await?,
         &req.expression,
         req.unit.as_deref(),
         req.name.as_deref(),
@@ -615,8 +616,12 @@ impl Prepared {
 /// Prepares an ad-hoc expression (an uploaded metric, a derived metric or
 /// any DSL expression) for analysis. `unit` converts the results; without
 /// it they are in the unit the expression has with the latest units.
-pub async fn prepare(pool: &PgPool, expression: &str, unit: Option<&str>) -> ApiResult<Prepared> {
-    let a = analyze(pool, expression, unit, None).await?;
+pub async fn prepare(
+    conn: &mut PgConnection,
+    expression: &str,
+    unit: Option<&str>,
+) -> ApiResult<Prepared> {
+    let a = analyze(conn, expression, unit, None).await?;
     let signature = a.result.map_err(|d| invalid(expression, &d))?;
     let mut root = a.root.expect("a valid expression has a root");
     root.unit = Some(signature.unit.clone());
@@ -692,7 +697,13 @@ pub async fn save(
     if req.expression.trim().is_empty() {
         return Err(ApiError::invalid("expression must not be empty"));
     }
-    let a = analyze(pool, &req.expression, Some(&req.unit), Some(name)).await?;
+    let a = analyze(
+        &mut *pool.acquire().await?,
+        &req.expression,
+        Some(&req.unit),
+        Some(name),
+    )
+    .await?;
     if let Err(d) = &a.result {
         return Err(invalid(&req.expression, d));
     }
@@ -941,19 +952,23 @@ pub fn classify(
 
 /// Prepares a saved derived metric for evaluation, in its declared unit or
 /// `unit`.
-async fn prepare_saved(pool: &PgPool, name: &str, unit: Option<&str>) -> ApiResult<Prepared> {
-    let library = load_library(pool, &BTreeSet::from([name.to_owned()])).await?;
+async fn prepare_saved(
+    conn: &mut PgConnection,
+    name: &str,
+    unit: Option<&str>,
+) -> ApiResult<Prepared> {
+    let library = load_library(conn, &BTreeSet::from([name.to_owned()])).await?;
     let Some(definition) = library.get(name) else {
         return Err(ApiError::not_found(format!(
             "derived metric {name} not found"
         )));
     };
     let expression = definition.expression.clone();
-    let catalogue = catalog::unit_catalogue(pool).await?;
+    let catalogue = catalog::unit_catalogue(&mut *conn).await?;
     let mut root = Root::definition(&library, name).map_err(ApiError::invalid)?;
     let (inputs, _) = root.closure(&library).map_err(ApiError::invalid)?;
     let names: BTreeSet<String> = inputs.metrics.union(&inputs.series).cloned().collect();
-    let latest = LatestUnits::load(pool, &names).await?;
+    let latest = LatestUnits::load(conn, &names).await?;
     if let Some(unit) = unit {
         root.unit = Some(unit.to_owned());
     }
@@ -971,9 +986,10 @@ async fn prepare_saved(pool: &PgPool, name: &str, unit: Option<&str>) -> ApiResu
 /// Evaluates an expression or a saved derived metric on every sample of a
 /// case execution (warmup samples included).
 pub async fn evaluate(pool: &PgPool, req: &EvaluateRequest) -> ApiResult<EvaluateResponse> {
+    let mut conn = pool.acquire().await?;
     let prepared = match (&req.expression, &req.name) {
-        (Some(e), None) => prepare(pool, e, req.unit.as_deref()).await?,
-        (None, Some(name)) => prepare_saved(pool, name, req.unit.as_deref()).await?,
+        (Some(e), None) => prepare(&mut conn, e, req.unit.as_deref()).await?,
+        (None, Some(name)) => prepare_saved(&mut conn, name, req.unit.as_deref()).await?,
         _ => return Err(ApiError::bad_request("give either expression or name")),
     };
     if req.max_points.is_some_and(|m| m < 2) {
@@ -1000,7 +1016,7 @@ pub async fn evaluate(pool: &PgPool, req: &EvaluateRequest) -> ApiResult<Evaluat
     }
     let mut evaluator = prepared.evaluator();
     let ids: Vec<Uuid> = samples.iter().map(|s| s.0).collect();
-    let data = load_sample_data(pool, &ids, evaluator.inputs()).await?;
+    let data = load_sample_data(&mut conn, &ids, evaluator.inputs()).await?;
     let sig = &prepared.signature;
     let mut out = Vec::new();
     for (id, repetition, is_warmup) in samples {

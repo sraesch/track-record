@@ -18,7 +18,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use tokio::sync::mpsc;
 use track_record_core::dsl::Kind;
 use utoipa::ToSchema;
@@ -167,16 +167,17 @@ pub async fn compare(pool: PgPool, req: CompareRequest) -> ApiResult<mpsc::Recei
             "dimension parameters needs the compared parameters in `parameters`",
         ));
     }
-    let prepared = derived::prepare(&pool, &req.metric, req.unit.as_deref()).await?;
+    let mut conn = pool.acquire().await?;
+    let prepared = derived::prepare(&mut conn, &req.metric, req.unit.as_deref()).await?;
     if prepared.signature.kind != Kind::Scalar {
         return Err(ApiError::invalid(format!(
             "{} is a series; a comparison needs a scalar metric",
             req.metric
         )));
     }
-    let aliases = Aliases::load(&pool).await?;
+    let aliases = Aliases::load(&mut *conn).await?;
     let mut ds = load_dataset(
-        &pool,
+        &mut conn,
         &req.filter,
         req.include_warmup,
         &Restrict::default(),
@@ -301,7 +302,7 @@ pub async fn compare(pool: PgPool, req: CompareRequest) -> ApiResult<mpsc::Recei
         if tx.send(start).await.is_err() {
             return;
         }
-        if let Err(e) = run(&pool, &prepared, &ds, &plan, &tx).await {
+        if let Err(e) = run(&mut conn, &prepared, &ds, &plan, &tx).await {
             let detail = match &e {
                 ApiError::Problem { detail, .. } => detail.clone(),
                 ApiError::Internal(err) => {
@@ -338,7 +339,7 @@ struct CellData {
 }
 
 async fn run(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     prepared: &Prepared,
     ds: &Dataset,
     plan: &Plan,
@@ -347,7 +348,7 @@ async fn run(
     let total = ds.samples.len();
     let progress_tx = tx.clone();
     let mut excluded = Excluded::default();
-    let values = eval_scalars(pool, prepared, &ds.samples, &mut excluded, &mut |done| {
+    let values = eval_scalars(conn, prepared, &ds.samples, &mut excluded, &mut |done| {
         // Progress is best effort: a slow reader skips some.
         let _ = progress_tx.try_send(CompareEvent::Progress { done, total });
     })

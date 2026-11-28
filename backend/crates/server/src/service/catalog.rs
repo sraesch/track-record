@@ -75,18 +75,20 @@ pub struct Unit {
     pub name: String,
 }
 
-pub async fn units(pool: &PgPool) -> ApiResult<Vec<Unit>> {
+pub async fn units(executor: impl sqlx::PgExecutor<'_>) -> ApiResult<Vec<Unit>> {
     Ok(sqlx::query_as(
         "SELECT symbol, quantity, to_base, name FROM unit ORDER BY quantity, to_base",
     )
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?)
 }
 
 /// The unit catalogue for conversions (FR-13a).
-pub async fn unit_catalogue(pool: &PgPool) -> ApiResult<track_record_core::units::UnitCatalogue> {
+pub async fn unit_catalogue(
+    executor: impl sqlx::PgExecutor<'_>,
+) -> ApiResult<track_record_core::units::UnitCatalogue> {
     Ok(track_record_core::units::UnitCatalogue::new(
-        units(pool)
+        units(executor)
             .await?
             .into_iter()
             .map(|u| track_record_core::units::CatalogueUnit {

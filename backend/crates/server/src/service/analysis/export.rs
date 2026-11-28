@@ -14,7 +14,7 @@ use bytes::Bytes;
 use parquet::arrow::ArrowWriter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use tokio::sync::mpsc;
 use track_record_core::dsl::Kind;
 use utoipa::ToSchema;
@@ -471,16 +471,17 @@ pub async fn export(pool: PgPool, req: ExportRequest) -> ApiResult<ExportStream>
                     "percentiles apply to level aggregates",
                 ));
             }
-            let prepared = derived::prepare(&pool, &req.metric, req.unit.as_deref()).await?;
+            let mut conn = pool.acquire().await?;
+            let prepared = derived::prepare(&mut conn, &req.metric, req.unit.as_deref()).await?;
             if prepared.signature.kind != Kind::Scalar {
                 return Err(ApiError::invalid(format!(
                     "{} is a series; export needs a scalar metric",
                     req.metric
                 )));
             }
-            let aliases = Aliases::load(&pool).await?;
+            let aliases = Aliases::load(&mut *conn).await?;
             let ds = load_dataset(
-                &pool,
+                &mut conn,
                 &req.filter,
                 req.include_warmup,
                 &Restrict::default(),
@@ -490,7 +491,9 @@ pub async fn export(pool: PgPool, req: ExportRequest) -> ApiResult<ExportStream>
             let columns = sample_columns();
             let writer = TableWriter::new(req.format, &columns).map_err(ApiError::Internal)?;
             tokio::spawn(async move {
-                if let Err(e) = stream_samples(&pool, &prepared, &ds, columns, writer, &tx).await {
+                if let Err(e) =
+                    stream_samples(&mut conn, &prepared, &ds, columns, writer, &tx).await
+                {
                     tracing::error!(error = %e, "export failed");
                     let _ = tx.send(Err(std::io::Error::other(e.to_string()))).await;
                 }
@@ -501,7 +504,7 @@ pub async fn export(pool: PgPool, req: ExportRequest) -> ApiResult<ExportStream>
 }
 
 async fn stream_samples(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     prepared: &Prepared,
     ds: &Dataset,
     columns: Columns,
@@ -514,7 +517,7 @@ async fn stream_samples(
         let _ = tx.send(Ok(head)).await;
     }
     for chunk in ds.samples.chunks(CHUNK) {
-        let values = eval_scalars(pool, prepared, chunk, &mut excluded, &mut |_| {})
+        let values = eval_scalars(conn, prepared, chunk, &mut excluded, &mut |_| {})
             .await
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         let rows: Vec<Vec<Cell>> = chunk

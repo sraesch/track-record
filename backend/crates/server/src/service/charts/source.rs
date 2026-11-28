@@ -19,7 +19,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use serde_json::Value;
-use sqlx::PgPool;
+use sqlx::PgConnection;
 use track_record_core::chart::spec::SourceNode;
 use track_record_core::chart::{Attr, AttrValue, Attributes, Column, Frame, Setting, Tree};
 use track_record_core::dsl::eval::{EvalError, Value as DslValue};
@@ -31,7 +31,7 @@ use crate::service::analysis::{
     CHUNK, Dataset, Excluded, MAX_SAMPLES, Restrict, RunRef, SampleRow, TestCaseRow,
     load_dataset_up_to,
 };
-use crate::service::derived;
+use crate::service::derived::{self, Prepared};
 use crate::service::query::Aliases;
 use crate::service::runs::{AssetRef, RunFilter};
 
@@ -141,16 +141,52 @@ pub fn run_filter(id: &str, node: &SourceNode) -> ApiResult<RunFilter> {
         .map_err(|e| ApiError::invalid(format!("source {id}: filter: {e}")))
 }
 
-/// Loads the frames of the bound source `id`. `progress` is called with
-/// the number of samples done after each chunk.
+/// Loads the frames of the bound source `id`: [`select`], then
+/// [`Selected::load`]. `progress` is called with the number of samples done
+/// after each chunk.
 pub async fn load(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     id: &str,
     node: &SourceNode,
     limits: &Limits,
     budget: &mut Budget,
     progress: &mut (dyn FnMut(usize) + Send),
 ) -> ApiResult<Loaded> {
+    select(conn, id, node, limits, false)
+        .await?
+        .load(conn, limits, budget, progress)
+        .await
+}
+
+/// The samples a source selects and their attributes, before any series is
+/// read. With `preview`, only the latest run that matches the filter.
+pub struct Selected {
+    id: String,
+    prepared: Prepared,
+    x_unit: String,
+    ds: Dataset,
+    attrs: SampleAttributes,
+}
+
+impl std::fmt::Debug for Selected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Selected")
+            .field("id", &self.id)
+            .field("samples", &self.ds.samples.len())
+            .finish_non_exhaustive()
+    }
+}
+
+/// Selects the samples of the bound source `id` (the first phase of
+/// [`load`]). Errors of the source and the limit of samples show here,
+/// before any point is loaded.
+pub async fn select(
+    conn: &mut PgConnection,
+    id: &str,
+    node: &SourceNode,
+    limits: &Limits,
+    preview: bool,
+) -> ApiResult<Selected> {
     let metric = bound(id, "metric", &node.metric)?;
     let unit = match &node.unit {
         Some(s) => Some(bound(id, "unit", s)?.as_str()),
@@ -160,8 +196,11 @@ pub async fn load(
         Some(s) => *bound(id, "include_warmup", s)?,
         None => false,
     };
-    let filter = run_filter(id, node)?;
-    let prepared = derived::prepare(pool, metric, unit)
+    let mut filter = run_filter(id, node)?;
+    if preview {
+        filter.latest_runs = Some(1);
+    }
+    let prepared = derived::prepare(conn, metric, unit)
         .await
         .map_err(|e| e.context(&format!("source {id}")))?;
     let series = prepared.signature.kind == Kind::Series;
@@ -185,9 +224,9 @@ pub async fn load(
             prepared.signature.x_unit
         )));
     }
-    let aliases = Aliases::load(pool).await?;
+    let aliases = Aliases::load(&mut *conn).await?;
     let ds = load_dataset_up_to(
-        pool,
+        conn,
         &filter,
         include_warmup,
         &Restrict::default(),
@@ -196,121 +235,154 @@ pub async fn load(
     )
     .await
     .map_err(|e| e.context(&format!("source {id}")))?;
-    let attrs = SampleAttributes::load(pool, &ds, id, &prepared.expression).await?;
+    let attrs = SampleAttributes::load(conn, &ds, id, &prepared.expression).await?;
+    Ok(Selected {
+        id: id.to_owned(),
+        prepared,
+        x_unit,
+        ds,
+        attrs,
+    })
+}
 
-    let y = Column::new("y", prepared.signature.unit.clone());
-    let mut excluded = Excluded::default();
-    let mut frames = Vec::new();
-    let mut evaluator = prepared.evaluator();
-    let mut done = 0;
-    for chunk in ds.samples.chunks(CHUNK) {
-        // The series a chunk reads are loaded in batches of a bounded number
-        // of points, so that a source of long series does not hold more
-        // than a batch of input points besides the frames it made.
-        let counts = point_counts(pool, chunk, evaluator.inputs()).await?;
-        let mut start = 0;
-        while start < chunk.len() {
-            // A batch fits into what the budget has left, so that the input
-            // points of a batch and the frames made so far stay within it.
-            // Inputs are dropped as their sample is evaluated.
-            let room = budget.room();
-            let end =
-                next_batch(&counts, start, limits.batch_points.min(room), room).map_err(|i| {
-                    ApiError::invalid(format!(
-                        "source {id}: sample {} has {} points in the series the metric reads, \
+impl Selected {
+    /// Samples the filter selected.
+    pub fn samples(&self) -> usize {
+        self.ds.samples.len()
+    }
+
+    /// Loads the frames of the selected samples (the second phase of
+    /// [`load`]), charging their points to `budget`.
+    pub async fn load(
+        self,
+        conn: &mut PgConnection,
+        limits: &Limits,
+        budget: &mut Budget,
+        progress: &mut (dyn FnMut(usize) + Send),
+    ) -> ApiResult<Loaded> {
+        let Selected {
+            id,
+            prepared,
+            x_unit,
+            ds,
+            attrs,
+        } = self;
+        let id = id.as_str();
+        let y = Column::new("y", prepared.signature.unit.clone());
+        let mut excluded = Excluded::default();
+        let mut frames = Vec::new();
+        let mut evaluator = prepared.evaluator();
+        let mut done = 0;
+        for chunk in ds.samples.chunks(CHUNK) {
+            // The series a chunk reads are loaded in batches of a bounded number
+            // of points, so that a source of long series does not hold more
+            // than a batch of input points besides the frames it made.
+            let counts = point_counts(&mut *conn, chunk, evaluator.inputs()).await?;
+            let mut start = 0;
+            while start < chunk.len() {
+                // A batch fits into what the budget has left, so that the input
+                // points of a batch and the frames made so far stay within it.
+                // Inputs are dropped as their sample is evaluated.
+                let room = budget.room();
+                let end = next_batch(&counts, start, limits.batch_points.min(room), room).map_err(
+                    |i| {
+                        ApiError::invalid(format!(
+                            "source {id}: sample {} has {} points in the series the metric reads, \
                          more than the {room} points the chart may still hold; narrow the \
                          filter of the source, or reduce its series in the metric expression, \
                          e.g. max(series.fps)",
-                        chunk[i].sample_id, counts[i]
-                    ))
-                })?;
-            let batch = &chunk[start..end];
-            start = end;
-            let ids: Vec<Uuid> = batch.iter().map(|s| s.sample_id).collect();
-            let mut data = derived::load_sample_data(pool, &ids, evaluator.inputs()).await?;
-            for s in batch {
-                let input = data.remove(&s.sample_id).unwrap_or_default();
-                // A run deleted while the source loads has no attributes
-                // any more; its samples are gone with it, before they are
-                // evaluated, counted or charged to the budget.
-                let Some(attrs) = attrs.of(s) else {
-                    continue;
-                };
-                let out = evaluator.evaluate(&input);
-                drop(input);
-                let out = match out {
-                    Ok(out) => out,
-                    Err(e) => {
-                        excluded.record(&e);
-                        continue;
-                    }
-                };
-                // A series, with or without a value, needs an x that
-                // converts to the source's x unit.
-                let factor = match &out.value {
-                    DslValue::Scalar(_) => 1.0,
-                    DslValue::Series(_) => match prepared
-                        .catalogue
-                        .conversion_factor(&out.signature.x_unit, &x_unit)
-                    {
-                        Some(f) => f,
-                        None => {
-                            excluded.record(&EvalError::Data(format!(
-                                "x is in {:?}, which cannot be converted to {x_unit:?}",
-                                out.signature.x_unit
-                            )));
-                            continue;
-                        }
+                            chunk[i].sample_id, counts[i]
+                        ))
                     },
-                };
-                let x = || Column::x(x_unit.clone(), out.signature.x_dimension.clone());
-                let (columns, values) = match out.value {
-                    DslValue::Scalar(v) => {
-                        budget.take(id, 1)?;
-                        (vec![y.clone()], vec![vec![v]])
-                    }
-                    DslValue::Series(None) => (vec![x(), y.clone()], vec![vec![], vec![]]),
-                    DslValue::Series(Some(mut points)) => {
-                        if factor != 1.0 {
-                            for x in &mut points.x {
-                                *x *= factor;
-                            }
-                        }
-                        // A conversion can overflow (1e300 s in ns).
-                        if let Some(x) = points.x.iter().find(|x| !x.is_finite()) {
-                            excluded.record(&EvalError::Data(format!(
-                                "x is {x} in {x_unit:?}, which cannot be shown"
-                            )));
+                )?;
+                let batch = &chunk[start..end];
+                start = end;
+                let ids: Vec<Uuid> = batch.iter().map(|s| s.sample_id).collect();
+                let mut data = derived::load_sample_data(conn, &ids, evaluator.inputs()).await?;
+                for s in batch {
+                    let input = data.remove(&s.sample_id).unwrap_or_default();
+                    // A run deleted while the source loads has no attributes
+                    // any more; its samples are gone with it, before they are
+                    // evaluated, counted or charged to the budget.
+                    let Some(attrs) = attrs.of(s) else {
+                        continue;
+                    };
+                    let out = evaluator.evaluate(&input);
+                    drop(input);
+                    let out = match out {
+                        Ok(out) => out,
+                        Err(e) => {
+                            excluded.record(&e);
                             continue;
                         }
-                        budget.take(id, points.len())?;
-                        (
-                            vec![x(), y.clone()],
-                            vec![
-                                points.x.into_iter().map(Some).collect(),
-                                points.y.into_iter().map(Some).collect(),
-                            ],
-                        )
-                    }
-                };
-                frames.push(Frame::new(attrs, columns, values));
+                    };
+                    // A series, with or without a value, needs an x that
+                    // converts to the source's x unit.
+                    let factor = match &out.value {
+                        DslValue::Scalar(_) => 1.0,
+                        DslValue::Series(_) => match prepared
+                            .catalogue
+                            .conversion_factor(&out.signature.x_unit, &x_unit)
+                        {
+                            Some(f) => f,
+                            None => {
+                                excluded.record(&EvalError::Data(format!(
+                                    "x is in {:?}, which cannot be converted to {x_unit:?}",
+                                    out.signature.x_unit
+                                )));
+                                continue;
+                            }
+                        },
+                    };
+                    let x = || Column::x(x_unit.clone(), out.signature.x_dimension.clone());
+                    let (columns, values) = match out.value {
+                        DslValue::Scalar(v) => {
+                            budget.take(id, 1)?;
+                            (vec![y.clone()], vec![vec![v]])
+                        }
+                        DslValue::Series(None) => (vec![x(), y.clone()], vec![vec![], vec![]]),
+                        DslValue::Series(Some(mut points)) => {
+                            if factor != 1.0 {
+                                for x in &mut points.x {
+                                    *x *= factor;
+                                }
+                            }
+                            // A conversion can overflow (1e300 s in ns).
+                            if let Some(x) = points.x.iter().find(|x| !x.is_finite()) {
+                                excluded.record(&EvalError::Data(format!(
+                                    "x is {x} in {x_unit:?}, which cannot be shown"
+                                )));
+                                continue;
+                            }
+                            budget.take(id, points.len())?;
+                            (
+                                vec![x(), y.clone()],
+                                vec![
+                                    points.x.into_iter().map(Some).collect(),
+                                    points.y.into_iter().map(Some).collect(),
+                                ],
+                            )
+                        }
+                    };
+                    frames.push(Frame::new(attrs, columns, values));
+                }
+                tokio::task::yield_now().await;
             }
-            tokio::task::yield_now().await;
+            done += chunk.len();
+            progress(done);
         }
-        done += chunk.len();
-        progress(done);
+        Ok(Loaded {
+            tree: Tree::Frames(frames),
+            excluded,
+            samples: ds.samples.len(),
+        })
     }
-    Ok(Loaded {
-        tree: Tree::Frames(frames),
-        excluded,
-        samples: ds.samples.len(),
-    })
 }
 
 /// The points of the series the metric reads, per sample of `chunk` (in
 /// its order), by the point counts stored with the series.
 async fn point_counts(
-    pool: &PgPool,
+    executor: impl sqlx::PgExecutor<'_>,
     chunk: &[SampleRow],
     refs: &References,
 ) -> ApiResult<Vec<usize>> {
@@ -326,7 +398,7 @@ async fn point_counts(
     )
     .bind(&ids)
     .bind(names)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?
     .into_iter()
     .collect();
@@ -401,7 +473,12 @@ struct RunExtra {
 }
 
 impl SampleAttributes {
-    async fn load(pool: &PgPool, ds: &Dataset, id: &str, expression: &str) -> ApiResult<Self> {
+    async fn load(
+        executor: impl sqlx::PgExecutor<'_>,
+        ds: &Dataset,
+        id: &str,
+        expression: &str,
+    ) -> ApiResult<Self> {
         let run_ids: Vec<Uuid> = ds.runs.keys().copied().collect();
         let rows: Vec<(
             Uuid,
@@ -423,7 +500,7 @@ impl SampleAttributes {
              WHERE r.id = ANY($1) GROUP BY r.id, s.name, sv.version",
         )
         .bind(&run_ids)
-        .fetch_all(pool)
+        .fetch_all(executor)
         .await?;
         let extra: HashMap<Uuid, RunExtra> = rows
             .into_iter()

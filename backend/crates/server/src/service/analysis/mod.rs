@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::{PgPool, Postgres, QueryBuilder};
+use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder};
 use track_record_core::dsl::Kind;
 use track_record_core::dsl::eval::{EvalError, Value as DslValue};
 use track_record_core::dsl::program::Outcome;
@@ -262,18 +262,18 @@ pub struct Restrict {
 }
 
 pub async fn load_dataset(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     filter: &RunFilter,
     include_warmup: bool,
     restrict: &Restrict,
     aliases: &Aliases,
 ) -> ApiResult<Dataset> {
-    load_dataset_up_to(pool, filter, include_warmup, restrict, aliases, MAX_SAMPLES).await
+    load_dataset_up_to(conn, filter, include_warmup, restrict, aliases, MAX_SAMPLES).await
 }
 
 /// [`load_dataset`] with another limit of samples than [`MAX_SAMPLES`].
 pub async fn load_dataset_up_to(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     filter: &RunFilter,
     include_warmup: bool,
     restrict: &Restrict,
@@ -285,7 +285,7 @@ pub async fn load_dataset_up_to(
             "limit and cursor apply to the run list, not to analysis",
         ));
     }
-    let filter = &filter.resolve(pool).await?;
+    let filter = &filter.resolve(conn).await?;
     let mut q = QueryBuilder::<Postgres>::new(
         "SELECT r.id, ce.id, ce.test_case_id, cd.name, ce.device_environment_id, \
                 sa.id, sa.repetition, sa.is_warmup \
@@ -318,7 +318,7 @@ pub async fn load_dataset_up_to(
     q.push(" ORDER BY r.started_at, r.id, ce.id, sa.repetition LIMIT ")
         .push_bind(max_samples + 1);
     let rows: Vec<(Uuid, Uuid, i64, String, i64, Uuid, i32, bool)> =
-        q.build_query_as().fetch_all(pool).await?;
+        q.build_query_as().fetch_all(&mut *conn).await?;
     if rows.len() as i64 > max_samples {
         return Err(ApiError::invalid(format!(
             "the filter selects more than {max_samples} samples; narrow it"
@@ -327,8 +327,8 @@ pub async fn load_dataset_up_to(
 
     let run_ids: Vec<Uuid> = unique(rows.iter().map(|r| r.0));
     let test_case_ids: Vec<i64> = unique(rows.iter().map(|r| r.2));
-    let runs = load_runs(pool, &run_ids).await?;
-    let test_cases = load_test_cases(pool, &test_case_ids, aliases).await?;
+    let runs = load_runs(&mut *conn, &run_ids).await?;
+    let test_cases = load_test_cases(conn, &test_case_ids, aliases).await?;
     let samples = rows
         .into_iter()
         .map(
@@ -367,7 +367,10 @@ fn unique<T: std::hash::Hash + Eq + Copy>(items: impl Iterator<Item = T>) -> Vec
     items.filter(|i| seen.insert(*i)).collect()
 }
 
-pub async fn load_runs(pool: &PgPool, ids: &[Uuid]) -> ApiResult<HashMap<Uuid, RunRef>> {
+pub async fn load_runs(
+    executor: impl sqlx::PgExecutor<'_>,
+    ids: &[Uuid],
+) -> ApiResult<HashMap<Uuid, RunRef>> {
     let rows: Vec<(
         Uuid,
         DateTime<Utc>,
@@ -385,7 +388,7 @@ pub async fn load_runs(pool: &PgPool, ids: &[Uuid]) -> ApiResult<HashMap<Uuid, R
          FROM run r JOIN sut_version sut ON sut.id = r.sut_version_id WHERE r.id = ANY($1)",
     )
     .bind(ids)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
     Ok(rows
         .into_iter()
@@ -425,7 +428,7 @@ pub async fn load_runs(pool: &PgPool, ids: &[Uuid]) -> ApiResult<HashMap<Uuid, R
 }
 
 pub async fn load_test_cases(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     ids: &[i64],
     aliases: &Aliases,
 ) -> ApiResult<HashMap<i64, TestCaseRow>> {
@@ -435,9 +438,9 @@ pub async fn load_test_cases(
          JOIN scenario sc ON sc.id = scv.scenario_id WHERE tc.id = ANY($1)",
     )
     .bind(ids)
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await?;
-    let mut assets = test_case_assets(pool, ids).await?;
+    let mut assets = test_case_assets(&mut *conn, ids).await?;
     Ok(rows
         .into_iter()
         .map(
@@ -568,7 +571,7 @@ pub fn case_sort_key(c: &CaseInfo) -> (String, i32, String) {
 /// the value or no value. `progress` is called with the number of samples
 /// done after each chunk.
 pub async fn eval_scalars(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     prepared: &Prepared,
     samples: &[SampleRow],
     excluded: &mut Excluded,
@@ -585,7 +588,7 @@ pub async fn eval_scalars(
     let mut done = 0;
     for chunk in samples.chunks(CHUNK) {
         let ids: Vec<Uuid> = chunk.iter().map(|s| s.sample_id).collect();
-        let data = derived::load_sample_data(pool, &ids, evaluator.inputs()).await?;
+        let data = derived::load_sample_data(conn, &ids, evaluator.inputs()).await?;
         for s in chunk {
             out.push(match evaluator.evaluate(&data[&s.sample_id]) {
                 Ok(Outcome {
@@ -679,10 +682,11 @@ pub fn group_values(ds: &Dataset, values: &[Option<Option<f64>>], drop: &[String
 
 pub async fn aggregates(pool: &PgPool, req: &AggregatesRequest) -> ApiResult<AggregatesResponse> {
     let options = StatsOptions::new(&req.percentiles, req.confidence)?;
-    let prepared = derived::prepare(pool, &req.metric, req.unit.as_deref()).await?;
-    let aliases = Aliases::load(pool).await?;
+    let mut conn = pool.acquire().await?;
+    let prepared = derived::prepare(&mut conn, &req.metric, req.unit.as_deref()).await?;
+    let aliases = Aliases::load(&mut *conn).await?;
     let ds = load_dataset(
-        pool,
+        &mut conn,
         &req.filter,
         req.include_warmup,
         &Restrict::default(),
@@ -690,7 +694,14 @@ pub async fn aggregates(pool: &PgPool, req: &AggregatesRequest) -> ApiResult<Agg
     )
     .await?;
     let mut excluded = Excluded::default();
-    let values = eval_scalars(pool, &prepared, &ds.samples, &mut excluded, &mut |_| {}).await?;
+    let values = eval_scalars(
+        &mut conn,
+        &prepared,
+        &ds.samples,
+        &mut excluded,
+        &mut |_| {},
+    )
+    .await?;
     let grouped = group_values(&ds, &values, &[]);
     let mut groups: Vec<AggregateGroup> = grouped
         .groups
@@ -808,9 +819,10 @@ pub struct TrendResponse {
 
 pub async fn trend(pool: &PgPool, req: &TrendRequest) -> ApiResult<TrendResponse> {
     let options = StatsOptions::new(&req.percentiles, req.confidence)?;
-    let prepared = derived::prepare(pool, &req.metric, req.unit.as_deref()).await?;
-    let aliases = Aliases::load(pool).await?;
-    let anchor = load_test_cases(pool, &[req.test_case_id], &aliases)
+    let mut conn = pool.acquire().await?;
+    let prepared = derived::prepare(&mut conn, &req.metric, req.unit.as_deref()).await?;
+    let aliases = Aliases::load(&mut *conn).await?;
+    let anchor = load_test_cases(&mut conn, &[req.test_case_id], &aliases)
         .await?
         .remove(&req.test_case_id)
         .ok_or_else(|| ApiError::not_found(format!("test case {} not found", req.test_case_id)))?;
@@ -820,12 +832,26 @@ pub async fn trend(pool: &PgPool, req: &TrendRequest) -> ApiResult<TrendResponse
         scenario_version_id: Some(anchor.scenario_version_id),
         device_names: Some(aliases.raw_device_names(&device)),
     };
-    let mut ds = load_dataset(pool, &req.filter, req.include_warmup, &restrict, &aliases).await?;
+    let mut ds = load_dataset(
+        &mut conn,
+        &req.filter,
+        req.include_warmup,
+        &restrict,
+        &aliases,
+    )
+    .await?;
     ds.samples
         .retain(|s| case_key(&ds.test_cases[&s.test_case_id], &[]) == key);
 
     let mut excluded = Excluded::default();
-    let values = eval_scalars(pool, &prepared, &ds.samples, &mut excluded, &mut |_| {}).await?;
+    let values = eval_scalars(
+        &mut conn,
+        &prepared,
+        &ds.samples,
+        &mut excluded,
+        &mut |_| {},
+    )
+    .await?;
     let grouped = group_values(&ds, &values, &[]);
     let mut env_ids: HashMap<Uuid, Vec<i64>> = HashMap::new();
     for s in &ds.samples {
@@ -932,7 +958,7 @@ pub async fn trend(pool: &PgPool, req: &TrendRequest) -> ApiResult<TrendResponse
     .bind(&case.test_case_ids)
     .bind(from)
     .bind(to)
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await?;
 
     Ok(TrendResponse {

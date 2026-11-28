@@ -24,7 +24,7 @@ fn node(v: Value) -> SourceNode {
 async fn load_with(app: &TestApp, v: Value, limits: Limits) -> Result<Loaded, ApiError> {
     let mut budget = Budget::new(limits.max_points);
     source::load(
-        &app.pool,
+        &mut app.pool.acquire().await.unwrap(),
         "runs",
         &node(v),
         &limits,
@@ -299,13 +299,27 @@ async fn a_source_stops_at_its_limits() {
     };
     let mut budget = Budget::new(points.max_points);
     let fps = node(json!({"metric": "series.fps"}));
-    source::load(&app.pool, "a", &fps, &points, &mut budget, &mut |_| {})
-        .await
-        .unwrap();
+    source::load(
+        &mut app.pool.acquire().await.unwrap(),
+        "a",
+        &fps,
+        &points,
+        &mut budget,
+        &mut |_| {},
+    )
+    .await
+    .unwrap();
     assert_eq!(budget.used(), 10);
-    let err = source::load(&app.pool, "b", &fps, &points, &mut budget, &mut |_| {})
-        .await
-        .unwrap_err();
+    let err = source::load(
+        &mut app.pool.acquire().await.unwrap(),
+        "b",
+        &fps,
+        &points,
+        &mut budget,
+        &mut |_| {},
+    )
+    .await
+    .unwrap_err();
     // The second source fails before it loads inputs that do not fit
     // into what the first one left.
     assert!(
@@ -317,7 +331,7 @@ async fn a_source_stops_at_its_limits() {
     // Without series inputs, the frames made are what counts.
     let mut budget = Budget::new(1);
     let err = source::load(
-        &app.pool,
+        &mut app.pool.acquire().await.unwrap(),
         "d",
         &node(json!({"metric": "load_time"})),
         &points,
@@ -341,9 +355,14 @@ async fn a_source_stops_at_its_limits() {
     let scalars = node(json!({"metric": "max(series.fps)"}));
     let mut budget = Budget::new(points.max_points);
     let mut seen = Vec::new();
-    source::load(&app.pool, "c", &scalars, &points, &mut budget, &mut |n| {
-        seen.push(n)
-    })
+    source::load(
+        &mut app.pool.acquire().await.unwrap(),
+        "c",
+        &scalars,
+        &points,
+        &mut budget,
+        &mut |n| seen.push(n),
+    )
     .await
     .unwrap();
     assert_eq!((budget.used(), seen), (2, vec![2]));
@@ -516,9 +535,16 @@ async fn run_chart(app: &TestApp, spec: &Value, until: Option<&str>) -> Tree {
     let mut sources = BTreeMap::new();
     for n in &spec.nodes {
         if let NodeKind::Source(src) = &n.kind {
-            let loaded = source::load(&app.pool, &n.id, src, &limits, &mut budget, &mut |_| {})
-                .await
-                .unwrap();
+            let loaded = source::load(
+                &mut app.pool.acquire().await.unwrap(),
+                &n.id,
+                src,
+                &limits,
+                &mut budget,
+                &mut |_| {},
+            )
+            .await
+            .unwrap();
             sources.insert(n.id.clone(), loaded.tree);
         }
     }
@@ -658,7 +684,7 @@ async fn a_sample_without_the_metric_needs_no_room() {
     let limits = Limits::default();
     let mut budget = Budget::new(1);
     let out = source::load(
-        &app.pool,
+        &mut app.pool.acquire().await.unwrap(),
         "a",
         &node(json!({"metric": "load_time"})),
         &limits,
