@@ -789,11 +789,7 @@
                   "type": "string"
                 }
               },
-              "application/vnd.apache.parquet": {
-                "schema": {
-                  "type": "string"
-                }
-              }
+              "application/vnd.apache.parquet": {}
             }
           },
           "400": {

@@ -29,7 +29,9 @@ use crate::service::charts::validate;
                content(
                    (ChartLine = "application/x-ndjson"),
                    (String = "text/csv"),
-                   (String = "application/vnd.apache.parquet"))),
+                   // Binary: the media type without a schema, as for other
+                   // file downloads.
+                   ("application/vnd.apache.parquet"))),
               (status = 400, content_type = "application/problem+json", body = Problem),
               (status = 422, content_type = "application/problem+json", body = Problem)))]
 pub async fn run_chart(

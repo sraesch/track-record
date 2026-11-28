@@ -2608,7 +2608,7 @@ export interface operations {
                 content: {
                     "application/x-ndjson": components["schemas"]["ChartLine"];
                     "text/csv": string;
-                    "application/vnd.apache.parquet": string;
+                    "application/vnd.apache.parquet": unknown;
                 };
             };
             400: {
